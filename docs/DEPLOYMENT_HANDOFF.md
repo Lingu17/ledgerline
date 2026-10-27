@@ -42,9 +42,9 @@ Free-tier behaviour to disclose: Render free instances spin down after inactivit
 
 | Run | Result |
 |---|---|
-| Local SQLite suite (`backend\.venv\Scripts\python -m pytest -q`) at `022b520` | **192 passed, 8 skipped** (skips = live PostgreSQL tests) |
+| Local SQLite suite at `50a229a` | **195 passed, 8 skipped** (skips = live PostgreSQL tests needing a database URL) |
 | PostgreSQL translation/encryption unit tests | pass locally |
-| Live PostgreSQL tests (`tests/test_postgres.py`: walkthrough + restart continuity, tenant switching/isolation/privileges/RLS, concurrent refund execution, concurrent duplicate webhooks, concurrent FX execution, failed-transaction rollback + pool recovery, stdio MCP signing identity across restart and refusal with a different secret, random-company accuracy) | **not yet run** locally: running downloaded PostgreSQL binaries was refused by this machine's permission policy and the EDB installer download returned HTTP 403. They run in GitHub Actions job `postgres` (postgres:17 service container), together with the whole suite on PostgreSQL. Result: see the latest Actions run for the branch; recorded below when observed. |
+| Real PostgreSQL 17 (GitHub Actions job `postgres`, service container), commit `8a079a7`, run 40520577449 | **PASS**: `tests/test_postgres.py` (walkthrough and restart continuity, tenant switching/isolation, privileges and RLS, concurrent refund execution, concurrent duplicate webhooks, concurrent FX execution, failed-transaction rollback and pool recovery, stdio MCP signing identity across restart and refusal with a wrong secret, random-company accuracy) **and the whole backend suite with every app on PostgreSQL** (`LEDGERLINE_TEST_ALL_ON_POSTGRES=1`). Earlier runs found and fixed: test-only bugs, a lazily created `agent_keys` table (now tenant migration v3), and one SQLite-only catalog query in a test. Same run: backend on Linux and Windows (SQLite), frontend build and Playwright e2e passed. |
 | Neon direct endpoint | **not yet run** (needs `backend\.env.test`) |
 | Deployed end-to-end, restart persistence | **not yet run** |
 
