@@ -128,7 +128,10 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             body = {"status": "ok", "version": app.version, "control_schema": schema, "storage": storage,
                     "bank": settings.provider, "claude": "configured" if settings.claude_configured else "not configured",
                     # The caller's own address as resolved through trusted proxies (verifies proxy configuration).
-                    "client": client_ip(request)}
+                    "client": client_ip(request),
+                    # Hop count of the caller's own forwarding chain (no addresses), for calibrating LEDGERLINE_TRUSTED_PROXY_HOPS.
+                    "forwarded_entries": len([x for x in request.headers.get("x-forwarded-for", "").split(",") if x.strip()]),
+                    "trusted_hops": settings.trusted_proxy_hops}
             return JSONResponse(body, headers={"Cache-Control": "no-store"})
         except Exception as exc:  # noqa: BLE001 - report unhealthy instead of crashing the probe
             log.error("health check failed: %s", exc)
