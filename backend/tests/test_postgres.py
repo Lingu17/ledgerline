@@ -264,7 +264,10 @@ def test_postgres_stdio_mcp_signing_identity_survives_restart():
     first = c.post("/api/deposits/DEP-1006/ask-agent").json()
     assert first["transport"] == "mcp/stdio" if "transport" in first else True
     assert first["verification"]["verdict"] == "verified"
-    key_id = c.get("/api/customers").json()
+    def registry(client):
+        return sorted((x["id"], x["agent_key_id"], x["agent_public_key"]) for x in client.get("/api/customers").json())
+
+    key_id = registry(c)
     pg.close_all()
     app2 = _pg_app(prefix=prefix, LEDGERLINE_PAYER_MCP_TRANSPORT="stdio")
     from .conftest import PASSWORD
@@ -272,7 +275,7 @@ def test_postgres_stdio_mcp_signing_identity_survives_restart():
     c2 = TestClient(app2)
     r = c2.post("/api/auth/login", json={"email": "mcp@pg.test", "password": PASSWORD})
     c2.headers["X-CSRF-Token"] = r.json()["csrf_token"]
-    assert c2.get("/api/customers").json() == key_id  # same registered public keys
+    assert registry(c2) == key_id  # same registered public keys
     v = c2.post("/api/deposits/DEP-1005/ask-agent").json()["verification"]
     assert v["verdict"] == "verified"  # signed after restart by the same, decrypted identity
     # A different server secret cannot decrypt the stored keys: refused, never a silently new identity.
@@ -289,6 +292,6 @@ def test_postgres_stdio_mcp_signing_identity_survives_restart():
     c4 = TestClient(app4)
     r = c4.post("/api/auth/login", json={"email": "mcp@pg.test", "password": PASSWORD})
     c4.headers["X-CSRF-Token"] = r.json()["csrf_token"]
-    assert c4.get("/api/customers").json() == key_id
+    assert registry(c4) == key_id
     v = c4.post("/api/deposits/DEP-1004/ask-agent").json()["verification"]
     assert v["verdict"] == "rejected" and "belongs to another customer" in v["reason"]  # signature passed, record check failed

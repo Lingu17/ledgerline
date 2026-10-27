@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS invoice_adjustments (
 TENANT: list[Migration] = [
     (1, "ledger schema", TENANT_V1),
     (2, "invoice adjustments, approval author, edit timestamps", _tenant_v2),
+    # Hosted mode stores the simulated payer agents' private keys here, encrypted (payer_agents/keys.py).
+    (3, "encrypted payer-agent signing keys", "CREATE TABLE IF NOT EXISTS agent_keys (customer_id TEXT PRIMARY KEY, private_key_enc TEXT NOT NULL, created_at TEXT NOT NULL)"),
 ]
 
 

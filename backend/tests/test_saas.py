@@ -296,7 +296,7 @@ def test_migrations_recorded_and_legacy_tenant_upgraded(settings, tmp_path):
     legacy = sqlite3.connect(tmp_path / "legacy.sqlite3", isolation_level=None)
     legacy.executescript(SCHEMA)  # a pre-SaaS database: v1 tables, no migration table
     ran = migrate(legacy, TENANT)
-    assert ran == [1, 2]
+    assert ran == [1, 2, 3]
     cols = {r[1] for r in legacy.execute("PRAGMA table_info(approvals)")}
     assert "created_by" in cols
     assert migrate(legacy, TENANT) == []  # idempotent
