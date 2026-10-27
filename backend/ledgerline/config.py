@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+AUTO_PREFIXES: list[str] = []
 
 _ENV_KEYS = (
     "LEDGERLINE_DB_PATH",
@@ -189,6 +190,7 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
         import secrets as _secrets
 
         prefix = "x" + _secrets.token_hex(4)
+        AUTO_PREFIXES.append(prefix)  # so a test run can drop exactly the schemas it created
     s.pg_schema_prefix = prefix
     s.secret_key = env.get("LEDGERLINE_SECRET_KEY") or None
     if s.database_url:

@@ -103,7 +103,15 @@ def test_postgres_tenant_schemas_and_privileges():
     app = _pg_app()
     a, b = _signup(app, "a@pg.test"), _signup(app, "b@pg.test", start="empty")
     assert b.get("/api/deposits/DEP-1006").status_code == 404
-    assert b.post("/auth/switch-organization", json={"organization_id": a.org_id}).status_code in (403, 404)
+    # Positive: a member of two organizations can switch between them.
+    second = a.post("/api/organizations", json={"name": "A second org", "start_with": "empty"}).json()["organization"]["id"]
+    assert second != a.org_id
+    r = a.post("/api/auth/switch-organization", json={"organization_id": a.org_id})
+    assert r.status_code == 200 and r.json()["organization"]["id"] == a.org_id
+    # Negative: B cannot switch into A's organization, and B's active organization is unchanged.
+    r = b.post("/api/auth/switch-organization", json={"organization_id": a.org_id})
+    assert r.status_code == 403
+    assert b.get("/api/auth/me").json()["organization"]["id"] == b.org_id
     s = app.state.settings
     conn = pg.PgConnection(PG_URL, pg.schema_for(s.pg_schema_prefix, "t", b.org_id))
     try:
@@ -161,3 +169,115 @@ def test_postgres_random_companies_match_reference_model():
     app = _pg_app()
     for seed in (2001, 2002, 2003):
         Scenario(app, seed).run()
+
+
+@needs_pg
+def test_postgres_duplicate_webhook_deliveries_create_one_deposit():
+    import time as _time
+
+    from ledgerline.webhooks import build_deposit_event, sign
+
+    app = _pg_app()
+    c = _signup(app, "hook@pg.test", start="empty")
+    body = build_deposit_event("evt_pg_dup_1", {"provider_ref": "SIM-PG-DUP-1", "currency": "USD", "payer_name": "ACME ROBOTICS INC",
+                                                "reference": "INV 1", "received_at": "2026-10-27T10:00:00Z"}, "125.00")
+    ts = str(int(_time.time() * 1000))
+    headers = {"x-timestamp": ts, "x-signature": sign(c.webhook_secret, ts, body), "content-type": "application/json"}
+    codes = []
+
+    def deliver():
+        codes.append(TestClient(app).post(c.webhook_url, content=body, headers=headers).status_code)
+
+    threads = [threading.Thread(target=deliver) for _ in range(6)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert codes and all(code == 200 for code in codes), codes
+    deps = c.get("/api/deposits").json()
+    assert len(deps) == 1 and deps[0]["amount_minor"] == 12_500
+    assert c.get("/api/ledger").json()["conservation"]["all_balanced"]
+
+
+@needs_pg
+def test_postgres_concurrent_fx_execution_converts_once():
+    app = _pg_app()
+    c = _signup(app, "fx@pg.test")
+    t = c.get("/api/treasury").json()
+    ob = next(o for o in t["obligations"] if o["currency"] == "EUR")
+    q = c.post(f"/api/treasury/obligations/{ob['id']}/quote")
+    assert q.status_code == 200, q.text
+    quote_id = q.json()["id"]
+    codes = []
+
+    def run():
+        codes.append(TestClient(app, headers=dict(c.headers), cookies=dict(c.cookies)).post(f"/api/treasury/quotes/{quote_id}/execute").status_code)
+
+    threads = [threading.Thread(target=run) for _ in range(5)]
+    [th.start() for th in threads]
+    [th.join() for th in threads]
+    assert codes.count(200) == 1, codes
+    convs = [x for x in c.get("/api/treasury").json()["conversions"] if x["status"] not in ("failed", "cancelled")]
+    assert len(convs) == 1
+    assert c.get("/api/ledger").json()["conservation"]["all_balanced"]
+
+
+@needs_pg
+def test_postgres_failed_transaction_rolls_back_and_pool_recovers():
+    from ledgerline import db
+
+    app = _pg_app()
+    target = app.state.settings.pg_target("t", "probe")
+    conn = db.connect(target)
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS probe (id TEXT PRIMARY KEY, n INTEGER NOT NULL)")
+        with pytest.raises(Exception):
+            with db.transaction(conn):
+                conn.execute("INSERT INTO probe VALUES (?, ?)", ("a", 1))
+                conn.execute("INSERT INTO probe VALUES (?, ?)", ("a", 2))  # unique violation aborts the transaction
+        assert conn.execute("SELECT COUNT(*) FROM probe").fetchone()[0] == 0  # nothing committed, connection usable
+    finally:
+        conn.close()
+    # A connection returned mid-transaction is rolled back and reset before reuse.
+    leaked = db.connect(target)
+    leaked.execute("BEGIN IMMEDIATE")
+    leaked.execute("INSERT INTO probe VALUES (?, ?)", ("b", 1))
+    leaked.close()
+    for _ in range(12):  # more than the pool size: every pooled connection must come back clean
+        c2 = db.connect(target)
+        try:
+            assert c2.execute("SELECT COUNT(*) FROM probe").fetchone()[0] == 0
+            assert c2.execute("SELECT current_schema()").fetchone()[0] == target.schema
+        finally:
+            c2.close()
+    # And the application still serves requests after an error inside a request transaction.
+    u = _signup(app, "err@pg.test", start="empty")
+    bad = u.post("/api/payments", json={"external_ref": "E-1", "currency": "USD", "amount": "-1", "payer_name": "X LTD"})
+    assert bad.status_code == 422 and u.get("/api/deposits").status_code == 200
+
+
+@needs_pg
+def test_postgres_stdio_mcp_signing_identity_survives_restart():
+    app = _pg_app(LEDGERLINE_PAYER_MCP_TRANSPORT="stdio")
+    prefix = app.state.settings.pg_schema_prefix
+    c = _signup(app, "mcp@pg.test")
+    first = c.post("/api/deposits/DEP-1006/ask-agent").json()
+    assert first["transport"] == "mcp/stdio" if "transport" in first else True
+    assert first["verification"]["verdict"] == "verified"
+    key_id = c.get("/api/customers").json()
+    pg.close_all()
+    app2 = _pg_app(prefix=prefix, LEDGERLINE_PAYER_MCP_TRANSPORT="stdio")
+    from .conftest import PASSWORD
+
+    c2 = TestClient(app2)
+    r = c2.post("/api/auth/login", json={"email": "mcp@pg.test", "password": PASSWORD})
+    c2.headers["X-CSRF-Token"] = r.json()["csrf_token"]
+    assert c2.get("/api/customers").json() == key_id  # same registered public keys
+    v = c2.post("/api/deposits/DEP-1005/ask-agent").json()["verification"]
+    assert v["verdict"] == "verified"  # signed after restart by the same, decrypted identity
+    # A different server secret cannot decrypt the stored keys: an error, never a silently new identity.
+    pg.close_all()
+    app3 = _pg_app(prefix=prefix, LEDGERLINE_SECRET_KEY="another-secret-" + "z" * 32)
+    c3 = TestClient(app3)
+    r = c3.post("/api/auth/login", json={"email": "mcp@pg.test", "password": PASSWORD})
+    c3.headers["X-CSRF-Token"] = r.json()["csrf_token"]
+    with pytest.raises(Exception):
+        c3.post("/api/deposits/DEP-1004/ask-agent")

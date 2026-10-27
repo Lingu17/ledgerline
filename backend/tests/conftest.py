@@ -16,6 +16,14 @@ if _env_test.is_file():
         if _line.startswith("LEDGERLINE_TEST_DATABASE_URL="):
             _os.environ.setdefault("LEDGERLINE_TEST_DATABASE_URL", _line.split("=", 1)[1].strip())
 
+# LEDGERLINE_TEST_ALL_ON_POSTGRES=1: run the WHOLE suite with every app on PostgreSQL (throwaway schemas).
+import os as _os2
+
+if _os2.environ.get("LEDGERLINE_TEST_ALL_ON_POSTGRES") == "1" and _os2.environ.get("LEDGERLINE_TEST_DATABASE_URL"):
+    _os2.environ["LEDGERLINE_DATABASE_URL"] = _os2.environ["LEDGERLINE_TEST_DATABASE_URL"]
+    _os2.environ["LEDGERLINE_PG_SCHEMA_PREFIX"] = "auto"
+    _os2.environ.setdefault("LEDGERLINE_SECRET_KEY", "test-only-secret-not-for-production-0123456789")
+
 from ledgerline import db  # noqa: E402
 from ledgerline.api.app import build_context, create_app  # noqa: E402
 from ledgerline.config import load_settings  # noqa: E402
@@ -102,12 +110,15 @@ def one(ctx, sql, params=()):
 
 @pytest.fixture(scope="session", autouse=True)
 def _drop_postgres_test_schemas():
-    """With LEDGERLINE_TEST_DATABASE_URL set, tests create throwaway schemas named x<8 hex>_...; drop them afterwards."""
+    """Drop only the schemas created by this test run (prefixes recorded by load_settings), so
+    concurrent runs and any runtime schemas in the same database are never touched."""
     yield
     import os
 
+    from ledgerline.config import AUTO_PREFIXES
+
     url = os.environ.get("LEDGERLINE_TEST_DATABASE_URL")
-    if not url:
+    if not url or not AUTO_PREFIXES:
         return
     import psycopg
 
@@ -115,6 +126,7 @@ def _drop_postgres_test_schemas():
 
     pg.close_all()
     with psycopg.connect(url, autocommit=True) as c:
-        names = [r[0] for r in c.execute(r"SELECT nspname FROM pg_namespace WHERE nspname ~ '^x[0-9a-f]{8}_'").fetchall()]
-        for n in names:
-            c.execute(f'DROP SCHEMA "{n}" CASCADE')
+        for prefix in set(AUTO_PREFIXES):
+            names = [r[0] for r in c.execute("SELECT nspname FROM pg_namespace WHERE starts_with(nspname, %s)", (prefix + "_",)).fetchall()]
+            for n in names:
+                c.execute(f'DROP SCHEMA "{n}" CASCADE')
