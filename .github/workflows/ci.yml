@@ -67,10 +67,10 @@ jobs:
           python-version: "3.14"
       - run: python -m pip install -r backend/requirements-lock.txt
       - name: PostgreSQL-specific tests
-        run: python -m pytest -v tests/test_postgres.py
+        run: python -m pytest -v tests/test_postgres.py --junitxml=pg-specific.xml || python ../scripts/ci_annotate.py pg-specific.xml
         working-directory: backend
       - name: Whole suite on PostgreSQL
-        run: python -m pytest -q -p no:cacheprovider
+        run: python -m pytest -q -p no:cacheprovider --junitxml=pg-report.xml || python ../scripts/ci_annotate.py pg-report.xml
         working-directory: backend
         env:
           LEDGERLINE_TEST_ALL_ON_POSTGRES: "1"
