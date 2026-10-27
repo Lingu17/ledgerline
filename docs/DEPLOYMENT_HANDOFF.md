@@ -19,17 +19,16 @@ Why: the user has no card that Render's paid plan or Oracle/alwaysdata accept (R
 
 Free-tier behaviour to disclose: Render free instances spin down after inactivity and the first request can take 50 s or more; Supabase free projects pause after 1 week of inactivity, include 500 MB, and have no automatic backups (supabase.com/pricing, 27 Oct 2026). Neither is promised to stay free or always on.
 
-## Current state
+## Current state (observed)
 
 | Item | Status |
 |---|---|
-| Render free service `ledgerline-api` | **Created, live** at `https://ledgerline-api-4dt3.onrender.com` (deploy of `cf3f61c`). Running as a **probe on ephemeral storage** (`LEDGERLINE_DATA_DIR=/tmp/...`): data is lost on restart. Not for judges until PostgreSQL is configured. |
-| Probe results (observed over HTTPS) | `/api/health` 200 in 0.5 s; signup 200 with cookie `HttpOnly; Secure; SameSite=strict; Path=/api`; sample org lists 6 deposits; **real stdio MCP** ask-agent → `verified` in 8.6 s on the 0.1 CPU instance; integrations report Airwallex/Claude `not_configured`. Health `client` showed a Cloudflare address: Render's edge adds hops; `LEDGERLINE_TRUSTED_PROXY_HOPS` must be calibrated once Vercel is in front. |
-| Supabase project | **Not created** (user step) |
-| `LEDGERLINE_DATABASE_URL` on Render | **Not set** (user step: Supabase Connect → Session pooler URI with `?sslmode=require`) |
-| `LEDGERLINE_SECRET_KEY` on Render | **Not set** (to be generated with Render's Generate button; never seen or typed by Claude) |
-| Vercel project | **Not created** (needs the user's Vercel sign-in) |
-| Paid resources | None. Render paid plan and disk were not purchased. |
+| Public URL | **https://ledgerline-black-iota.vercel.app** (Vercel Hobby project `ledgerline`, root `frontend`, production branch `deploy/vercel-render`). `/api/*` is routed to Render by `frontend/vercel.json` `routes` (with an `x-ledgerline-edge` request-header transform from the Vercel env `LEDGERLINE_EDGE_SECRET`). |
+| Render free service `ledgerline-api` | Live at `https://ledgerline-api-4dt3.onrender.com`, branch `deploy/vercel-render`, auto-deploy on commit. **Still on ephemeral SQLite (`/tmp`)**: data is lost on restart until `LEDGERLINE_DATABASE_URL` is set. Env set by Claude (non-secret): `LEDGERLINE_ALLOWED_ORIGINS` and `LEDGERLINE_PUBLIC_URL` = the Vercel origin, `LEDGERLINE_TRUSTED_PROXY_HOPS=4`; `LEDGERLINE_SECRET_KEY` generated with Render's Generate button (regenerated once after it was displayed on screen; current value never displayed). |
+| Proxy calibration | Measured with `/api/health` (`forwarded_entries`, `client`): through Vercel the chain has 4 entries and Vercel overwrites a client-sent X-Forwarded-For; Render adds 3 entries after the connecting address. With hops=4 the server resolved this PC's real public address through Vercel, ignored a forged header through Vercel, and resolved a direct Render call to Render's internal peer (fail closed). Remaining gap until the edge secret is set on both sides: a direct caller to the Render URL who forges exactly one entry can choose its per-IP throttling identity; commit `1d7a90b` closes it once `LEDGERLINE_EDGE_SECRET` is set identically on Render and Vercel. |
+| Supabase | Being provisioned by Codex (user request). Claude does not create projects or handle database credentials. |
+| Fail-closed storage | `LEDGERLINE_REQUIRE_DATABASE=1` (commit `1d7a90b`) to be set on Render together with the database URL. |
+| Paid resources | None. |
 
 ## PostgreSQL storage (commits `8f8293b`, `022b520`)
 
@@ -50,8 +49,8 @@ Free-tier behaviour to disclose: Render free instances spin down after inactivit
 
 ## Blockers needing the user
 
-1. Supabase: sign in, create project `ledgerline` (Singapore), copy the Session pooler URI (password substituted, `?sslmode=require`), and paste it (a) into Render → `ledgerline-api` → Environment as `LEDGERLINE_DATABASE_URL`, (b) into `backend\.env.test` as `LEDGERLINE_TEST_DATABASE_URL=...` (gitignored). Never in chat.
-2. Vercel: sign in (GitHub) so the frontend project can be created.
+1. Supabase (Codex is handling): project, Session pooler URI with `?sslmode=require` into Render `LEDGERLINE_DATABASE_URL` and `backend\.env.test` `LEDGERLINE_TEST_DATABASE_URL`; then set `LEDGERLINE_REQUIRE_DATABASE=1`.
+2. Edge secret: generate `LEDGERLINE_EDGE_SECRET` in Render and paste the same value into Vercel (Production, Sensitive).
 3. Optional integrations, server-side only: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY`, `LEDGERLINE_SANDBOX_ORGS`, `ANTHROPIC_API_KEY`.
 
 ## Superseded
