@@ -4,7 +4,7 @@ Audit date: 27 Oct 2026 (build phase day 1; deadline 13 Nov 2026, 11:59 PM IST).
 
 Status key: **Done+tested** = implemented with automated tests passing locally · **Live** = verified against the real external service · **Partial** · **Missing** · **Blocked** = needs something only the user/organizer can provide.
 
-Nothing below is "Live" yet: no Airwallex sandbox credentials or Anthropic API key exist on this machine or any server.
+Live as of 28 Oct 2026: the deployment itself (section C). No Airwallex or Claude integration is live: no Airwallex sandbox API keys or Anthropic API key exist on this machine or the server.
 
 ## A. Event requirements (HackerEarth / Airwallex)
 
@@ -32,7 +32,7 @@ Nothing below is "Live" yet: no Airwallex sandbox credentials or Anthropic API k
 | B3 | Clean match / bank-fee write-off / partial / duplicate / no reference / wrong currency | Done+tested | `test_matching.py`, accuracy harness (250 seeds, 64,215 checks, 0 mismatches) |
 | B4 | Payment link for the exact balance; draft if links unavailable | Done+tested (local) · **Blocked** live | Sandbox `POST /pa/payment_links/create` payload matches the docs; local mode stores a labelled "Draft, not sent" note and never shows a URL |
 | B5 | Payer agent over MCP, signed `explain_payment`, three checks | Done+tested | Real stdio MCP subprocess, Ed25519, replay/expiry/binding/records checks; malicious claim rejected (DEP-1004) |
-| B6 | Claude reads emails/PDFs when no agent | Done+tested (fixture) · **Blocked** live | Strict tools + output validation + per-org daily cap; live call needs `ANTHROPIC_API_KEY` |
+| B6 | Claude reads emails/PDFs when no agent | Done+tested (fixture) · **Blocked** live | Strict tools + output validation; calls reserved before dispatch against per-org and server-wide daily caps (failed calls count); live call needs `ANTHROPIC_API_KEY` |
 | B7 | Apparent duplicate becomes advance credit after signed evidence | Done+tested | DEP-1005 → verified_advance_credit; plan v1, evidence, v2 and journal preserved |
 | B8 | FX: quote and convert only the shortfall above reserve | Done+tested (local) · **Blocked** live | Reserves, settled-only spendability, pending FX never spendable; sandbox quote/conversion payloads checked against docs |
 | B9 | Refund over limit approved by a person, duplicate lock, SENT not final | Done+tested | Partial unique index, UUIDv5 ids, scope hash, SENT keeps liability; status map updated for approval_rejected/recalled |
@@ -40,7 +40,7 @@ Nothing below is "Live" yet: no Airwallex sandbox credentials or Anthropic API k
 | B11 | Conservation to the cent; scorecard | Done+tested | Per-currency conservation; scorecard computed from state |
 | B12 | Beneficiary creation (`/beneficiaries/schema`, `/beneficiaries/create`) | **Missing** | Refund destinations must be existing sandbox beneficiary ids |
 | B13 | `GET /fx/rates/current` | Partial | Quotes are used for decisions; local mode uses fixed synthetic rates |
-| B14 | Demo video (~4 min) | **Blocked** (user) | `docs/DEMO_SCRIPT.md` to be written; recording is the user's |
+| B14 | Demo video (~4 min) | **Blocked** (user) | `docs/DEMO_SCRIPT.md` written and its figures checked against a fresh sample organization (28 Oct); recording is the user's |
 
 ## C. Deployment and SaaS (user briefs)
 
@@ -65,5 +65,5 @@ Product home page with 3D globe; Google/Apple sign-in (needs OAuth clients); ran
 | `LEDGERLINE_SANDBOX_ORGS` | Server environment | Which organization (yours) may use the sandbox account |
 | Airwallex webhook secret + registered URL | Ledgerline Settings (owner) + sandbox web app | B1 |
 | `ANTHROPIC_API_KEY` (optional `LEDGERLINE_CLAUDE_MODEL`, default `claude-opus-5-5`) | Server environment only | B6 live extraction |
-| PythonAnywhere API token (or Render cost approval) | User's PythonAnywhere account page / Render | C2 deployment |
-| Vercel sign-in | Browser | C1 |
+| Vercel email verification, then a production redeploy | Vercel | Valid edge proof (C3) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` + redirect URI `https://ledgerline-black-iota.vercel.app/api/auth/oauth/google/callback` | Google Cloud console + Render environment | Optional Google sign-in (D) |

@@ -8,7 +8,7 @@ Built for the Agentic Banking Hackathon (Treasury & Ops). **Hackathon build, not
 
 ![Ledgerline finance operations workspace](docs/screenshots/workspace.png)
 
-Independent verification: **174 backend tests**, **9 browser E2E tests**, strict frontend build, **18/18 live HTTP checks**, and **zero npm audit findings**. See [the review report](docs/INDEPENDENT_REVIEW.md) for scope and limitations.
+Verification as of 28 Oct 2026: **215 backend tests** pass locally (8 PostgreSQL-only tests are skipped without a database URL; the whole suite last passed on PostgreSQL 17 in CI at `8a079a7`), **9 browser E2E tests**, strict frontend build, **32/32 live checks** through the public URL (`scripts/smoke_deploy.py`), and **0 npm audit findings**. Earlier independent review: [report](docs/INDEPENDENT_REVIEW.md). Live deployment details: [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md).
 
 ---
 
@@ -18,9 +18,9 @@ Independent verification: **174 backend tests**, **9 browser E2E tests**, strict
 |---|---|---|
 | Accounts, organizations, roles, sessions | **Real, tested** | scrypt password hashes, HttpOnly SameSite=Strict session cookie, CSRF token, login throttling, idle/absolute expiry, server-side logout. |
 | Tenant isolation | **Real, tested** | One database, simulated bank and payer-agent key set per organization; every request is bound to the member's organization only. |
-| Matching rules, ledger, approvals, locks, pause, FX reserve logic | **Real, tested** | Integer minor units, SQLite transactions (`BEGIN IMMEDIATE`). |
+| Matching rules, ledger, approvals, locks, pause, FX reserve logic | **Real, tested** | Integer minor units, serialized writer transactions (SQLite `BEGIN IMMEDIATE`; on PostgreSQL a transaction-scoped advisory lock per schema). |
 | Payer agents (`explain_payment`) | **Real MCP protocol, simulated agents** | An MCP server subprocess (stdio) using the official `mcp` SDK. The six customer agents are local simulations with their own Ed25519 keys; one is deliberately dishonest. |
-| Bank (transfers, FX, deposits) — default | **Simulated bank ("Local workspace")** | A per-organization SQLite "bank" with fault injection. No network, no money. Shown as a *Local workspace* badge; simulated actions are labelled. |
+| Bank (transfers, FX, deposits) — default | **Simulated bank ("Local workspace")** | A per-organization "bank" (SQLite file locally, PostgreSQL schema when hosted) with fault injection. No network, no money. Shown as a *Local workspace* badge; simulated actions are labelled. |
 | Airwallex sandbox adapter | **Implemented, not executed against the sandbox** | Endpoints and payloads follow the official API reference (checked 2026-10-27). Tested only against a mocked HTTP transport; no credentials were available. Settings → *Run readiness check* performs a real sandbox login when credentials exist and reports exactly what happened. |
 | Webhooks | **Real verification** | Per-organization URL and secret; HMAC-SHA256 over `x-timestamp` + raw body; skew limit; event-id dedupe in the same transaction; documented flat `deposit.settled` shape. |
 | Claude evidence reader | **Optional** | With `ANTHROPIC_API_KEY`, Claude must answer through strict typed proposal tools. Without it, offline rules produce the same shape, labelled "Claude not invoked". Advisory only; never moves money. |
@@ -121,9 +121,11 @@ Every rule above is enforced by the API; the UI only hides what you cannot do.
                                  │  payer_agents/ (MCP stdio) · claude_reader · providers/{local, airwallex}
                                  └──► backend/var/control.sqlite3
                                       backend/var/orgs/<org_id>/{ledgerline.sqlite3, local_bank.sqlite3, payer_agents/}
+                                      (hosted: PostgreSQL schemas <prefix>_control, <prefix>_t_<org_id>, <prefix>_b_<org_id>;
+                                       payer-agent keys encrypted in the organization's schema)
 ```
 
-**Why database-per-organization:** isolation is structural. A query in one organization's context cannot reach another organization's rows because they are in a different file; the only path between them is the session → membership check, which is re-read from the control plane on every request. Tests prove cross-organization reads, approvals, switching and webhook signing are refused.
+**Why database-per-organization:** isolation is structural. A query in one organization's context cannot reach another organization's rows because they are in a different file (hosted: a different schema, pinned by the connection's `search_path`); the only path between them is the session → membership check, which is re-read from the control plane on every request. Tests prove cross-organization reads, approvals, switching and webhook signing are refused.
 
 Financial rules the code enforces (unchanged from the single-tenant build, all regressions still passing):
 
@@ -150,7 +152,7 @@ Financial rules the code enforces (unchanged from the single-tenant build, all r
 
 ### Deployment notes
 
-`python -m ledgerline` refuses to bind a non-loopback address unless `LEDGERLINE_COOKIE_SECURE=1`, i.e. you terminate TLS in front of it. For anything beyond a demo you would also want: Postgres instead of SQLite (keep the per-organization schema or add row-level tenancy with the same tests), email delivery for invitations, SSO/MFA, a secrets manager for per-organization Airwallex credentials, backups, and rate limiting at the proxy. None of that is included.
+`python -m ledgerline` refuses to bind a non-loopback address unless `LEDGERLINE_COOKIE_SECURE=1`, i.e. you terminate TLS in front of it. Hosted mode stores everything in PostgreSQL (`LEDGERLINE_DATABASE_URL`, one schema per organization; see [DEPLOYMENT](docs/DEPLOYMENT.md)); it has only been run as a single server instance. For anything beyond a demo you would also want: email delivery for invitations, SSO/MFA, a secrets manager for per-organization Airwallex credentials, backups, and rate limiting at the proxy. None of that is included.
 
 ## Integration setup
 
@@ -203,6 +205,6 @@ Financial rules the code enforces (unchanged from the single-tenant build, all r
 - Sign in with Google / Apple is tested only against fake providers that sign real RS256 tokens (`tests/test_oauth.py`); it has not been run against real Google or Apple accounts. Apple needs HTTPS. Provider-only accounts cannot add a password yet.
 - No email delivery (invitation links are copied manually), no enterprise SSO (SAML) or MFA, no password reset flow (an owner can re-invite; `manage create-owner` bootstraps).
 - Payer agents are local simulations; real deployments would discover each customer's MCP endpoint and key at onboarding.
-- SQLite per organization suits a single server process; horizontal scaling needs Postgres.
+- The hosted PostgreSQL mode has been run as one Render instance only; several instances have not been tested.
 - FX uses fixed synthetic rates in local workspaces. Paying obligations is out of scope.
 - No subscription billing (explicitly out of scope).
