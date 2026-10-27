@@ -177,3 +177,12 @@ def test_malformed_csrf_header_is_refused_not_an_error(tmp_path):
     c.headers.pop("X-CSRF-Token", None)
     r = c.post("/api/customers", json={"name": "Nope Ltd"}, headers=[(b"X-CSRF-Token", "tést".encode("utf-8"))])
     assert r.status_code == 403
+
+
+def test_health_reports_edge_proof_status_without_the_value(tmp_path):
+    c = TestClient(create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="2", LEDGERLINE_EDGE_SECRET="edge-test-secret")))
+    assert c.get("/api/health").json()["edge_proof"] == "missing"
+    assert c.get("/api/health", headers={"X-Ledgerline-Edge": "nope"}).json()["edge_proof"] == "invalid"
+    body = c.get("/api/health", headers={"X-Ledgerline-Edge": "edge-test-secret"}).json()
+    assert body["edge_proof"] == "valid" and "edge-test-secret" not in str(body)
+    assert TestClient(create_app(_settings(tmp_path / "b"))).get("/api/health").json()["edge_proof"] == "not configured"

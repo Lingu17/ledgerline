@@ -27,7 +27,7 @@ from ..workspace import InputError
 from .auth_routes import auth_error_handler
 from .auth_routes import router as auth_router
 from .oauth_routes import router as oauth_router
-from .security import client_ip
+from .security import client_ip, same_secret
 from .routes import router
 
 FRONTEND_DIST = BACKEND_DIR.parent / "frontend" / "dist"
@@ -113,6 +113,14 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(auth_router, prefix="/api")
     app.include_router(oauth_router, prefix="/api")
 
+    def _edge_proof(request: Request) -> str:
+        if settings.edge_secret is None:
+            return "not configured"
+        supplied = request.headers.get("x-ledgerline-edge")
+        if not supplied:
+            return "missing"
+        return "valid" if same_secret(supplied, settings.edge_secret) else "invalid"
+
     @app.get("/api/health", include_in_schema=False)
     def health(request: Request) -> JSONResponse:
         """Liveness and readiness for the host's health check: control database readable and data directory writable."""
@@ -131,7 +139,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
                     "client": client_ip(request),
                     # Hop count of the caller's own forwarding chain (no addresses), for calibrating LEDGERLINE_TRUSTED_PROXY_HOPS.
                     "forwarded_entries": len([x for x in request.headers.get("x-forwarded-for", "").split(",") if x.strip()]),
-                    "trusted_hops": settings.trusted_proxy_hops}
+                    "trusted_hops": settings.trusted_proxy_hops,
+                    # Whether this request carried the edge's proof (never the value), for checking the edge secret matches.
+                    "edge_proof": _edge_proof(request)}
             return JSONResponse(body, headers={"Cache-Control": "no-store"})
         except Exception as exc:  # noqa: BLE001 - report unhealthy instead of crashing the probe
             log.error("health check failed: %s", exc)
