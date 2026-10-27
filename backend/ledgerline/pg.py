@@ -25,12 +25,22 @@ search_path is session state, which transaction-mode poolers (Neon's "-pooler" h
 port 6543) do not preserve. Such URLs are refused (fail closed) because a lost search_path would point a
 tenant connection at the wrong schema. TLS is required for remote hosts. Connections are validated on
 checkout so a database that scales to zero (Neon free suspends after 5 idle minutes) is reconnected cleanly.
+
+Every network wait is bounded, so a dead or silent connection fails and is discarded instead of holding a request
+thread, a pool slot and possibly a writer lock forever: libpq connect timeout and TCP keepalives (plus
+tcp_user_timeout where the OS supports it), server-side statement and idle-in-transaction timeouts, and a
+client-side watchdog that shuts the socket of any statement (including the pool's health check) that has had
+no answer for CLIENT_WAIT_LIMIT seconds. Checking a connection back in makes no network call: the next checkout
+pins and verifies its schema anyway.
 """
 from __future__ import annotations
 
 import hashlib
 import re
+import socket
 import threading
+import time
+from contextlib import contextmanager
 from decimal import Decimal
 from typing import Any, Iterable
 
@@ -44,6 +54,111 @@ _pools_lock = threading.Lock()
 
 class PoolerURLRefused(ValueError):
     pass
+
+
+class DatabaseUnresponsive(psycopg.OperationalError):
+    """A statement got no answer within CLIENT_WAIT_LIMIT; its connection was shut down and is discarded."""
+
+
+# Bounds for every wait on the database (seconds unless noted). The server-side limits are below the client
+# watchdog so a slow but alive server cancels a statement itself (a clean error) before the socket is cut.
+CONNECT_TIMEOUT = 10
+STATEMENT_TIMEOUT_MS = 30_000
+IDLE_IN_TRANSACTION_TIMEOUT_MS = 60_000
+CLIENT_WAIT_LIMIT = 45.0
+_WATCH_INTERVAL = 0.5
+
+
+def connect_kwargs() -> dict[str, Any]:
+    return {
+        "autocommit": True,
+        "connect_timeout": CONNECT_TIMEOUT,
+        # Probe idle connections (keeps NAT mappings alive and detects dead peers); libpq ignores the options an
+        # OS lacks (keepalives_count on Windows, tcp_user_timeout outside Linux).
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+        "tcp_user_timeout": 30_000,  # ms: unacknowledged writes fail instead of retrying for many minutes
+    }
+
+
+class _Watchdog:
+    """One background thread that shuts the socket of any database wait older than its deadline."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._waits: dict[int, list[Any]] = {}
+        self._seq = 0
+        self._thread: threading.Thread | None = None
+
+    def start(self, raw: Any, limit: float) -> list[Any]:
+        with self._lock:
+            self._seq += 1
+            entry = [time.monotonic() + limit, raw, False, self._seq]  # deadline, connection, fired, key
+            self._waits[self._seq] = entry
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(target=self._run, name="ledgerline-db-watchdog", daemon=True)
+                self._thread.start()
+        return entry
+
+    def finish(self, entry: list[Any]) -> bool:
+        """Stop watching; True if the deadline passed and the socket was shut."""
+        with self._lock:
+            self._waits.pop(entry[3], None)
+            return entry[2]
+
+    def _run(self) -> None:
+        while True:
+            time.sleep(_WATCH_INTERVAL)
+            now = time.monotonic()
+            with self._lock:
+                expired = [e for e in self._waits.values() if not e[2] and e[0] <= now]
+                for e in expired:
+                    e[2] = True
+            for e in expired:
+                _shut_socket(e[1])
+
+
+_watchdog = _Watchdog()
+
+
+def _shut_socket(raw: Any) -> None:
+    """Make a blocked libpq wait return: the read sees EOF, psycopg raises, the connection becomes unusable."""
+    try:
+        s = socket.socket(fileno=raw.pgconn.socket)
+        try:
+            s.shutdown(socket.SHUT_RDWR)
+        finally:
+            s.detach()  # never close libpq's descriptor from here
+    except Exception:  # noqa: BLE001 - the connection may already be closed; nothing else to do
+        pass
+
+
+@contextmanager
+def bounded(raw: Any, what: str, limit: float | None = None):
+    """Run database round trips with a hard client-side deadline."""
+    limit = CLIENT_WAIT_LIMIT if limit is None else limit
+    entry = _watchdog.start(raw, limit)
+    try:
+        yield
+    except psycopg.Error as exc:
+        if _watchdog.finish(entry):
+            raise DatabaseUnresponsive(f"database gave no answer to {what} within {limit:.0f}s; connection discarded") from exc
+        raise
+    finally:
+        _watchdog.finish(entry)
+
+
+def _configure(conn: psycopg.Connection) -> None:
+    with bounded(conn, "session setup"):
+        conn.execute(f"SET statement_timeout = {int(STATEMENT_TIMEOUT_MS)}")
+        conn.execute(f"SET idle_in_transaction_session_timeout = {int(IDLE_IN_TRANSACTION_TIMEOUT_MS)}")
+
+
+def _check(conn: psycopg.Connection) -> None:
+    with bounded(conn, "the pool health check"):
+        ConnectionPool.check_connection(conn)
 
 
 def check_direct_url(url: str) -> None:
@@ -64,8 +179,8 @@ def pool(url: str) -> ConnectionPool:
             check_direct_url(url)
             # Small pool (one free-tier process). check: validate on checkout, so connections closed by the server
             # (e.g. Neon suspending compute after inactivity) are replaced instead of failing a request.
-            p = ConnectionPool(url, min_size=0, max_size=8, timeout=60, kwargs={"autocommit": True},
-                               check=ConnectionPool.check_connection, max_idle=120, open=True, name="ledgerline")
+            p = ConnectionPool(url, min_size=0, max_size=8, timeout=60, kwargs=connect_kwargs(), configure=_configure,
+                               check=_check, max_idle=120, open=True, name="ledgerline")
             _pools[url] = p
         return p
 
@@ -193,7 +308,7 @@ class PgConnection:
         self._raw = self._pool.getconn()
         self._in_tx = False
         try:
-            with self._raw.cursor() as cur:
+            with self._raw.cursor() as cur, bounded(self._raw, "schema pinning"):
                 cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
                 cur.execute(f'SET search_path TO "{schema}"')
                 cur.execute("SELECT current_schema()")
@@ -206,13 +321,13 @@ class PgConnection:
     def execute(self, sql: str, params: Any = ()) -> Cursor:
         stripped = sql.strip().rstrip(";").upper()
         if stripped in ("BEGIN IMMEDIATE", "BEGIN"):
-            with self._raw.cursor() as cur:
+            with self._raw.cursor() as cur, bounded(self._raw, "BEGIN"):
                 cur.execute("BEGIN")
                 cur.execute("SELECT pg_advisory_xact_lock(%s)", (lock_key(self.schema),))
             self._in_tx = True
             return Cursor(None, 0, None)
         if stripped in ("COMMIT", "ROLLBACK"):
-            with self._raw.cursor() as cur:
+            with self._raw.cursor() as cur, bounded(self._raw, stripped):
                 cur.execute(stripped)
             self._in_tx = False
             return Cursor(None, 0, None)
@@ -226,7 +341,7 @@ class PgConnection:
         returning = q.lstrip().upper().startswith("INSERT INTO JOURNAL_ENTRIES")
         if returning and "RETURNING" not in q.upper():
             q = q.rstrip().rstrip(";") + " RETURNING id"
-        with self._raw.cursor() as cur:
+        with self._raw.cursor() as cur, bounded(self._raw, "a statement"):
             cur.execute(q, _params(params))
             rows = None
             if cur.description is not None:
@@ -239,7 +354,7 @@ class PgConnection:
 
     def executemany(self, sql: str, seq: Iterable[Any]) -> None:
         q = translate(sql)
-        with self._raw.cursor() as cur:
+        with self._raw.cursor() as cur, bounded(self._raw, "a batch statement"):
             cur.executemany(q, [_params(p) for p in seq])
 
     def executescript(self, script: str) -> None:
@@ -250,11 +365,11 @@ class PgConnection:
         if self._raw is None:
             return
         try:
-            if self._in_tx:
-                with self._raw.cursor() as cur:
+            if self._in_tx and not self._raw.closed:
+                with self._raw.cursor() as cur, bounded(self._raw, "ROLLBACK"):
                     cur.execute("ROLLBACK")
-            with self._raw.cursor() as cur:
-                cur.execute("RESET search_path")
+            # No RESET here: it cost a round trip on every check-in (and is where a silent connection was seen
+            # hanging). The next checkout sets and verifies search_path before any SQL runs.
         finally:
             self._pool.putconn(self._raw)
             self._raw = None
@@ -272,13 +387,13 @@ def harden(conn: "PgConnection") -> None:
     if not isinstance(conn, PgConnection):
         return
     s = conn.schema
-    with conn._raw.cursor() as cur:
+    with conn._raw.cursor() as cur, bounded(conn._raw, "schema hardening"):
         cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = %s ORDER BY tablename", (s,))
         tables = tuple(r[0] for r in cur.fetchall())
     key = (conn._pool.name or "", s, tables)
     if key in _hardened:
         return
-    with conn._raw.cursor() as cur:
+    with conn._raw.cursor() as cur, bounded(conn._raw, "schema hardening"):
         cur.execute(f'REVOKE ALL ON SCHEMA "{s}" FROM PUBLIC')
         cur.execute("SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated')")
         api_roles = [r[0] for r in cur.fetchall()]
