@@ -1,0 +1,160 @@
+"""Versioned schema migrations for the control-plane DB and each organization's tenant DB.
+
+Each migration runs once, inside a transaction, and is recorded in
+`schema_migrations`. Migrations are append-only: never edit a shipped one.
+"""
+from __future__ import annotations
+
+import sqlite3
+from typing import Callable
+
+from .db import SCHEMA as TENANT_V1
+
+Migration = tuple[int, str, str | Callable[[sqlite3.Connection], None]]
+
+CONTROL: list[Migration] = [
+    (1, "control plane", """
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  password_changed_at TEXT NOT NULL,
+  disabled INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE organizations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('workspace','sample')),
+  bank_mode TEXT NOT NULL DEFAULT 'local' CHECK (bank_mode IN ('local','airwallex_sandbox')),
+  webhook_secret_local TEXT NOT NULL,
+  airwallex_webhook_secret TEXT,
+  airwallex_global_accounts TEXT NOT NULL DEFAULT '{}',
+  created_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL
+);
+CREATE TABLE memberships (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  org_id TEXT NOT NULL REFERENCES organizations(id),
+  role TEXT NOT NULL CHECK (role IN ('owner','operator','viewer')),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, org_id)
+);
+CREATE TABLE sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  org_id TEXT REFERENCES organizations(id),
+  csrf_token TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  user_agent TEXT
+);
+CREATE INDEX sessions_user ON sessions(user_id);
+CREATE TABLE invitations (
+  token_hash TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES organizations(id),
+  email TEXT NOT NULL COLLATE NOCASE,
+  role TEXT NOT NULL CHECK (role IN ('owner','operator','viewer')),
+  invited_by TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  accepted_at TEXT,
+  revoked_at TEXT
+);
+CREATE TABLE login_failures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX login_failures_key ON login_failures(key, at);
+CREATE TABLE control_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  org_id TEXT,
+  action TEXT NOT NULL,
+  detail TEXT NOT NULL
+);
+"""),
+    (2, "sign in with Google / Apple", """
+CREATE TABLE oauth_identities (
+  provider TEXT NOT NULL CHECK (provider IN ('google','apple')),
+  subject TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  email TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_login_at TEXT,
+  PRIMARY KEY (provider, subject)
+);
+CREATE UNIQUE INDEX oauth_identities_user_provider ON oauth_identities(user_id, provider);
+CREATE TABLE oauth_states (
+  state_hash TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  binding_hash TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  code_verifier TEXT,
+  intent TEXT NOT NULL CHECK (intent IN ('signin','link')),
+  link_user_id TEXT REFERENCES users(id),
+  return_to TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+)
+"""),
+]
+
+
+def _tenant_v2(conn: sqlite3.Connection) -> None:
+    # conn.execute, not executescript: executescript would COMMIT the migration transaction early.
+    conn.execute("""
+CREATE TABLE IF NOT EXISTS invoice_adjustments (
+  id TEXT PRIMARY KEY,
+  invoice_id TEXT NOT NULL REFERENCES invoices(id),
+  currency TEXT NOT NULL,
+  delta_minor INTEGER NOT NULL CHECK (delta_minor != 0),
+  reason TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)""")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(approvals)")}
+    if "created_by" not in cols:
+        conn.execute("ALTER TABLE approvals ADD COLUMN created_by TEXT")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(customers)")}
+    if "updated_at" not in cols:
+        conn.execute("ALTER TABLE customers ADD COLUMN updated_at TEXT")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(invoices)")}
+    if "voided_at" not in cols:
+        conn.execute("ALTER TABLE invoices ADD COLUMN voided_at TEXT")
+
+
+TENANT: list[Migration] = [
+    (1, "ledger schema", TENANT_V1),
+    (2, "invoice adjustments, approval author, edit timestamps", _tenant_v2),
+]
+
+
+def migrate(conn: sqlite3.Connection, migrations: list[Migration]) -> list[int]:
+    conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+    applied = {r[0] for r in conn.execute("SELECT version FROM schema_migrations")}
+    ran = []
+    for version, name, step in migrations:
+        if version in applied:
+            continue
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if version not in {r[0] for r in conn.execute("SELECT version FROM schema_migrations")}:
+                if callable(step):
+                    step(conn)
+                else:
+                    for statement in [s for s in step.split(";\n") if s.strip()]:
+                        conn.execute(statement)
+                conn.execute("INSERT INTO schema_migrations(version, name) VALUES (?, ?)", (version, name))
+                ran.append(version)
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    return ran

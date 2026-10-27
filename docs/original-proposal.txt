@@ -1,0 +1,74 @@
+Ledgerline: when a payment doesn't match, my agent asks the payer's agent
+Published
+Registration & Idea Phase
+Last updated Oct 27, 2026 03:34 AM IST (Asia/Kolkata)
+Description
+*
+In one line: an agent that matches incoming payments to invoices. When one doesn't add up, it asks the customer's own finance agent what the money was for, verifies that answer, then fixes it with a credit, a refund, a payment link or an FX conversion, without ever paying twice.
+
+Track: Treasury & Ops (closest one is Track 1, Adaptive Treasury Controller). Solo entry.
+
+The flow: deposit lands → rules in code try to match it → if it's unclear, ask the payer's agent → verify the answer → act (credit / refund / payment link / FX) → ledger balances to the cent
+
+Who it's for
+Take a 12-person software company in Singapore that bills customers in the US, the EU and the UK. That's the kind of business Airwallex Global Accounts are built for. Every week their one finance person spends hours matching payments by hand. The references say "INV 2231 + 2240", or nothing at all. A bank fee turns a 5,000 invoice into 4,970. A customer pays twice. Another pays a EUR invoice in USD. Each unclear payment means an email and a two-day wait, and meanwhile the cash sits in the wrong currency while next week's bills are due in another.
+
+Mistakes cost real money and goodwill. Refund a "duplicate" that was really an advance payment and you annoy a good customer. Chase a short payment that was only a bank fee and you look careless.
+
+What I'll build
+Ledgerline listens for Airwallex deposit.settled webhooks. For every deposit, it picks one action:
+
+Clean match: mark the invoice paid.
+Short by a bank fee (under a tolerance set in code): write off the gap.
+Short by more: record a partial payment and send an Airwallex payment link for the exact balance.
+Paid twice: refund it, or keep it as credit. The evidence decides.
+No reference: ask the payer's agent. If there's no agent, Claude reads their emails and PDFs. If it's still unsure, a person decides.
+Wrong currency: convert only what's needed, or hold it if a bill in that currency is due soon.
+Then it handles cash placement: it keeps a reserve in each currency and converts only the gap for upcoming bills.
+
+The new part: agents on both sides, verify before trust
+Soon both sides of a payment will have agents. In my build, each customer's AP agent exposes one MCP tool, explain_payment. Ledgerline asks "5,000 USD on 21 Oct, which invoice?" and gets back a signed answer. The JSON carries the invoice number, amount and reason, plus the deposit ID it refers to and an expiry time.
+
+Ledgerline treats that answer as a claim, not a fact:
+
+The signature must match the key that customer registered, so nobody else can answer for them.
+The answer must name this exact deposit and must not have expired, so an old answer can't be replayed.
+Our own records must agree: the invoice exists, belongs to that customer, and the amount fits.
+If any check fails, the answer is ignored and a person gets the case. In the demo I run the customer agents myself, and one of them gives a wrong answer on purpose.
+
+Demo (around 4 minutes)
+Six open invoices in USD, EUR and GBP, and six messy deposits created with simulation/deposit/create.
+First plan: 2 clean matches, 1 short payment, 1 unknown deposit, and 2 apparent duplicates to refund.
+The short payment is bigger than a bank fee, so a payment link for the exact balance goes out.
+The first "duplicate" customer's agent replies, signed: "it's for the March invoice." All three checks pass, so the refund is dropped before any money moves and the payment becomes credit.
+Another agent claims the unknown deposit belongs to a different customer's invoice. Check 3 fails, and the case comes to me with the reason shown.
+A EUR bill is due in 3 days. The agent gets an FX quote and converts only the shortfall above the EUR reserve.
+The second duplicate's agent confirms it really was paid twice. The refund is over the auto limit, so I approve it on screen and it's sent under a duplicate lock.
+The finish: deposits = matched + credits + refunds + unapplied, to the cent.
+Scorecard shown at the end: 6 deposits, 4 settled with no human, 1 approval, 1 escalation with a reason, 0 double payments, and the ledger balanced to the cent.
+
+Keeping it safe
+Money rules (tolerances, reserves, refund limits, the final balance check) live in code. Claude reads messy text, compares evidence and explains. It never decides amounts.
+Nothing another agent says moves money until it passes all three checks.
+Claude never sees API keys. It can only call typed tools like propose_refund and propose_conversion, which code validates first.
+Approvals are tied to the exact amount, currency, counterparty and evidence shown. If any of that changes, the agent asks again.
+Each refund gets its own request_id and a lock per deposit. Transfers are tracked to a final state, and SENT doesn't count as done.
+Webhook signatures are verified and events are deduped by ID, so a repeated event can't trigger a second action.
+There's one "pause" switch that stops every money-out action at once while matching keeps running.
+Build plan (3 weeks, solo)
+Day 3 milestone: one deposit goes end to end. Webhook in, matched, ledger updated.
+Week 1: sandbox setup, the ledger, deposit simulation, and the matching rules in code.
+Week 2: Claude for messy references, the explain_payment tool with signed answers, and the three checks.
+Week 3: FX, refunds and payment links with locks and approvals, the dashboard, and the video.
+Risks and fallbacks:
+
+If the sandbox doesn't send webhooks reliably, I poll GET /deposits. The decision code stays the same.
+If deposits don't carry the reference text, I store it on my side when I simulate each one.
+If payment links aren't enabled on my sandbox, the agent drafts the balance-due email instead.
+Airwallex APIs
+deposit.settled webhook, GET /deposits, GET /balances/current, GET /global_accounts, POST /simulation/deposit/create, GET /fx/rates/current, POST /fx/quotes/create, POST /fx/conversions/create, POST /beneficiaries/schema, POST /beneficiaries/create, POST /transfers/create, POST /simulation/transfers/{id}/transition, GET /transfers, POST /pa/payment_links/create. All sandbox.
+
+Stack: Python, FastAPI, SQLite, Claude with tool use, MCP for agent-to-agent calls, and a simple web dashboard.
+
+Why me
+I spend a lot of time on ML competitions where most of the work is cleaning and matching messy data. Reconciliation is that same problem, with real money on the line.

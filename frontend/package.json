@@ -1,0 +1,27 @@
+{
+  "name": "ledgerline-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "preview": "vite preview --host 127.0.0.1",
+    "e2e": "node -e \"require('fs').rmSync('e2e/.data',{recursive:true,force:true})\" && playwright test"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "5.1.0",
+    "@fontsource/ibm-plex-sans": "5.1.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "5.2.0",
+    "typescript": "5.6.3",
+    "vite": "7.3.7"
+  }
+}

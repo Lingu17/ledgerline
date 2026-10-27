@@ -1,0 +1,571 @@
+"""HTTP routes. Thin: validation and orchestration live in the domain modules."""
+from __future__ import annotations
+
+import json
+from typing import Any, Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+
+from .. import claude_reader, db, demo, ledger, payouts, treasury, webhooks, workspace
+from ..clock import iso
+from ..context import AppContext, validate_policy
+from ..payer_agents.client import explain_payments
+from ..providers.local import DEMO_RATES
+from ..reconcile import deposit_buckets, latest_plan, pending_agent_questions, record_agent_answer
+from .security import require_operator, require_owner, require_reader
+
+router = APIRouter()
+read = [Depends(require_reader)]
+
+
+def ctx_of(request: Request) -> AppContext:
+    """The authenticated member's organization context (set by the role dependency)."""
+    return request.state.principal.ctx
+
+
+def _page(response: Response, total: int) -> None:
+    response.headers["X-Total-Count"] = str(total)
+
+
+def _loads(row: dict[str, Any], *keys: str) -> dict[str, Any]:
+    for k in keys:
+        if row.get(k) is not None and isinstance(row[k], str):
+            row[k] = json.loads(row[k])
+    return row
+
+
+# --------------------------------------------------------------------------- status
+@router.get("/status", dependencies=read)
+def status(request: Request) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    s = ctx.settings
+    with ctx.conn() as conn:
+        paused = ctx.paused(conn)
+        pause_info = db.get_setting(conn, "money_out_pause_info", None)
+        policy = ctx.policy(conn)
+        epoch = db.get_setting(conn, "demo_epoch")
+    return {
+        "now": iso(ctx.clock.now()),
+        "demo_epoch": epoch,
+        "bank": {
+            "mode": ctx.provider.name,
+            "label": ctx.provider.label,
+            "airwallex_credentials_present": s.airwallex_configured,
+            "airwallex_executed_in_this_build": False,
+            "sandbox_available": s.airwallex_configured,
+            "global_accounts_configured": sorted(s.airwallex_global_account_ids),
+        },
+        "claude": {
+            "mode": "claude_api" if s.claude_configured else "deterministic_fixture",
+            "model": s.claude_model if s.claude_configured else None,
+            "label": f"Claude API ({s.claude_model})" if s.claude_configured else "Deterministic fixture - Claude not invoked (no ANTHROPIC_API_KEY)",
+        },
+        "payer_agents": {
+            "transport": "mcp/stdio" if s.payer_mcp_transport == "stdio" else "mcp/in-memory",
+            "label": "Simulated customer agents (local demo), real MCP protocol",
+        },
+        "security": {
+            "bind_host": s.host,
+            "cookie_secure": s.cookie_secure,
+            "allowed_origins": list(s.allowed_origins),
+            "webhook_secret_source": "organization Airwallex secret" if s.airwallex_webhook_secret else "organization local secret",
+            "webhook_path": f"/api/webhooks/airwallex/{ctx.org['id']}" if ctx.org else None,
+        },
+        "org": ctx.org,
+        "role": request.state.principal.role,
+        "paused": paused,
+        "pause_info": pause_info,
+        "policy": policy,
+        "demo_fx_rates": [{"sell": a, "buy": b, "rate": str(r)} for (a, b), r in DEMO_RATES.items()],
+    }
+
+
+# --------------------------------------------------------------------------- overview
+@router.get("/overview", dependencies=read)
+def overview(request: Request) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        pos = treasury.wallet_position(conn, ctx)
+        counts = {r["status"]: r["n"] for r in db.rows(conn, "SELECT status, COUNT(*) AS n FROM deposits GROUP BY status")}
+        queue = []
+        for d in db.rows(conn, "SELECT * FROM deposits WHERE status IN ('awaiting_evidence','escalated','refund_awaiting_approval','refund_in_flight') ORDER BY received_at"):
+            queue.append({"kind": "deposit", "id": d["id"], "status": d["status"], "currency": d["currency"],
+                          "amount_minor": d["amount_minor"], "payer_name": d["payer_name"], "reason": d["escalation_reason"]})
+        for a in db.rows(conn, "SELECT * FROM approvals WHERE status = 'pending'"):
+            scope = json.loads(a["scope"])
+            queue.append({"kind": "approval", "id": a["id"], "status": "pending", "currency": scope["currency"],
+                          "amount_minor": scope["amount_minor"], "payer_name": scope["destination"], "reason": a["reason"]})
+        for o in db.rows(conn, "SELECT * FROM operations WHERE needs_reconciliation = 1"):
+            queue.append({"kind": "operation", "id": o["id"], "status": o["status"], "currency": o["currency"],
+                          "amount_minor": o["amount_minor"], "payer_name": o["destination"], "reason": o["last_error"]})
+        cons = ledger.conservation(conn)
+        paused = ctx.paused(conn)
+    return {
+        "wallets": [{k: v for k, v in p.items() if k != "obligations"} for p in pos.values()],
+        "deposit_counts": counts,
+        "work_queue": queue,
+        "conservation": {c: v["balanced"] for c, v in cons["currencies"].items()},
+        "all_balanced": cons["all_balanced"],
+        "scorecard": demo.scorecard(ctx),
+        "paused": paused,
+    }
+
+
+# --------------------------------------------------------------------------- deposits
+def _deposit_summary(conn, d: dict[str, Any]) -> dict[str, Any]:
+    plan = latest_plan(conn, d["id"])
+    cust = db.row(conn, "SELECT name FROM customers WHERE id = ?", (d["customer_id"],)) if d["customer_id"] else None
+    return {**d, "customer_name": cust["name"] if cust else None, "buckets": deposit_buckets(conn, d["id"]),
+            "plan": plan, "plan_count": conn.execute("SELECT COUNT(*) FROM plans WHERE deposit_id = ?", (d["id"],)).fetchone()[0]}
+
+
+@router.get("/deposits", dependencies=read)
+def list_deposits(request: Request, response: Response, status: str | None = None, currency: str | None = None,
+                  q: str | None = Query(None, max_length=80), limit: int = Query(200, ge=1, le=500),
+                  offset: int = Query(0, ge=0)) -> list[dict[str, Any]]:
+    ctx = ctx_of(request)
+    sql, params = "SELECT * FROM deposits WHERE 1=1", []
+    if status:
+        sql += " AND status = ?"
+        params.append(status)
+    if currency:
+        sql += " AND currency = ?"
+        params.append(currency)
+    if q:
+        sql += " AND (id LIKE ? OR payer_name LIKE ? OR reference LIKE ? OR provider_ref LIKE ?)"
+        params += [f"%{q}%"] * 4
+    with ctx.conn() as conn:
+        _page(response, conn.execute(sql.replace("SELECT *", "SELECT COUNT(*)", 1), tuple(params)).fetchone()[0])
+        rows = db.rows(conn, sql + " ORDER BY received_at DESC, id DESC LIMIT ? OFFSET ?", (*params, limit, offset))
+        return [_deposit_summary(conn, d) for d in rows]
+
+
+@router.get("/deposits/{deposit_id}", dependencies=read)
+def get_deposit(request: Request, deposit_id: str) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        d = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (deposit_id,))
+        if d is None:
+            raise HTTPException(404, "unknown deposit")
+        plans = [_loads(p, "actions") for p in db.rows(conn, "SELECT * FROM plans WHERE deposit_id = ? ORDER BY version", (deposit_id,))]
+        evidence = [_loads(e, "checks", "envelope") for e in db.rows(conn, "SELECT * FROM evidence WHERE deposit_id = ? ORDER BY version", (deposit_id,))]
+        return {
+            **_deposit_summary(conn, d),
+            "plans": plans,
+            "evidence": evidence,
+            "allocations": db.rows(conn, "SELECT * FROM allocations WHERE deposit_id = ?", (deposit_id,)),
+            "writeoffs": db.rows(conn, "SELECT * FROM writeoffs WHERE deposit_id = ?", (deposit_id,)),
+            "credits": db.rows(conn, "SELECT * FROM credits WHERE deposit_id = ?", (deposit_id,)),
+            "payment_links": db.rows(conn, "SELECT * FROM payment_links WHERE deposit_id = ?", (deposit_id,)),
+            "approvals": [_loads(a, "scope") for a in db.rows(conn, "SELECT * FROM approvals WHERE deposit_id = ? ORDER BY created_at", (deposit_id,))],
+            "operations": [_loads(o, "detail") for o in db.rows(conn, "SELECT * FROM operations WHERE deposit_id = ? ORDER BY created_at", (deposit_id,))],
+            "audit": [_loads(a, "detail") for a in db.rows(conn, "SELECT * FROM audit_events WHERE entity_id = ? OR detail LIKE ? ORDER BY id", (deposit_id, f'%"{deposit_id}"%'))],
+            "has_remittance_doc": d["provider_ref"] in claude_reader.REMITTANCE_DOCS,
+        }
+
+
+@router.post("/deposits/{deposit_id}/ask-agent")
+def ask_agent(request: Request, deposit_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        qs = [q for q in pending_agent_questions(conn) if q["deposit_id"] == deposit_id]
+    if not qs:
+        raise HTTPException(409, "deposit is not awaiting a payer agent answer")
+    answers, transport = explain_payments(ctx.settings.data_dir, qs, ctx.settings.payer_mcp_transport)
+    with ctx.conn() as conn, db.transaction(conn):
+        r = record_agent_answer(conn, ctx, deposit_id, qs[0]["customer_id"], answers[0], transport)
+    payouts.auto_execute_ready(ctx, operator)
+    return r
+
+
+class RemittanceBody(BaseModel):
+    text: str | None = Field(None, max_length=5000)
+
+
+@router.post("/deposits/{deposit_id}/read-remittance")
+def read_remittance(request: Request, deposit_id: str, body: RemittanceBody | None = None,
+                    operator: str = Depends(require_operator)) -> dict[str, Any]:
+    try:
+        return claude_reader.read_remittance(ctx_of(request), deposit_id, operator, body.text if body else None)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/deposits/{deposit_id}/resolve")
+def resolve(request: Request, deposit_id: str, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.resolve_deposit(ctx_of(request), deposit_id, body, operator)
+
+
+@router.post("/payments")
+def record_payment(request: Request, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.record_manual_payment(ctx_of(request), body, operator)
+
+
+@router.post("/customers")
+def create_customer(request: Request, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.create_customer(ctx_of(request), body, operator)
+
+
+@router.post("/invoices")
+def create_invoice(request: Request, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.create_invoice(ctx_of(request), body, operator)
+
+
+@router.patch("/customers/{customer_id}")
+def update_customer(request: Request, customer_id: str, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.update_customer(ctx_of(request), customer_id, body, operator)
+
+
+@router.patch("/invoices/{invoice_id}")
+def update_invoice(request: Request, invoice_id: str, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.update_invoice(ctx_of(request), invoice_id, body, operator)
+
+
+@router.post("/invoices/{invoice_id}/adjustments")
+def adjust_invoice(request: Request, invoice_id: str, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.adjust_invoice(ctx_of(request), invoice_id, body, operator)
+
+
+class CsvBody(BaseModel):
+    csv: str = Field(max_length=200_000)
+
+
+@router.post("/payments/import")
+def import_payments(request: Request, body: CsvBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.import_payments_csv(ctx_of(request), body.csv, operator)
+
+
+@router.post("/treasury/obligations")
+def create_obligation(request: Request, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.create_obligation(ctx_of(request), body, operator)
+
+
+@router.post("/treasury/opening-balance")
+def opening_balance(request: Request, body: dict[str, Any], owner: str = Depends(require_owner)) -> dict[str, Any]:
+    return workspace.set_opening_balance(ctx_of(request), body, owner)
+
+
+@router.post("/deposits/{deposit_id}/return-to-sender")
+def return_to_sender(request: Request, deposit_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return _loads(payouts.operator_return_to_sender(ctx_of(request), deposit_id, operator), "scope")
+
+
+@router.get("/invoices", dependencies=read)
+def list_invoices(request: Request, response: Response, q: str | None = Query(None, max_length=80),
+                  status: str | None = Query(None, pattern="^(outstanding|open|scheduled|paid|void)$"),
+                  customer_id: str | None = None, limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0)) -> list[dict[str, Any]]:
+    ctx = ctx_of(request)
+    from ..reconcile import invoice_views
+
+    with ctx.conn() as conn:
+        views = invoice_views(conn)
+        rows = db.rows(conn, "SELECT i.*, c.name AS customer_name FROM invoices i JOIN customers c ON c.id = i.customer_id ORDER BY i.id DESC")
+        if q:
+            ql = q.lower()
+            rows = [r for r in rows if ql in r["id"].lower() or ql in r["customer_name"].lower() or ql in r["description"].lower()]
+        if customer_id:
+            rows = [r for r in rows if r["customer_id"] == customer_id]
+        if status:
+            def keep(r):
+                v = views[r["id"]]
+                if status == "outstanding":
+                    return v.status == "open" and v.remaining_minor > 0
+                if status == "paid":
+                    return v.status in ("open", "paid") and v.remaining_minor == 0
+                return v.status == status
+            rows = [r for r in rows if keep(r)]
+        _page(response, len(rows))
+        out = []
+        for inv in rows[offset:offset + limit]:
+            v = views[inv["id"]]
+            out.append({**inv, "remaining_minor": v.remaining_minor, "effective_amount_minor": v.amount_minor,
+                        "effective_status": v.status,
+                        "adjustments": db.rows(conn, "SELECT * FROM invoice_adjustments WHERE invoice_id = ? ORDER BY created_at", (inv["id"],)),
+                        "allocated_minor": conn.execute("SELECT COALESCE(SUM(amount_minor),0) FROM allocations WHERE invoice_id=?", (inv["id"],)).fetchone()[0],
+                        "written_off_minor": conn.execute("SELECT COALESCE(SUM(amount_minor),0) FROM writeoffs WHERE invoice_id=?", (inv["id"],)).fetchone()[0],
+                        "payment_links": db.rows(conn, "SELECT * FROM payment_links WHERE invoice_id = ?", (inv["id"],))})
+        return out
+
+
+@router.get("/invoices/{invoice_id}", dependencies=read)
+def get_invoice(request: Request, invoice_id: str) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    from ..reconcile import invoice_views
+
+    with ctx.conn() as conn:
+        inv = db.row(conn, "SELECT i.*, c.name AS customer_name FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ?", (invoice_id,))
+        if inv is None:
+            raise HTTPException(404, "unknown invoice")
+        v = invoice_views(conn)[invoice_id]
+        return {**inv, "remaining_minor": v.remaining_minor, "effective_amount_minor": v.amount_minor, "effective_status": v.status,
+                "allocations": db.rows(conn, "SELECT a.*, d.payer_name, d.received_at FROM allocations a JOIN deposits d ON d.id = a.deposit_id WHERE a.invoice_id = ? ORDER BY a.created_at", (invoice_id,)),
+                "writeoffs": db.rows(conn, "SELECT * FROM writeoffs WHERE invoice_id = ?", (invoice_id,)),
+                "adjustments": db.rows(conn, "SELECT * FROM invoice_adjustments WHERE invoice_id = ? ORDER BY created_at", (invoice_id,)),
+                "payment_links": db.rows(conn, "SELECT * FROM payment_links WHERE invoice_id = ?", (invoice_id,)),
+                "audit": [_loads(a, "detail") for a in db.rows(conn, "SELECT * FROM audit_events WHERE entity_id = ? ORDER BY id", (invoice_id,))]}
+
+
+@router.get("/customers", dependencies=read)
+def list_customers(request: Request, response: Response, q: str | None = Query(None, max_length=80)) -> list[dict[str, Any]]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        out = []
+        rows = db.rows(conn, "SELECT * FROM customers ORDER BY name")
+        if q:
+            ql = q.lower()
+            rows = [c for c in rows if ql in c["name"].lower() or ql in c["id"].lower() or ql in c["payer_names"].lower()]
+        _page(response, len(rows))
+        for c in rows:
+            c["payer_names"] = json.loads(c["payer_names"])
+            c["credits"] = db.rows(conn, "SELECT * FROM credits WHERE customer_id = ?", (c["id"],))
+            out.append(c)
+        return out
+
+
+# --------------------------------------------------------------------------- evidence
+@router.get("/evidence", dependencies=read)
+def evidence_timeline(request: Request) -> list[dict[str, Any]]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        out = []
+        for d in db.rows(conn, "SELECT * FROM deposits WHERE id IN (SELECT deposit_id FROM evidence) OR id IN (SELECT deposit_id FROM plans GROUP BY deposit_id HAVING COUNT(*) > 1) ORDER BY received_at"):
+            out.append({
+                "deposit": d,
+                "plans": [_loads(p, "actions") for p in db.rows(conn, "SELECT * FROM plans WHERE deposit_id = ? ORDER BY version", (d["id"],))],
+                "evidence": [_loads(e, "checks", "envelope") for e in db.rows(conn, "SELECT * FROM evidence WHERE deposit_id = ? ORDER BY version", (d["id"],))],
+            })
+        return out
+
+
+# --------------------------------------------------------------------------- approvals & operations
+@router.get("/approvals", dependencies=read)
+def list_approvals(request: Request) -> list[dict[str, Any]]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        out = []
+        for a in db.rows(conn, "SELECT * FROM approvals ORDER BY created_at DESC"):
+            a = _loads(a, "scope")
+            ev = db.row(conn, "SELECT id, verdict, reason, checks, source FROM evidence WHERE id = ?", (a["scope"].get("evidence_id"),)) if a["scope"].get("evidence_id") else None
+            a["evidence"] = _loads(ev, "checks") if ev else None
+            a["operation"] = db.row(conn, "SELECT * FROM operations WHERE approval_id = ?", (a["id"],))
+            out.append(a)
+        return out
+
+
+class Decision(BaseModel):
+    scope_hash: str = Field(min_length=64, max_length=64)
+
+
+@router.post("/approvals/{approval_id}/approve")
+def approve(request: Request, approval_id: str, body: Decision, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return _loads(payouts.decide(ctx_of(request), approval_id, approve=True, actor=operator, seen_scope_hash=body.scope_hash), "scope")
+
+
+@router.post("/approvals/{approval_id}/reject")
+def reject(request: Request, approval_id: str, body: Decision, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return _loads(payouts.decide(ctx_of(request), approval_id, approve=False, actor=operator, seen_scope_hash=body.scope_hash), "scope")
+
+
+@router.post("/approvals/{approval_id}/execute")
+def execute(request: Request, approval_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return payouts.execute_refund(ctx_of(request), approval_id, operator)
+
+
+@router.get("/operations", dependencies=read)
+def list_operations(request: Request) -> list[dict[str, Any]]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        out = []
+        for o in db.rows(conn, "SELECT * FROM operations ORDER BY created_at DESC"):
+            o = _loads(o, "detail")
+            o["events"] = db.rows(conn, "SELECT * FROM operation_events WHERE operation_id = ? ORDER BY id", (o["id"],))
+            out.append(o)
+        return out
+
+
+class SimStatus(BaseModel):
+    next_status: Literal["SENT", "PAID", "FAILED"]
+
+
+@router.post("/operations/{op_id}/sync")
+def sync(request: Request, op_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        op = db.row(conn, "SELECT kind FROM operations WHERE id = ?", (op_id,))
+    if op is None:
+        raise HTTPException(404, "unknown operation")
+    if op["kind"] == "fx_conversion":
+        return treasury.sync_conversion(ctx, op_id)
+    return payouts.sync_operation(ctx, op_id)
+
+
+@router.post("/operations/{op_id}/simulate-bank")
+def simulate_bank(request: Request, op_id: str, body: SimStatus, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return payouts.simulate_bank_status(ctx_of(request), op_id, body.next_status)
+
+
+@router.post("/operations/{op_id}/cancel")
+def cancel(request: Request, op_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return payouts.cancel_pending(ctx_of(request), op_id, operator)
+
+
+# --------------------------------------------------------------------------- treasury
+@router.get("/treasury", dependencies=read)
+def treasury_view(request: Request) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        pos = treasury.wallet_position(conn, ctx)
+        obligations = db.rows(conn, "SELECT * FROM obligations ORDER BY due_at")
+        plans = {o["id"]: treasury.plan_for_obligation(conn, ctx, o["id"]) for o in obligations}
+        quotes = [treasury.quote_preview(conn, ctx, q["id"]) for q in db.rows(conn, "SELECT id FROM fx_quotes ORDER BY created_at DESC LIMIT 10")]
+        conversions = db.rows(conn, "SELECT * FROM operations WHERE kind = 'fx_conversion' ORDER BY created_at DESC")
+    return {"wallets": list(pos.values()), "obligations": obligations, "plans": plans, "quotes": quotes,
+            "conversions": conversions, "rates": [{"sell": a, "buy": b, "rate": str(r)} for (a, b), r in DEMO_RATES.items()],
+            "rate_source": ctx.provider.label}
+
+
+@router.post("/treasury/obligations/{obligation_id}/quote")
+def quote(request: Request, obligation_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return treasury.create_quote(ctx_of(request), obligation_id, operator)
+
+
+@router.post("/treasury/quotes/{quote_id}/execute")
+def convert(request: Request, quote_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return treasury.execute_conversion(ctx_of(request), quote_id, operator)
+
+
+# --------------------------------------------------------------------------- ledger & audit
+@router.get("/ledger", dependencies=read)
+def ledger_view(request: Request) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        return {"conservation": ledger.conservation(conn), "per_deposit": ledger.per_deposit_check(conn),
+                "journal": ledger.journal(conn, 300)}
+
+
+@router.get("/audit", dependencies=read)
+def audit_view(request: Request, response: Response, limit: int = Query(300, ge=1, le=2000), offset: int = Query(0, ge=0),
+               q: str | None = Query(None, max_length=80)) -> list[dict[str, Any]]:
+    ctx = ctx_of(request)
+    sql, params = "SELECT * FROM audit_events", []
+    if q:
+        sql += " WHERE action LIKE ? OR entity_id LIKE ? OR actor LIKE ? OR COALESCE(operation_id,'') LIKE ?"
+        params = [f"%{q}%"] * 4
+    with ctx.conn() as conn:
+        _page(response, conn.execute(sql.replace("SELECT *", "SELECT COUNT(*)", 1), params).fetchone()[0])
+        return [_loads(a, "detail") for a in db.rows(conn, sql + " ORDER BY id DESC LIMIT ? OFFSET ?", (*params, limit, offset))]
+
+
+@router.get("/audit/export", dependencies=read)
+def audit_export(request: Request) -> Response:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        payload = {
+            "exported_at": iso(ctx.clock.now()),
+            "organization": ctx.org,
+            "exported_by": request.state.principal.actor,
+            "mode": {"bank": ctx.provider.label, "claude": "claude_api" if ctx.settings.claude_configured else "deterministic_fixture"},
+            "synthetic_data_only": True,
+            "deposits": db.rows(conn, "SELECT * FROM deposits ORDER BY id"),
+            "plans": [_loads(p, "actions") for p in db.rows(conn, "SELECT * FROM plans ORDER BY deposit_id, version")],
+            "evidence": [_loads(e, "checks", "envelope") for e in db.rows(conn, "SELECT * FROM evidence ORDER BY deposit_id, version")],
+            "approvals": [_loads(a, "scope") for a in db.rows(conn, "SELECT * FROM approvals ORDER BY created_at")],
+            "operations": [_loads(o, "detail") for o in db.rows(conn, "SELECT * FROM operations ORDER BY created_at")],
+            "operation_events": db.rows(conn, "SELECT * FROM operation_events ORDER BY id"),
+            "conservation": ledger.conservation(conn),
+            "audit_events": [_loads(a, "detail") for a in db.rows(conn, "SELECT * FROM audit_events ORDER BY id")],
+            "scorecard": demo.scorecard(ctx),
+        }
+    body = json.dumps(payload, indent=2, default=str)
+    return Response(body, media_type="application/json",
+                    headers={"Content-Disposition": 'attachment; filename="ledgerline-evidence-export.json"', "Cache-Control": "no-store"})
+
+
+# --------------------------------------------------------------------------- settings
+class PauseBody(BaseModel):
+    paused: bool
+    reason: str = Field("", max_length=200)
+
+
+@router.post("/settings/pause")
+def set_pause(request: Request, body: PauseBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    """Any operator can stop money-out in an emergency; only an owner can resume it."""
+    ctx = ctx_of(request)
+    if not body.paused and request.state.principal.role != "owner":
+        raise HTTPException(403, "only an owner can resume money-out")
+    from .. import audit
+
+    with ctx.conn() as conn, db.transaction(conn):
+        now = iso(ctx.clock.now())
+        db.set_setting(conn, "money_out_paused", body.paused)
+        db.set_setting(conn, "money_out_pause_info", {"by": operator, "at": now, "reason": body.reason})
+        audit.record(conn, now, operator, "money_out.paused" if body.paused else "money_out.resumed", "settings", "pause",
+                     {"reason": body.reason})
+    return {"paused": body.paused}
+
+
+@router.put("/settings/policy")
+def put_policy(request: Request, body: dict[str, Any], operator: str = Depends(require_owner)) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    from .. import audit
+
+    policy = validate_policy(body)
+    with ctx.conn() as conn, db.transaction(conn):
+        db.set_setting(conn, "policy", policy)
+        audit.record(conn, iso(ctx.clock.now()), operator, "policy.updated", "settings", "policy", policy)
+    return policy
+
+
+# --------------------------------------------------------------------------- demo
+def _sample_only(ctx: AppContext) -> None:
+    if not ctx.org or ctx.org.get("kind") != "sample":
+        raise HTTPException(409, "the walkthrough runs only in sample organizations; create one from the organization menu")
+
+
+@router.get("/demo", dependencies=read)
+def demo_state(request: Request) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    if not ctx.org or ctx.org.get("kind") != "sample":
+        return {"available": False, "steps": [], "next": None, "blocked": None, "provider": ctx.provider.label}
+    return {"available": True, **demo.state(ctx)}
+
+
+class StepBody(BaseModel):
+    step: str = Field(max_length=32)
+
+
+@router.post("/demo/step")
+def demo_step(request: Request, body: StepBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    _sample_only(ctx)
+    if body.step == "seed" and request.state.principal.role != "owner":
+        raise HTTPException(403, "only an owner can reset the sample organization")
+    return demo.run_step(ctx, body.step, operator)
+
+
+@router.get("/scorecard", dependencies=read)
+def scorecard(request: Request) -> dict[str, Any]:
+    return demo.scorecard(ctx_of(request))
+
+
+# --------------------------------------------------------------------------- webhooks
+@router.post("/webhooks/airwallex/{org_id}")
+async def airwallex_webhook(request: Request, org_id: str) -> dict[str, Any]:
+    """Each organization has its own webhook URL and secret. HMAC is the only credential."""
+    try:
+        ctx = request.app.state.orgs.get(org_id)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(404, "unknown webhook endpoint") from exc
+    raw = await request.body()
+    if len(raw) > 64_000:
+        raise HTTPException(413, "payload too large")
+    secret = ctx.settings.airwallex_webhook_secret or ctx.settings.webhook_secret
+    source = "airwallex_sandbox_webhook" if ctx.settings.airwallex_webhook_secret else "local_simulated_webhook"
+    from starlette.concurrency import run_in_threadpool
+
+    return await run_in_threadpool(
+        webhooks.handle, ctx, raw_body=raw, timestamp_ms=request.headers.get("x-timestamp"),
+        signature=request.headers.get("x-signature"), secret=secret, source=source,
+    )

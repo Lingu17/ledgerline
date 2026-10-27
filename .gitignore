@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/.venv/
+.venv/
+
+# Local state: databases, simulated bank, payer agent PRIVATE keys
+backend/var/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Secrets
+.env
+backend/.env
+*.pem
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local tooling
+.claude/

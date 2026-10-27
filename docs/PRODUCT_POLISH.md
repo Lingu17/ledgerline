@@ -1,0 +1,11 @@
+# User clarification — real application quality
+
+The user explicitly clarified: "make sure it look like real application not as demo one".
+
+Treat this as a functional finance operations workspace, not a demo landing page. Default to an operational overview/inbox with useful records and actions; the guided demo should be an optional secondary flow. Navigation, filtering, search, record detail, approvals, treasury and settings must work and persist. Distinctive, restrained visual design with careful spacing/typography and realistic information hierarchy. No giant demo instructions, placeholder buttons, fake live activity, invented performance claims or decorative charts without data. Avoid dashboard templates and generic gradient/glow styling.
+
+Support ordinary application input rather than requiring the fixed walkthrough: create customer and invoice through validated, audited API/UI forms; import or manually record synthetic received payments in local mode with idempotent external references (clearly marked manually imported, not bank-verified); and resolve an escalated payment with explicit operator allocation/credit or return proposal under the same accounting safeguards. A useful populated sample workspace on first launch is fine, with guided walkthrough available separately. Add a way to enter remittance text for evidence extraction, rather than only two hardcoded remittance documents, if feasible within the current architecture. Do not weaken the deterministic ownership, conservation, approval, pause or idempotency checks for these inputs. Clearly surface validation errors. Keep the sandbox path separate from local manually imported funds.
+
+Keep truthful mode indicators (e.g. a compact "Local workspace" or "Sandbox" badge, integration readiness in Settings) and a clear disclosure when required. A professional interface must not imply simulated bank actions or fixture evidence are real. API keys stay on the backend. Realistic synthetic names/data, usable empty states, error feedback and responsive layouts.
+
+Preserve the project requirements and address docs/CODEX_REVIEW_FINDINGS.md before handoff. Codex independently tests functionality and reviews visual quality.

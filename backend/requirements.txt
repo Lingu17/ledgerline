@@ -1,0 +1,10 @@
+# Direct dependencies (exact pins). Full transitive lock: requirements-lock.txt
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.1
+cryptography==50.0.2
+httpx==0.28.1
+python-multipart==0.0.32
+mcp==2.3.0
+anthropic==2.3.0
+pytest==9.1.1
