@@ -58,6 +58,8 @@ def create_customer(ctx: AppContext, body: dict[str, Any], actor: str) -> dict[s
     pub = body.get("agent_public_key") or None
     key_id = None
     if pub is not None:
+        if not isinstance(pub, str):
+            raise InputError("agent_public_key must be a base64 raw Ed25519 public key (32 bytes)")
         try:
             if len(crypto.b64d(pub)) != 32:
                 raise ValueError
@@ -91,6 +93,8 @@ def create_invoice(ctx: AppContext, body: dict[str, Any], actor: str) -> dict[st
     except ValueError as exc:
         raise InputError("due_date must be YYYY-MM-DD") from exc
     with ctx.conn() as conn, db.transaction(conn):
+        if not isinstance(body.get("customer_id"), str):
+            raise InputError("customer_id does not exist")
         cust = db.row(conn, "SELECT id FROM customers WHERE id = ?", (body.get("customer_id"),))
         if cust is None:
             raise InputError("customer_id does not exist")
@@ -244,6 +248,8 @@ def update_customer(ctx: AppContext, customer_id: str, body: dict[str, Any], act
         if "agent_public_key" in body:
             pub = body["agent_public_key"] or None
             if pub is not None:
+                if not isinstance(pub, str):
+                    raise InputError("agent_public_key must be a base64 raw Ed25519 public key (32 bytes)")
                 try:
                     if len(crypto.b64d(pub)) != 32:
                         raise ValueError

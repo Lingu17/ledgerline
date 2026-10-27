@@ -43,6 +43,7 @@ _ENV_KEYS = (
     "LEDGERLINE_REQUIRE_PERSISTENT_MOUNT",
     "LEDGERLINE_SANDBOX_ORGS",
     "LEDGERLINE_CLAUDE_DAILY_LIMIT",
+    "LEDGERLINE_CLAUDE_SERVER_DAILY_LIMIT",
     "LEDGERLINE_EDGE_SECRET",
     "LEDGERLINE_DATABASE_URL",
     "LEDGERLINE_PG_SCHEMA_PREFIX",
@@ -105,6 +106,8 @@ class Settings:
     sandbox_org_ids: frozenset[str] = frozenset()
     # Shared Anthropic key: at most this many Claude calls per organization per UTC day.
     claude_daily_limit: int = 25
+    # ...and at most this many across the whole server per UTC day (the spending safeguard for the shared key).
+    claude_server_daily_limit: int = 200
     # Optional shared secret the edge proxy adds as X-Ledgerline-Edge. When set, X-Forwarded-For is trusted only on
     # requests carrying it, so a client calling the origin directly cannot choose its throttling identity.
     edge_secret: str | None = None
@@ -135,6 +138,36 @@ class Settings:
     @property
     def claude_configured(self) -> bool:
         return bool(self.anthropic_api_key)
+
+
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+_ENCRYPTING_SSLMODES = {"require", "verify-ca", "verify-full"}
+
+
+def check_database_tls(url: str) -> None:
+    """Refuse a remote PostgreSQL URL unless every sslmode it carries enforces encryption.
+
+    The URL is parsed rather than searched, so text elsewhere in it (a password, application_name=@localhost)
+    cannot make a remote host look local, and a `host=` query parameter (which libpq lets override the
+    authority) counts as a host too."""
+    from urllib.parse import parse_qs, urlsplit
+
+    parts = urlsplit(url)
+    if parts.scheme not in ("postgres", "postgresql"):
+        raise ValueError("LEDGERLINE_DATABASE_URL must be a postgresql:// URL")
+    try:
+        query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=bool(parts.query))
+        authority = [h for h in (parts.hostname,) if h]
+    except ValueError as exc:
+        raise ValueError(f"LEDGERLINE_DATABASE_URL could not be parsed: {exc}") from None
+    hosts = authority + [h for v in query.get("host", []) + query.get("hostaddr", []) for h in v.split(",")]
+    hosts = [h.strip().strip("[]").lower() for h in hosts]
+    local = all(h in _LOCAL_HOSTS or h.startswith("/") or h == "" for h in hosts)
+    modes = [m.strip().lower() for m in query.get("sslmode", [])]
+    if local:
+        return
+    if not modes or any(m not in _ENCRYPTING_SSLMODES for m in modes):
+        raise ValueError("LEDGERLINE_DATABASE_URL must set sslmode=require (or verify-ca / verify-full) for a remote database")
 
 
 def load_settings(overrides: dict[str, str] | None = None) -> Settings:
@@ -184,6 +217,7 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.require_persistent_mount = env.get("LEDGERLINE_REQUIRE_PERSISTENT_MOUNT") or None
     s.sandbox_org_ids = frozenset(x.strip() for x in env.get("LEDGERLINE_SANDBOX_ORGS", "").split(",") if x.strip())
     s.claude_daily_limit = max(0, int(env.get("LEDGERLINE_CLAUDE_DAILY_LIMIT") or 25))
+    s.claude_server_daily_limit = max(0, int(env.get("LEDGERLINE_CLAUDE_SERVER_DAILY_LIMIT") or 200))
     s.edge_secret = env.get("LEDGERLINE_EDGE_SECRET") or None
     s.database_url = env.get("LEDGERLINE_DATABASE_URL") or None
     prefix = (env.get("LEDGERLINE_PG_SCHEMA_PREFIX") or "ll").strip().lower()
@@ -199,8 +233,7 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
         # writing accounts and money records to an ephemeral local SQLite file.
         raise ValueError("LEDGERLINE_REQUIRE_DATABASE=1 but LEDGERLINE_DATABASE_URL is not set; refusing to start on local storage")
     if s.database_url:
-        if "sslmode=" not in s.database_url and not any(h in s.database_url for h in ("@localhost", "@127.0.0.1")):
-            raise ValueError("LEDGERLINE_DATABASE_URL must set sslmode=require (or verify-full) for a remote database")
+        check_database_tls(s.database_url)
         if not s.secret_key or len(s.secret_key) < 32:
             raise ValueError("LEDGERLINE_SECRET_KEY (32+ random characters) is required with LEDGERLINE_DATABASE_URL")
         s.db_path = s.pg_target("t", "single")

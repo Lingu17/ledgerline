@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
 from ..payer_agents.keys import key_location
 from .. import claude_reader, db, demo, ledger, payouts, treasury, webhooks, workspace
@@ -189,7 +189,8 @@ class RemittanceBody(BaseModel):
 def read_remittance(request: Request, deposit_id: str, body: RemittanceBody | None = None,
                     operator: str = Depends(require_operator)) -> dict[str, Any]:
     try:
-        return claude_reader.read_remittance(ctx_of(request), deposit_id, operator, body.text if body else None)
+        return claude_reader.read_remittance(ctx_of(request), deposit_id, operator, body.text if body else None,
+                                             control=request.app.state.control)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -204,24 +205,62 @@ def record_payment(request: Request, body: dict[str, Any], operator: str = Depen
     return workspace.record_manual_payment(ctx_of(request), body, operator)
 
 
+# Typed request bodies: a field of the wrong JSON type is refused with 422 before anything reaches the database
+# or the key decoder. Fields are optional here so a missing value still gets the domain's own message (workspace.py),
+# and only fields the client actually sent are passed on (exclude_unset keeps PATCH semantics).
+class _Body(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    def fields(self) -> dict[str, Any]:
+        return self.model_dump(exclude_unset=True)
+
+
+class CustomerBody(_Body):
+    name: StrictStr | None = None
+    country: StrictStr | None = None
+    payer_names: list[StrictStr] | None = None
+    refund_beneficiary: StrictStr | None = None
+    agent_public_key: StrictStr | None = None
+
+
+Amount = StrictStr | StrictInt | StrictFloat
+
+
+class InvoiceBody(_Body):
+    customer_id: StrictStr | None = None
+    currency: StrictStr | None = None
+    amount: Amount | None = None
+    description: StrictStr | None = None
+    due_date: StrictStr | None = None
+
+
+class InvoicePatchBody(_Body):
+    description: StrictStr | None = None
+    due_date: StrictStr | None = None
+    # Never editable; accepted only so the domain can say so (workspace.update_invoice).
+    amount: Any = None
+    currency: Any = None
+    customer_id: Any = None
+
+
 @router.post("/customers")
-def create_customer(request: Request, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
-    return workspace.create_customer(ctx_of(request), body, operator)
+def create_customer(request: Request, body: CustomerBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.create_customer(ctx_of(request), body.fields(), operator)
 
 
 @router.post("/invoices")
-def create_invoice(request: Request, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
-    return workspace.create_invoice(ctx_of(request), body, operator)
+def create_invoice(request: Request, body: InvoiceBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.create_invoice(ctx_of(request), body.fields(), operator)
 
 
 @router.patch("/customers/{customer_id}")
-def update_customer(request: Request, customer_id: str, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
-    return workspace.update_customer(ctx_of(request), customer_id, body, operator)
+def update_customer(request: Request, customer_id: str, body: CustomerBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.update_customer(ctx_of(request), customer_id, body.fields(), operator)
 
 
 @router.patch("/invoices/{invoice_id}")
-def update_invoice(request: Request, invoice_id: str, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
-    return workspace.update_invoice(ctx_of(request), invoice_id, body, operator)
+def update_invoice(request: Request, invoice_id: str, body: InvoicePatchBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.update_invoice(ctx_of(request), invoice_id, body.fields(), operator)
 
 
 @router.post("/invoices/{invoice_id}/adjustments")

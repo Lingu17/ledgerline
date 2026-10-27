@@ -161,7 +161,7 @@ Financial rules the code enforces (unchanged from the single-tenant build, all r
 - Apple: create a Services ID with Sign in with Apple, a key (.p8), and register `https://<your host>/api/auth/oauth/apple/callback`. Apple only accepts HTTPS redirects and returns by cross-site form POST, so run behind TLS with `LEDGERLINE_COOKIE_SECURE=1`. Set `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY_PATH`. The client secret is a 5-minute ES256 JWT signed per request.
 - Server-side checks: single-use state bound to the starting browser by an HttpOnly cookie (10-minute expiry), nonce, ID-token RS256 signature against the provider's published keys, issuer, audience, expiry, and a verified email for new accounts. A provider login is **never merged into an existing password account by email**, because password sign-ups do not verify email ownership. Instead, sign in with the password and use Settings → Sign-in methods → Connect. Accounts created through a provider have no password; the last sign-in method cannot be disconnected. Invited users can sign in with a provider and then join in one click if the address matches.
 
-**Claude** (optional): set `ANTHROPIC_API_KEY` (model defaults to `claude-opus-5-5`, override with `LEDGERLINE_CLAUDE_MODEL`). Used only by *Read remittance*.
+**Claude** (optional): set `ANTHROPIC_API_KEY` (model defaults to `claude-opus-5-5`, override with `LEDGERLINE_CLAUDE_MODEL`). Used only by *Read remittance*. Calls are budgeted per organization (`LEDGERLINE_CLAUDE_DAILY_LIMIT`, default 25) and server-wide (`LEDGERLINE_CLAUDE_SERVER_DAILY_LIMIT`, default 200) per UTC day; each attempt is reserved before dispatch and counts even if it fails.
 
 ## Four-minute demo script
 

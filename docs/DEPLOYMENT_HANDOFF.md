@@ -2,6 +2,18 @@
 
 Last updated 27 Oct 2026. Branch `deploy/vercel-render` (not merged to `main`). This file states only what was observed; anything not yet executed is marked **not yet run**.
 
+## Review fixes after `eeaf1e6` (27 Oct 2026)
+
+Codex's review of `eeaf1e6` reproduced five issues; all are fixed with regressions:
+
+| # | Issue | Fix | Regressions |
+|---|---|---|---|
+| 1 | Live `/api/health` 502 (Vercel) / timeout (Render) | **Not reproduced** on 27 Oct: both returned 200 in ~0.3 s. The service is on Render Free, which spins down when idle; a cold start can exceed Vercel's rewrite timeout (502) and a client timeout. Render logs were not inspected (dashboard not signed in from this session), so this cause is likely, not established. The same probe showed `"storage":"local directory"`, i.e. the live service is **still on ephemeral SQLite**; that is the real deployment blocker (see below). | probe only |
+| 2 | Claude limit race; failed calls free | Control-plane migration v3 `claude_calls`. `ControlPlane.reserve_claude_call` checks the organization limit and the new server-wide `LEDGERLINE_CLAUDE_SERVER_DAILY_LIMIT` (default 200) and inserts a `reserved` row in one serialized transaction, committed **before** the API call; the call runs with no transaction open; the row is then settled `succeeded`/`failed`. Every reservation counts, including failed and never-settled (interrupted) ones. Without the control plane a configured key is never used. | `test_judge_safety.py`: 6 simultaneous requests at limit 1 → exactly 1 model call; failed calls consume budget; server-wide cap across organizations |
+| 3 | `sslmode=disable/allow/prefer` accepted; `application_name=@localhost` looked local | `config.check_database_tls` parses the URL: scheme must be postgres(ql); hosts from the authority **and** `host=`/`hostaddr=` query parameters; local only if every host is loopback or a socket path; otherwise every `sslmode` must be `require`, `verify-ca` or `verify-full`. | `test_deployment.py` negative cases |
+| 4 | Wrong JSON types → 500 | Typed pydantic bodies (`StrictStr`, strict numbers) for create/update customer and invoice; wrong types are 422 before database binding or key decoding. Domain functions also type-check `agent_public_key` and `customer_id`. | `test_input_validation.py`: 422 and state unchanged |
+| 5 | Non-ASCII `x-ledgerline-edge` crashed `compare_digest` | `security.same_secret` compares bytes with a length bound; malformed proof is simply untrusted. Same helper for `X-CSRF-Token`. | `test_deployment.py` |
+
 ## Selected architecture (user decision)
 
 ```

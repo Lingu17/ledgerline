@@ -132,6 +132,28 @@ class ControlPlane:
         c.execute("INSERT INTO control_audit(at, actor, org_id, action, detail) VALUES (?,?,?,?,?)",
                   (self.now(), actor, org_id, action, json.dumps(detail, sort_keys=True)))
 
+    # ---------------------------------------------------------------- Claude budget
+    def reserve_claude_call(self, org_id: str, org_limit: int, server_limit: int) -> int:
+        """Reserve one Claude call before it is dispatched. Every reservation counts against today's budget
+        whatever its outcome (a failed or interrupted call may still have been billed), and the check and the
+        insert share one serialized transaction, so concurrent requests cannot overspend."""
+        day = self.clock.now().strftime("%Y-%m-%d")
+        with self.conn() as c, db.transaction(c):
+            org_used = c.execute("SELECT COUNT(*) FROM claude_calls WHERE day = ? AND org_id = ?", (day, org_id)).fetchone()[0]
+            if org_used >= org_limit:
+                raise ValueError(f"this organization has used its {org_limit} Claude reads for today; try again tomorrow")
+            server_used = c.execute("SELECT COUNT(*) FROM claude_calls WHERE day = ?", (day,)).fetchone()[0]
+            if server_used >= server_limit:
+                raise ValueError("this server has reached its daily Claude budget; try again tomorrow")
+            c.execute("INSERT INTO claude_calls(org_id, day, status, reserved_at) VALUES (?,?,?,?)",
+                      (org_id, day, "reserved", self.now()))
+            return int(c.execute("SELECT MAX(id) FROM claude_calls WHERE org_id = ? AND day = ?", (org_id, day)).fetchone()[0])
+
+    def settle_claude_call(self, call_id: int, ok: bool, detail: str = "") -> None:
+        with self.conn() as c, db.transaction(c):
+            c.execute("UPDATE claude_calls SET status = ?, settled_at = ?, detail = ? WHERE id = ? AND status = 'reserved'",
+                      ("succeeded" if ok else "failed", self.now(), detail[:300], call_id))
+
     # ---------------------------------------------------------------- orgs
     def _insert_org(self, c: sqlite3.Connection, name: str, kind: str, user_id: str) -> str:
         org_id = "org_" + uuid.uuid4().hex[:12]

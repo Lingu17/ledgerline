@@ -38,6 +38,24 @@ class Principal:
         return self.session.role or ""
 
 
+_MAX_PROOF = 512
+
+
+def same_secret(supplied: str | None, expected: str) -> bool:
+    """Constant-time comparison of a client-supplied header against a server secret.
+
+    Header values arrive as latin-1-decoded text, so they may contain any byte; compare_digest refuses
+    non-ASCII str and would raise. Comparing bytes (and bounding the length) keeps a malformed value an
+    ordinary mismatch instead of an error."""
+    if not supplied or len(supplied) > _MAX_PROOF:
+        return False
+    try:
+        got = supplied.encode("latin-1")
+    except UnicodeEncodeError:
+        return False
+    return hmac.compare_digest(got, expected.encode("utf-8"))
+
+
 def client_ip(request: Request) -> str:
     """The browser's address, for sign-in throttling and audit.
 
@@ -53,8 +71,7 @@ def client_ip(request: Request) -> str:
     if hops <= 0:
         return peer
     chain = [x.strip() for x in request.headers.get("x-forwarded-for", "").split(",") if x.strip()] + [peer]
-    edge_ok = settings.edge_secret is None or hmac.compare_digest(
-        request.headers.get("x-ledgerline-edge", ""), settings.edge_secret)
+    edge_ok = settings.edge_secret is None or same_secret(request.headers.get("x-ledgerline-edge"), settings.edge_secret)
     if not edge_ok or len(chain) < hops + 1:
         # Not via the authenticated edge, or not enough proxy hops: trust only what our own proxy appended.
         return chain[-2] if len(chain) >= 2 and peer in ("unknown", "127.0.0.1", "::1") else peer
@@ -87,7 +104,7 @@ def check_csrf(request: Request, info: SessionInfo) -> None:
     if request.headers.get("sec-fetch-site") == "cross-site":
         raise HTTPException(403, "cross-site request refused")
     supplied = request.headers.get("x-csrf-token", "")
-    if not supplied or not hmac.compare_digest(supplied, info.csrf_token):
+    if not same_secret(supplied, info.csrf_token):
         raise HTTPException(403, "missing or invalid CSRF token; reload the page")
 
 

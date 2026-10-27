@@ -138,8 +138,10 @@ def _validate(conn: sqlite3.Connection, deposit: dict[str, Any], proposal: dict[
     return checks
 
 
-def read_remittance(ctx: AppContext, deposit_id: str, actor: str, text: str | None = None) -> dict[str, Any]:
-    """Read operator-supplied remittance text, or the document on file for the deposit."""
+def read_remittance(ctx: AppContext, deposit_id: str, actor: str, text: str | None = None, control: Any = None) -> dict[str, Any]:
+    """Read operator-supplied remittance text, or the document on file for the deposit.
+
+    `control` (the control plane) holds the persisted Claude budget; without it a configured key is never used."""
     with ctx.conn() as conn:
         d = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (deposit_id,))
     if d is None:
@@ -153,18 +155,18 @@ def read_remittance(ctx: AppContext, deposit_id: str, actor: str, text: str | No
     if not text:
         raise ValueError("no remittance text: paste the email or advice text to read")
     if ctx.settings.claude_configured:
-        day = ctx.clock.now().strftime("%Y-%m-%d")
-        with ctx.conn() as conn:
-            used = conn.execute("SELECT COUNT(*) FROM audit_events WHERE action = 'evidence.extracted' AND at >= ? "
-                                "AND detail LIKE '%Claude API%'", (day,)).fetchone()[0]
-        if used >= ctx.settings.claude_daily_limit:
-            raise ValueError(f"this organization has used its {ctx.settings.claude_daily_limit} Claude reads for today; try again tomorrow")
+        if control is None or not ctx.org:
+            raise ValueError("Claude budget is unavailable; refusing to call the API")
+        # Reserve before dispatch (its own committed transaction), call with no transaction open, then settle.
+        call_id = control.reserve_claude_call(ctx.org["id"], ctx.settings.claude_daily_limit, ctx.settings.claude_server_daily_limit)
         try:
             proposal = typed_proposal(_claude_read(ctx, text))
         except Exception as exc:  # noqa: BLE001 - network/auth/rate-limit errors surface as a provider failure
             from .providers.base import ProviderError
 
+            control.settle_claude_call(call_id, False, f"{type(exc).__name__}: {str(exc)[:200]}")
             raise ProviderError(f"Claude API call failed: {type(exc).__name__}: {str(exc)[:200]}") from exc
+        control.settle_claude_call(call_id, True)
         source, mode = "claude_extracted", f"Claude API ({proposal.get('model', ctx.settings.claude_model)})"
     else:
         proposal = _fixture_read(text)

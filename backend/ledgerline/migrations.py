@@ -104,6 +104,18 @@ CREATE TABLE oauth_states (
   used_at TEXT
 )
 """),
+    (3, "server-wide Claude call budget", """
+CREATE TABLE claude_calls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id TEXT NOT NULL,
+  day TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('reserved','succeeded','failed')),
+  reserved_at TEXT NOT NULL,
+  settled_at TEXT,
+  detail TEXT
+);
+CREATE INDEX claude_calls_day ON claude_calls(day, org_id)
+"""),
 ]
 
 

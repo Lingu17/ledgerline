@@ -23,7 +23,7 @@ def test_health_reports_ready_without_auth(tmp_path):
     r = c.get("/api/health")
     assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
     body = r.json()
-    assert body["status"] == "ok" and body["control_schema"] == 2 and body["storage"] == "local directory"
+    assert body["status"] == "ok" and body["control_schema"] == 3 and body["storage"] == "local directory"
     assert not any(":\\" in str(v) or str(v).startswith("/") for v in body.values())  # never reveals filesystem paths
 
 
@@ -123,3 +123,57 @@ def test_edge_header_placeholder_is_not_a_valid_secret(tmp_path):
     assert _ip_of(app, {"X-Forwarded-For": chain, "X-Ledgerline-Edge": "real-edge-secret-0123456789abcdef"}) == "client"
     # Direct caller forging one extra entry, without the secret: not trusted.
     assert _ip_of(app, {"X-Forwarded-For": "forged, me, cf, lb"}) == "10.0.0.5"
+
+
+def test_remote_database_urls_must_enforce_tls():
+    import pytest
+
+    from ledgerline.config import check_database_tls
+
+    remote = "postgresql://u:p@ep-cool-123456.ap-southeast-1.aws.neon.tech/db"
+    for ok in (remote + "?sslmode=require", remote + "?sslmode=verify-full&channel_binding=require",
+               remote + "?sslmode=VERIFY-CA", "postgresql://u:p@localhost/db", "postgresql://u:p@127.0.0.1:5432/db",
+               "postgresql://u:p@[::1]/db", "postgresql:///db?host=/var/run/postgresql"):
+        check_database_tls(ok)
+    for bad in (remote, remote + "?sslmode=disable", remote + "?sslmode=allow", remote + "?sslmode=prefer",
+                remote + "?sslmode=require&sslmode=disable",
+                remote + "?application_name=@localhost",
+                remote + "?sslmode=prefer&application_name=x@127.0.0.1",
+                "postgresql://u:p@localhost/db?host=db.example.com",
+                "postgresql://u:p@localhost/db?host=localhost,db.example.com&sslmode=prefer",
+                "postgresql://u:p%40localhost@db.example.com/db",
+                "mysql://u:p@db.example.com/db?sslmode=require"):
+        with pytest.raises(ValueError):
+            check_database_tls(bad)
+
+
+def test_settings_refuse_an_unencrypted_remote_database(tmp_path):
+    import pytest
+
+    base = {"LEDGERLINE_DATA_DIR": str(tmp_path), "LEDGERLINE_SECRET_KEY": "k" * 40}
+    with pytest.raises(ValueError, match="sslmode"):
+        load_settings({**base, "LEDGERLINE_DATABASE_URL": "postgresql://u:p@db.example.com/db?sslmode=prefer"})
+    with pytest.raises(ValueError, match="sslmode"):
+        load_settings({**base, "LEDGERLINE_DATABASE_URL": "postgresql://u:p@db.example.com/db?application_name=@localhost"})
+    s = load_settings({**base, "LEDGERLINE_DATABASE_URL": "postgresql://u:p@db.example.com/db?sslmode=require"})
+    assert s.postgres
+
+
+def test_malformed_edge_proof_is_untrusted_not_an_error(tmp_path):
+    app = create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="2", LEDGERLINE_EDGE_SECRET="edge-test-secret"))
+    for proof in ("édge-tést".encode("utf-8"), "edge-test-secreté".encode("latin-1"), b"\xff\xfe", b"x" * 5000):
+        assert _ip_of(app, {"X-Forwarded-For": "forged, edge", "X-Ledgerline-Edge": proof.decode("latin-1")}) == "10.0.0.5"
+    c = TestClient(app)
+    for proof in ("édge-tést".encode("utf-8"), b"\xff" * 40):
+        r = c.get("/api/health", headers=[(b"X-Forwarded-For", b"forged, edge"), (b"X-Ledgerline-Edge", proof)])
+        assert r.status_code == 200 and r.json()["status"] == "ok"
+    # The genuine proof is still honoured.
+    assert _ip_of(app, {"X-Forwarded-For": "client, edge", "X-Ledgerline-Edge": "edge-test-secret"}) == "client"
+
+
+def test_malformed_csrf_header_is_refused_not_an_error(tmp_path):
+    c = TestClient(create_app(_settings(tmp_path)), raise_server_exceptions=False)
+    signup(c, email="csrf@deploy.test", start_with="empty")
+    c.headers.pop("X-CSRF-Token", None)
+    r = c.post("/api/customers", json={"name": "Nope Ltd"}, headers=[(b"X-CSRF-Token", "tést".encode("utf-8"))])
+    assert r.status_code == 403
