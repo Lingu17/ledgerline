@@ -1,29 +1,59 @@
 # Deployment handoff (Claude → Codex)
 
-Update (27 Oct 2026, later): the user approved Render ($7.25/month), but Render's card verification declined the user's Indian debit card twice; no Render service was created and no charge was made. alwaysdata re-checked from the user's own Chrome/network: its docs describe a no-card "restricted mode", but the email sign-up form shows "To continue your registration and to prevent misuse, you must validate a credit or debit card" (Continue with Google/Apple not yet tried by the user). cloudflared was installed via winget for a possible temporary PC-tunnel fallback only (depends on this PC staying on; quick-tunnel URL changes on restart), not used yet.
+Last updated 27 Oct 2026. Branch `deploy/vercel-render` (not merged to `main`). This file states only what was observed; anything not yet executed is marked **not yet run**.
 
-Hosting feasibility (27 Oct 2026, observed): Oracle Always Free and alwaysdata free both require card verification at sign-up; PythonAnywhere free (account `Lingu10`) blocks outbound HTTPS to `api.sandbox.airwallex.com` (curl from its console: no connection), reaches `api.anthropic.com` (HTTP 401 without key) and PyPI, and needs an account API token before an ASGI site can be created. Render with a disk ($7.25/month) is the only checked option that meets every requirement. Codex review findings 1, 2, 3 and 5 are fixed in `d64722a`; finding 4 is this section; finding 6 (live evidence) waits for a deployment.
+## Selected architecture (user decision)
 
-Status: **prepared, not yet deployed.** The user chose the free option: Oracle Cloud Always Free VM for the backend (`deploy/vm/`), Vercel Hobby for the frontend; Render (`render.yaml`, $7.25/month) is kept only as a documented paid alternative and was not purchased. Waiting for the user to create the Oracle account and sign in to Oracle and Vercel (Claude does not create accounts or enter passwords). Branch `deploy/vercel-render` at `6442442` adds the VM kit (setup.sh, hardened systemd unit, Caddy auto-HTTPS on sslip.io, nightly SQLite backups, update.sh). A deploy SSH key pair was generated locally at `~/.ssh/ledgerline_oracle` (private key never leaves this machine).
+```
+Browser ── https ──> Vercel (static React app, frontend/, free Hobby)
+                       │ /api/* same-origin rewrite (frontend/vercel.json)
+                       ▼
+                     Render web service `ledgerline-api` (FREE plan, Singapore, Python 3.14.8)
+                       │ psycopg pool, TLS (sslmode=require)
+                       ▼
+                     Supabase PostgreSQL (free), shared pooler in SESSION mode (port 5432, IPv4)
+                       schemas: <prefix>_control · <prefix>_t_<org_id> (ledger) · <prefix>_b_<org_id> (simulated bank)
+```
 
-## Done
+Why: the user has no card that Render's paid plan or Oracle/alwaysdata accept (Render declined the user's Indian debit card twice; alwaysdata email sign-up requires card validation from the user's network). PythonAnywhere free blocks outbound HTTPS to `api.sandbox.airwallex.com` (observed from its console). Render's free plan is available without a card in the user's "My Workspace" (observed: service created). Render free has no persistent disk, so all durable state moves to PostgreSQL.
 
-- Branch `deploy/vercel-render`, commit `ae2dad1`, pushed to `Lingu17/ledgerline` (not yet merged to `main`).
-- `render.yaml`: `ledgerline-api`, Python 3.14.8, Starter plan, Singapore, 1 GB disk `ledgerline-data` at `/var/data`, `LEDGERLINE_DATA_DIR=/var/data/ledgerline`, `LEDGERLINE_REQUIRE_PERSISTENT_MOUNT=/var/data` (the app refuses to start otherwise), health check `/api/health`, `LEDGERLINE_COOKIE_SECURE=1`, `LEDGERLINE_TRUSTED_PROXY_HOPS=2`; origin, public URL and API keys are `sync: false` (set in the dashboard, never in Git).
-- `frontend/vercel.json`: Vite build from `frontend/`, same-origin rewrite `/api/:path*` → `https://ledgerline-api.onrender.com/api/:path*`, HSTS/CSP/frame/referrer headers.
-- Backend: `/api/health`, `PORT` support, persistent-mount guard, proxy-aware client address for sign-in throttling, read-only Airwallex readiness check (login, global accounts, balances) per airwallexdev.com.
-- Frontend: readable "server not reachable" message for gateway errors and network failures.
-- `scripts/smoke_deploy.py` (deployed probe + `--verify` after restart), `docs/DEPLOYMENT.md`.
+Free-tier behaviour to disclose: Render free instances spin down after inactivity and the first request can take 50 s or more; Supabase free projects pause after 1 week of inactivity, include 500 MB, and have no automatic backups (supabase.com/pricing, 27 Oct 2026). Neither is promised to stay free or always on.
 
-## Verified locally (27 Oct 2026)
+## Current state
 
-- Backend `pytest`: **180 passed**. Frontend build OK. Browser suite `npm run e2e`: **9 passed**.
-- Production-settings simulation: backend with `LEDGERLINE_COOKIE_SECURE=1`, origin allow-list and trusted proxy hops, behind a same-origin `/api` proxy (Vite preview standing in for Vercel). In the browser: sample sign-up → Inbox, session survives reload, cookie not readable by JavaScript, MCP payer-agent evidence **verified** through the proxy, mutation without CSRF token **403**.
+| Item | Status |
+|---|---|
+| Render free service `ledgerline-api` | **Created, live** at `https://ledgerline-api-4dt3.onrender.com` (deploy of `cf3f61c`). Running as a **probe on ephemeral storage** (`LEDGERLINE_DATA_DIR=/tmp/...`): data is lost on restart. Not for judges until PostgreSQL is configured. |
+| Probe results (observed over HTTPS) | `/api/health` 200 in 0.5 s; signup 200 with cookie `HttpOnly; Secure; SameSite=strict; Path=/api`; sample org lists 6 deposits; **real stdio MCP** ask-agent → `verified` in 8.6 s on the 0.1 CPU instance; integrations report Airwallex/Claude `not_configured`. Health `client` showed a Cloudflare address: Render's edge adds hops; `LEDGERLINE_TRUSTED_PROXY_HOPS` must be calibrated once Vercel is in front. |
+| Supabase project | **Not created** (user step) |
+| `LEDGERLINE_DATABASE_URL` on Render | **Not set** (user step: Supabase Connect → Session pooler URI with `?sslmode=require`) |
+| `LEDGERLINE_SECRET_KEY` on Render | **Not set** (to be generated with Render's Generate button; never seen or typed by Claude) |
+| Vercel project | **Not created** (needs the user's Vercel sign-in) |
+| Paid resources | None. Render paid plan and disk were not purchased. |
 
-## Cost to approve
+## PostgreSQL storage (commits `8f8293b`, `022b520`)
 
-Render Hobby workspace $0 + Starter web service $7.00/month + 1 GB disk $0.25/month = **$7.25/month** (prorated by the second; render.com/pricing, checked 27 Oct 2026). Vercel Hobby $0.
+- `backend/ledgerline/pg.py`: same connection surface as SQLite so the money code is unchanged. One schema per logical database; a connection's `search_path` is that schema only. `BEGIN IMMEDIATE` → `BEGIN` + `pg_advisory_xact_lock(schema)` (one writer per logical database, as in SQLite); READ COMMITTED reads. DDL: `INTEGER` → `BIGINT`, identity columns; dialect translation (`?`, `INSERT OR IGNORE`, `LIKE`→`ILIKE`, JSON, `PRAGMA table_info`); integral `NUMERIC` sums returned as `int`. Pool returns connections rolled back and reset.
+- Hardening: `REVOKE ALL` on Ledgerline schemas from `PUBLIC`, `anon`, `authenticated`; RLS enabled with no policies on every table. The server role owns the tables (bypasses RLS); tenant isolation is enforced in the application (session → membership → registry → that organization's schema).
+- Payer-agent signing keys: table `agent_keys` per organization, AES-256-GCM, key from HKDF(`LEDGERLINE_SECRET_KEY`), associated data `schema:customer_id`. Keys are created only when a sample organization is seeded; the agent only loads them (missing or undecryptable → error, never a new identity). The stdio MCP child receives the organization's keys via its environment (not argv) and has no database access.
+- Config refuses a remote database URL without `sslmode`, and PostgreSQL mode without a 32+ character `LEDGERLINE_SECRET_KEY`.
 
-## Not yet done
+## Tests
 
-Deployment, deployed tests, restart persistence check, merge to `main`, final URLs. Airwallex sandbox and Claude API remain unconfigured and untested (no credentials).
+| Run | Result |
+|---|---|
+| Local SQLite suite (`backend\.venv\Scripts\python -m pytest -q`) at `022b520` | **192 passed, 8 skipped** (skips = live PostgreSQL tests) |
+| PostgreSQL translation/encryption unit tests | pass locally |
+| Live PostgreSQL tests (`tests/test_postgres.py`: walkthrough + restart continuity, tenant switching/isolation/privileges/RLS, concurrent refund execution, concurrent duplicate webhooks, concurrent FX execution, failed-transaction rollback + pool recovery, stdio MCP signing identity across restart and refusal with a different secret, random-company accuracy) | **not yet run** locally: running downloaded PostgreSQL binaries was refused by this machine's permission policy and the EDB installer download returned HTTP 403. They run in GitHub Actions job `postgres` (postgres:17 service container), together with the whole suite on PostgreSQL. Result: see the latest Actions run for the branch; recorded below when observed. |
+| Supabase session pooler | **not yet run** (needs the user's `backend\.env.test`) |
+| Deployed end-to-end, restart persistence | **not yet run** |
+
+## Blockers needing the user
+
+1. Supabase: sign in, create project `ledgerline` (Singapore), copy the Session pooler URI (password substituted, `?sslmode=require`), and paste it (a) into Render → `ledgerline-api` → Environment as `LEDGERLINE_DATABASE_URL`, (b) into `backend\.env.test` as `LEDGERLINE_TEST_DATABASE_URL=...` (gitignored). Never in chat.
+2. Vercel: sign in (GitHub) so the frontend project can be created.
+3. Optional integrations, server-side only: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY`, `LEDGERLINE_SANDBOX_ORGS`, `ANTHROPIC_API_KEY`.
+
+## Superseded
+
+The Render Starter + disk configuration in `render.yaml` and the Oracle VM kit in `deploy/vm/` are kept as documented alternatives; neither is deployed.
