@@ -7,6 +7,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Optional: backend/.env.test (gitignored) may hold LEDGERLINE_TEST_DATABASE_URL so the secret is never typed on a command line.
+_env_test = Path(__file__).resolve().parent.parent / ".env.test"
+if _env_test.is_file():
+    import os as _os
+
+    for _line in _env_test.read_text(encoding="utf-8").splitlines():
+        if _line.startswith("LEDGERLINE_TEST_DATABASE_URL="):
+            _os.environ.setdefault("LEDGERLINE_TEST_DATABASE_URL", _line.split("=", 1)[1].strip())
+
 from ledgerline import db  # noqa: E402
 from ledgerline.api.app import build_context, create_app  # noqa: E402
 from ledgerline.config import load_settings  # noqa: E402

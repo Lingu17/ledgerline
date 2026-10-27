@@ -29,3 +29,6 @@ Thumbs.db
 
 # Local tooling
 .claude/
+
+# Local secret for running the PostgreSQL tests (never commit)
+backend/.env.test
