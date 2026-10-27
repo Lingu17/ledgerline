@@ -20,8 +20,9 @@ Codex's review of `eeaf1e6` reproduced five issues; all are fixed with regressio
 - Render `ledgerline-api` env added: `LEDGERLINE_DATABASE_URL`, `LEDGERLINE_REQUIRE_DATABASE=1`, `LEDGERLINE_EDGE_SECRET` (Render-generated). Existing `LEDGERLINE_SECRET_KEY` kept, so encrypted signing identities stay decryptable. `/api/health` now reports `"storage":"postgresql"`, `control_schema` 3.
 - `scripts/smoke_deploy.py https://ledgerline-black-iota.vercel.app`: **32/32** (signup/login/logout/reload, cookies, CSRF/origin, empty and sample workspaces, customer/invoice/payment, signed MCP evidence, walkthrough incl. approvals, FX treasury conversion and refund lifecycle, four-eyes, ledger, tenant isolation).
 - Extra live checks (roles, CSV import, audit, malformed input, malformed edge header): **14/14**.
-- Render **Restart service** → `--verify`: **8/8** (accounts, invoice balance, payment decision, ledger, refund lifecycle, payer-agent signing keys via MCP).
-- **Open:** `LEDGERLINE_EDGE_SECRET` is set on Render but not yet on Vercel, so Vercel requests carry no valid proof and the API resolves clients to Render's internal peer (observed `client` 10.x through Vercel). Sign-in throttling then groups all users together until the same value is set in Vercel (Production) and Vercel redeploys.
+- Persistence across a **process replacement**: data created at 17:48Z on instance `nzqm4` was verified by `scripts/smoke_deploy.py --verify` at 18:05Z on instance `bl8d4` (the `481e388` redeploy): **8/8** (accounts, invoice balance, payment decision, ledger, refund lifecycle, payer-agent signing keys via MCP). An earlier `--verify` right after clicking *Restart service* (17:49:42Z) still ran on `nzqm4` (the restart had not switched instances yet; `w7zrk` first appears at 17:55:03Z), so it does **not** count as restart evidence.
+- Edge secret: after the first Vercel value was saved and production redeployed, `/api/health` through Vercel reported `"edge_proof":"invalid"` (same length as Render's value, not a placeholder, different value), so clients still resolved to Render's internal peer (`10.x`). Codex reports that it then saved the exact Render value in Vercel Production and that the Vercel redeploy is blocked on Vercel email verification. **Not yet observed:** `"edge_proof":"valid"`, the real client address through Vercel, and spoof refusal. Until then sign-in throttling through Vercel groups all users under one internal address.
+- MCP `ask-agent` connection reset (Codex smoke, stopped after 19 passes at `DEP-1004`): **cause not established.** Facts from Render application logs: account `sample-0c781372` got `ask-agent` 200 for `DEP-1006` at 17:55:03.251Z (9 341 ms, instance `w7zrk`); there is **no** log line for its `DEP-1004` call; the next instance seen is `bl8d4` at 18:05:28Z, after the `481e388` deploy that Codex reports at 18:03:53Z (with graceful-shutdown logs and no `server_failed` event). Every `ask-agent` that did complete took 8.4-9.3 s (a fresh stdio MCP process per call on a free instance). The exact client-side time of the reset is still needed to correlate it; whether `sample-0c781372` was Codex's run is inferred, not confirmed.
 - Not run: Airwallex sandbox API (no scoped API keys; browser login alone is not API connectivity) and Claude API (no `ANTHROPIC_API_KEY` on the server).
 
 ## Selected architecture (user decision)
@@ -46,10 +47,10 @@ Free-tier behaviour to disclose: Render free instances spin down after inactivit
 | Item | Status |
 |---|---|
 | Public URL | **https://ledgerline-black-iota.vercel.app** (Vercel Hobby project `ledgerline`, root `frontend`, production branch `deploy/vercel-render`). `/api/*` is routed to Render by `frontend/vercel.json` `routes` (with an `x-ledgerline-edge` request-header transform from the Vercel env `LEDGERLINE_EDGE_SECRET`). |
-| Render free service `ledgerline-api` | Live at `https://ledgerline-api-4dt3.onrender.com`, branch `deploy/vercel-render`, auto-deploy on commit. **Still on ephemeral SQLite (`/tmp`)**: data is lost on restart until `LEDGERLINE_DATABASE_URL` is set. Env set by Claude (non-secret): `LEDGERLINE_ALLOWED_ORIGINS` and `LEDGERLINE_PUBLIC_URL` = the Vercel origin, `LEDGERLINE_TRUSTED_PROXY_HOPS=4`; `LEDGERLINE_SECRET_KEY` generated with Render's Generate button (regenerated once after it was displayed on screen; current value never displayed). |
+| Render free service `ledgerline-api` | Live at `https://ledgerline-api-4dt3.onrender.com`, branch `deploy/vercel-render`, auto-deploy on commits that touch `backend/` (commits touching only docs/scripts do not redeploy; observed with `dd51e96`). **On Neon PostgreSQL** since 27 Oct (`/api/health` `"storage":"postgresql"`). Env: `LEDGERLINE_ALLOWED_ORIGINS`, `LEDGERLINE_PUBLIC_URL` (Vercel origin), `LEDGERLINE_TRUSTED_PROXY_HOPS=4`, `LEDGERLINE_SECRET_KEY` (Render-generated, never displayed), `LEDGERLINE_DATABASE_URL` (pasted by the user), `LEDGERLINE_REQUIRE_DATABASE=1`, `LEDGERLINE_EDGE_SECRET` (Render-generated). |
 | Proxy calibration | Measured with `/api/health` (`forwarded_entries`, `client`): through Vercel the chain has 4 entries and Vercel overwrites a client-sent X-Forwarded-For; Render adds 3 entries after the connecting address. With hops=4 the server resolved this PC's real public address through Vercel, ignored a forged header through Vercel, and resolved a direct Render call to Render's internal peer (fail closed). Remaining gap until the edge secret is set on both sides: a direct caller to the Render URL who forges exactly one entry can choose its per-IP throttling identity; commit `1d7a90b` closes it once `LEDGERLINE_EDGE_SECRET` is set identically on Render and Vercel. |
-| Neon | Being provisioned by Codex (user request). Claude does not create projects or handle database credentials. |
-| Fail-closed storage | `LEDGERLINE_REQUIRE_DATABASE=1` (commit `1d7a90b`) to be set on Render together with the database URL. |
+| Neon | Project `ledgerline` (`red-grass-80303368`) created by Claude in the user's Neon account, AWS ap-southeast-1, free plan; direct endpoint, `sslmode=require`. The connection string was copied into Render by the user, never through chat or Git. |
+| Fail-closed storage | `LEDGERLINE_REQUIRE_DATABASE=1` is set: without a database URL the service refuses to start instead of using local SQLite. |
 | Paid resources | None. |
 
 ## PostgreSQL storage (commits `8f8293b`, `022b520`)
@@ -65,16 +66,18 @@ Free-tier behaviour to disclose: Render free instances spin down after inactivit
 | Run | Result |
 |---|---|
 | Local SQLite suite at `50a229a` | **195 passed, 8 skipped** (skips = live PostgreSQL tests needing a database URL) |
+| Local SQLite suite at `aa85cfd`+ (review fixes) | **213 passed, 8 skipped** (Claude, and independently Codex); frontend build passed; Codex: browser suite 9/9 |
 | PostgreSQL translation/encryption unit tests | pass locally |
 | Real PostgreSQL 17 (GitHub Actions job `postgres`, service container), commit `8a079a7`, run 40520577449 | **PASS**: `tests/test_postgres.py` (walkthrough and restart continuity, tenant switching/isolation, privileges and RLS, concurrent refund execution, concurrent duplicate webhooks, concurrent FX execution, failed-transaction rollback and pool recovery, stdio MCP signing identity across restart and refusal with a wrong secret, random-company accuracy) **and the whole backend suite with every app on PostgreSQL** (`LEDGERLINE_TEST_ALL_ON_POSTGRES=1`). Earlier runs found and fixed: test-only bugs, a lazily created `agent_keys` table (now tenant migration v3), and one SQLite-only catalog query in a test. Same run: backend on Linux and Windows (SQLite), frontend build and Playwright e2e passed. |
-| Neon direct endpoint | live service only (see above); `backend\.env.test` suite run not done |
-| Deployed end-to-end, restart persistence | **PASS** 27 Oct (see above) |
+| Neon, isolated test run | **not yet run**: needs a Neon test branch and its direct URL in the gitignored `backend\.env.test` (`LEDGERLINE_TEST_DATABASE_URL=`); no local PostgreSQL or Docker on this PC |
+| Deployed end-to-end | **PASS** 27 Oct: 32/32 smoke + 14/14 extra (roles, CSV import, audit, malformed input, malformed edge header) |
+| Persistence across process replacement | **PASS** (redeploy `481e388`, see above); a restart-only check is still to be repeated on a new instance |
 
 ## Blockers needing the user
 
-1. Neon (Codex is handling): project in an Asia-Pacific region, the DIRECT connection string (no `-pooler`) with `?sslmode=require` into Render `LEDGERLINE_DATABASE_URL` and `backend\.env.test` `LEDGERLINE_TEST_DATABASE_URL`; then set `LEDGERLINE_REQUIRE_DATABASE=1`.
-2. Edge secret: generate `LEDGERLINE_EDGE_SECRET` in Render and paste the same value into Vercel (Production, Sensitive).
-3. Optional integrations, server-side only: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY`, `LEDGERLINE_SANDBOX_ORGS`, `ANTHROPIC_API_KEY`.
+1. Vercel email verification (reported by Codex) so production can be redeployed with the corrected `LEDGERLINE_EDGE_SECRET`; then check `/api/health` through Vercel shows `"edge_proof":"valid"` and the real client address.
+2. Neon isolated tests: a Neon child branch (e.g. `tests`) and its direct connection string written by the user into `backend\.env.test`.
+3. Optional integrations, server-side only (user pastes secrets into Render): `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` + `LEDGERLINE_SANDBOX_ORGS`; `ANTHROPIC_API_KEY`; Google sign-in `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` with redirect URI `https://ledgerline-black-iota.vercel.app/api/auth/oauth/google/callback`. None exist in `backend/.env` (checked by key name only). Apple sign-in needs a paid Apple Developer membership, so it stays disabled.
 
 ## Superseded
 

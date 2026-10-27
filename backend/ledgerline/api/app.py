@@ -75,7 +75,17 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     @app.middleware("http")
     async def request_log(request: Request, call_next):
         started = time.perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Leave a correlatable line for requests that never produce a response (the traceback follows).
+            if request.url.path.startswith("/api"):
+                principal = getattr(request.state, "principal", None)
+                log.error("%s %s failed after %.0fms: %s org=%s user=%s", request.method,
+                          getattr(request.scope.get("route"), "path", "<unmatched-api-route>"),
+                          (time.perf_counter() - started) * 1000, type(exc).__name__,
+                          principal.session.org_id if principal else "-", principal.session.email if principal else "-")
+            raise
         if request.url.path.startswith("/api"):
             principal = getattr(request.state, "principal", None)
             # Invitation URLs contain bearer credentials. Log the route template,

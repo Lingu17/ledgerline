@@ -1,11 +1,37 @@
 # Deploying Ledgerline
 
-Two supported backends, same frontend (Vercel, free) and same same-origin `/api` proxy:
+**Deployed setup (27 Oct 2026): Vercel Hobby (frontend) + Render Free (API) + Neon Free (PostgreSQL).** No card, no paid resources. Observed results are in `DEPLOYMENT_HANDOFF.md`.
 
-- **Free (chosen): an always-free Linux VM** (Oracle Cloud Always Free, Ubuntu 24.04) running `deploy/vm/setup.sh`: systemd service, Caddy with automatic HTTPS on an `sslip.io` hostname, data on the VM's persistent boot volume, nightly consistent SQLite backups. Cost $0.
-- **Paid alternative: Render** (`render.yaml`, $7.25/month) described further down.
+```
+Browser ──https──> Vercel (static React app, frontend/)
+                     │  /api/*  same-origin route (frontend/vercel.json) + x-ledgerline-edge header from LEDGERLINE_EDGE_SECRET
+                     ▼
+                   Render Free web service "ledgerline-api" (backend/, Singapore)
+                     │  psycopg pool, TLS (sslmode=require), direct endpoint (no pooler)
+                     ▼
+                   Neon Free PostgreSQL (ap-southeast-1): one schema per logical database
+```
 
-## Free path: Oracle Cloud Always Free VM
+Free-tier behaviour: Render Free spins down when idle (first request can take 50 s or more); Neon Free suspends compute after 5 idle minutes and has 100 CU-hours per project per month. Nothing here is promised to stay free or always on.
+
+## Setup (Vercel + Render Free + Neon)
+
+1. **Neon:** create a project in AWS Asia Pacific (Singapore). In *Connect*, turn **Connection pooling off** so the hostname has no `-pooler` (the app refuses pooler endpoints because they drop the per-connection `search_path`). The string must keep `sslmode=require` (or `verify-ca`/`verify-full`; the app refuses weaker modes for remote hosts).
+2. **Render:** a Python web service from this repository, root `backend`, build `pip install --no-cache-dir -r requirements-lock.txt`, start `python -m ledgerline`, health check `/api/health`. Environment:
+   - `LEDGERLINE_HOST=0.0.0.0`, `LEDGERLINE_COOKIE_SECURE=1`, `LEDGERLINE_LOG_LEVEL=INFO`, `PYTHON_VERSION=3.14.8`
+   - `LEDGERLINE_ALLOWED_ORIGINS` and `LEDGERLINE_PUBLIC_URL` = the Vercel origin (no trailing slash)
+   - `LEDGERLINE_TRUSTED_PROXY_HOPS=4` (measured: Vercel adds 1 entry, Render's proxy 3)
+   - `LEDGERLINE_SECRET_KEY`: Render's *Generate* (32+ characters). It derives the key that encrypts payer-agent signing keys in the database: **never change or copy it**, or the stored identities become undecryptable.
+   - `LEDGERLINE_DATABASE_URL`: the Neon direct string, pasted by the account owner (never into chat or Git).
+   - `LEDGERLINE_REQUIRE_DATABASE=1`: refuse to start without a database instead of falling back to local SQLite.
+   - `LEDGERLINE_EDGE_SECRET`: Render's *Generate*.
+   Render redeploys automatically only for commits that change files under `backend/`.
+3. **Vercel:** import the repository with **Root Directory `frontend`**; `frontend/vercel.json` sets install/build/output, security headers and the `/api` route to the Render URL. Add **one** environment variable: `LEDGERLINE_EDGE_SECRET` (Production, Secret) = exactly the Render value, then redeploy production. There are no browser-side secrets.
+4. **Check:** `GET https://<vercel origin>/api/health` must show `"storage":"postgresql"`, `"edge_proof":"valid"` and your own public address as `client`. `edge_proof` is `missing`, `invalid`, `invalid: length differs` or `invalid: unsubstituted placeholder` otherwise; it never shows the value.
+
+The two sections below are documented alternatives that are **not deployed**.
+
+## Alternative (not deployed): Oracle Cloud Always Free VM
 
 1. Create an Oracle Cloud account (card verification; Always Free resources are not charged) and sign in.
 2. Compute → Instances → Create: image **Canonical Ubuntu 24.04**, shape **VM.Standard.E2.1.Micro** (Always Free-eligible; or Ampere A1 if available), public IPv4, and paste the deploy SSH **public** key.
@@ -23,7 +49,7 @@ Data: `/var/lib/ledgerline` (mode 700, owned by the service user) on the boot vo
 
 Proxy note: Caddy appends the Vercel edge address to `X-Forwarded-For`, and the app (`LEDGERLINE_TRUSTED_PROXY_HOPS=2`) uses the browser address Vercel recorded. `GET /api/health` returns `client` so this can be checked. A client calling the VM hostname directly (bypassing Vercel) can influence the address used for the per-IP sign-in budget. The per-account budget (5 failures per email per 15 minutes) still applies.
 
-## Paid alternative: Render
+## Paid alternative (not deployed): Render Starter with a disk
 
 ```
 Browser ──https──> Vercel (static React app, frontend/)
@@ -63,11 +89,11 @@ A disk is mandatory: Render's free instances have ephemeral storage, which would
 
 1. Vercel → **Add New → Project** → import `Lingu17/ledgerline`, **Root Directory `frontend`** (framework Vite; `frontend/vercel.json` sets install/build/output).
 2. If the Render service URL is not `https://ledgerline-api.onrender.com`, change the rewrite destination in `frontend/vercel.json` and push.
-3. No environment variables are needed on Vercel: there are no browser-side secrets.
+3. Set `LEDGERLINE_EDGE_SECRET` (Production, Secret) to the same value as on the backend and redeploy; it is the only Vercel variable and never reaches the browser.
 
 ## Proxy-aware sign-in throttling
 
-Requests reach the app via Vercel's edge and Render's proxy, so the socket peer is a proxy. `LEDGERLINE_TRUSTED_PROXY_HOPS=2` makes the app read the client from `X-Forwarded-For` counting from the trusted (right) end; entries a client prepends are ignored. Without this, five typos by one judge would lock every judge out for 15 minutes.
+Requests reach the app via Vercel's edge and Render's proxy, so the socket peer is a proxy. The app reads the client from `X-Forwarded-For`, counting `LEDGERLINE_TRUSTED_PROXY_HOPS` entries from the trusted (right) end; entries a client prepends are ignored. On the deployed Vercel → Render path the measured value is **4**. With `LEDGERLINE_EDGE_SECRET` set, the header is trusted only on requests carrying the matching `x-ledgerline-edge` proof (added by Vercel), so a client calling the Render URL directly cannot choose its throttling identity; a missing, malformed or wrong proof falls back to the nearest address. If Vercel's value does not match, every user is throttled as one address (check `edge_proof` in `/api/health`).
 
 ## Airwallex sandbox (optional, needs your credentials)
 
@@ -77,7 +103,7 @@ Following the Airwallex hackathon guide (airwallexdev.com): create a sandbox acc
 
 ```
 backend\.venv\Scripts\python scripts\smoke_deploy.py https://<vercel origin> --save %TEMP%\ledgerline-smoke.json
-# restart the Render service (Manual Deploy → Restart), then:
+# replace the backend process (a redeploy, or Restart service and wait until the instance id in the Render logs changes), then:
 backend\.venv\Scripts\python scripts\smoke_deploy.py https://<vercel origin> --verify %TEMP%\ledgerline-smoke.json
 ```
 
