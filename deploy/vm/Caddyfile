@@ -1,0 +1,16 @@
+{
+	# Requests arrive from Vercel's edge; append the peer to X-Forwarded-For instead of replacing it,
+	# so the app (LEDGERLINE_TRUSTED_PROXY_HOPS=2) can read the browser's address Vercel recorded.
+	servers {
+		trusted_proxies static 0.0.0.0/0 ::/0
+	}
+}
+
+__HOST__ {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8000
+}

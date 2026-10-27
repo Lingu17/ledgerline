@@ -1,4 +1,29 @@
-# Deploying Ledgerline (Vercel + Render)
+# Deploying Ledgerline
+
+Two supported backends, same frontend (Vercel, free) and same same-origin `/api` proxy:
+
+- **Free (chosen): an always-free Linux VM** (Oracle Cloud Always Free, Ubuntu 24.04) running `deploy/vm/setup.sh`: systemd service, Caddy with automatic HTTPS on an `sslip.io` hostname, data on the VM's persistent boot volume, nightly consistent SQLite backups. Cost $0.
+- **Paid alternative: Render** (`render.yaml`, $7.25/month) described further down.
+
+## Free path: Oracle Cloud Always Free VM
+
+1. Create an Oracle Cloud account (card verification; Always Free resources are not charged) and sign in.
+2. Compute → Instances → Create: image **Canonical Ubuntu 24.04**, shape **VM.Standard.E2.1.Micro** (Always Free-eligible; or Ampere A1 if available), public IPv4, and paste the deploy SSH **public** key.
+3. Networking → the instance's subnet → Security List → add ingress rules for TCP **80** and **443** from `0.0.0.0/0`.
+4. With the public IP `A.B.C.D`, the hostname is `A-B-C-D.sslip.io` (resolves to the IP; Let's Encrypt works on it). Then:
+   ```
+   ssh ubuntu@A.B.C.D
+   curl -fsSLO https://raw.githubusercontent.com/Lingu17/ledgerline/main/deploy/vm/setup.sh
+   sudo bash setup.sh A-B-C-D.sslip.io https://<vercel-origin> main
+   ```
+5. Set the rewrite destination in `frontend/vercel.json` to `https://A-B-C-D.sslip.io/api/:path*`, push, and import the repo into Vercel with **Root Directory `frontend`**.
+6. Updates: `sudo bash /opt/ledgerline/src/deploy/vm/update.sh main`. Optional API keys: edit `/etc/ledgerline/ledgerline.env` (root-owned, mode 640) and `sudo systemctl restart ledgerline`.
+
+Data: `/var/lib/ledgerline` (mode 700, owned by the service user) on the boot volume, which persists across reboots and service restarts. Backups: `ledgerline-backup.timer` runs `deploy/vm/backup.py` daily at 03:15, 7 kept, under `/var/lib/ledgerline/backups`. These protect against bad writes, not against losing the volume.
+
+Proxy note: Caddy appends the Vercel edge address to `X-Forwarded-For`, and the app (`LEDGERLINE_TRUSTED_PROXY_HOPS=2`) uses the browser address Vercel recorded. `GET /api/health` returns `client` so this can be checked. A client calling the VM hostname directly (bypassing Vercel) can influence the address used for the per-IP sign-in budget. The per-account budget (5 failures per email per 15 minutes) still applies.
+
+## Paid alternative: Render
 
 ```
 Browser ──https──> Vercel (static React app, frontend/)

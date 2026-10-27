@@ -1,0 +1,9 @@
+[Unit]
+Description=Ledgerline nightly SQLite backup (consistent copies, 7 kept)
+
+[Service]
+Type=oneshot
+User=ledgerline
+ExecStart=/opt/ledgerline/venv/bin/python /opt/ledgerline/src/deploy/vm/backup.py /var/lib/ledgerline /var/lib/ledgerline/backups 7
+ReadWritePaths=/var/lib/ledgerline
+ProtectSystem=strict

@@ -1,0 +1,23 @@
+[Unit]
+Description=Ledgerline API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ledgerline
+Group=ledgerline
+WorkingDirectory=/opt/ledgerline/src/backend
+EnvironmentFile=/etc/ledgerline/ledgerline.env
+ExecStart=/opt/ledgerline/venv/bin/python -m ledgerline
+Restart=always
+RestartSec=3
+# Hardening: the service can write only its data directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/ledgerline
+ReadOnlyPaths=/opt/ledgerline
+
+[Install]
+WantedBy=multi-user.target

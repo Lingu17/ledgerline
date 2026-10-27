@@ -27,6 +27,7 @@ from ..workspace import InputError
 from .auth_routes import auth_error_handler
 from .auth_routes import router as auth_router
 from .oauth_routes import router as oauth_router
+from .security import client_ip
 from .routes import router
 
 FRONTEND_DIST = BACKEND_DIR.parent / "frontend" / "dist"
@@ -113,7 +114,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(oauth_router, prefix="/api")
 
     @app.get("/api/health", include_in_schema=False)
-    def health() -> JSONResponse:
+    def health(request: Request) -> JSONResponse:
         """Liveness and readiness for the host's health check: control database readable and data directory writable."""
         try:
             with control.conn() as c:
@@ -122,7 +123,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             probe.write_text(str(time.time()), encoding="utf-8")
             body = {"status": "ok", "version": app.version, "control_schema": schema,
                     "storage": "persistent mount" if settings.require_persistent_mount else "local directory",
-                    "bank": settings.provider, "claude": "configured" if settings.claude_configured else "not configured"}
+                    "bank": settings.provider, "claude": "configured" if settings.claude_configured else "not configured",
+                    # The caller's own address as resolved through trusted proxies (verifies proxy configuration).
+                    "client": client_ip(request)}
             return JSONResponse(body, headers={"Cache-Control": "no-store"})
         except Exception as exc:  # noqa: BLE001 - report unhealthy instead of crashing the probe
             log.error("health check failed: %s", exc)
