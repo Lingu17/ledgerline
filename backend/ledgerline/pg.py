@@ -20,8 +20,11 @@ Mapping, in one auditable place:
   case-insensitive); json_extract(col,'$.k') -> col::jsonb ->> 'k'; PRAGMA table_info -> catalog.
 - Results: integral NUMERIC from SUM() comes back as int, never float.
 
-Connections go through Supabase's shared pooler in session mode (port 5432, IPv4), which keeps
-session state for the life of the client connection; TLS is required.
+Connections must be DIRECT (session) connections, e.g. Neon's non-pooled endpoint: the per-connection
+search_path is session state, which transaction-mode poolers (Neon's "-pooler" hostname, Supabase's
+port 6543) do not preserve. Such URLs are refused (fail closed) because a lost search_path would point a
+tenant connection at the wrong schema. TLS is required for remote hosts. Connections are validated on
+checkout so a database that scales to zero (Neon free suspends after 5 idle minutes) is reconnected cleanly.
 """
 from __future__ import annotations
 
@@ -39,13 +42,30 @@ _pools: dict[str, ConnectionPool] = {}
 _pools_lock = threading.Lock()
 
 
+class PoolerURLRefused(ValueError):
+    pass
+
+
+def check_direct_url(url: str) -> None:
+    """Refuse transaction-mode pooler endpoints: they drop session state such as search_path."""
+    from urllib.parse import urlparse
+
+    u = urlparse(url)
+    host = (u.hostname or "").lower()
+    if "-pooler." in host or u.port == 6543 or "pgbouncer=true" in (u.query or "").lower():
+        raise PoolerURLRefused("LEDGERLINE_DATABASE_URL points at a transaction-mode pooler; use the direct (non-pooled) "
+                               "connection string, e.g. Neon's hostname without '-pooler'")
+
+
 def pool(url: str) -> ConnectionPool:
     with _pools_lock:
         p = _pools.get(url)
         if p is None:
-            # Small pool: the free Render instance is one process; Supabase's free pooler limits clients.
-            p = ConnectionPool(url, min_size=1, max_size=8, timeout=30, kwargs={"autocommit": True},
-                               open=True, name="ledgerline")
+            check_direct_url(url)
+            # Small pool (one free-tier process). check: validate on checkout, so connections closed by the server
+            # (e.g. Neon suspending compute after inactivity) are replaced instead of failing a request.
+            p = ConnectionPool(url, min_size=0, max_size=8, timeout=60, kwargs={"autocommit": True},
+                               check=ConnectionPool.check_connection, max_idle=120, open=True, name="ledgerline")
             _pools[url] = p
         return p
 
@@ -176,6 +196,9 @@ class PgConnection:
             with self._raw.cursor() as cur:
                 cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
                 cur.execute(f'SET search_path TO "{schema}"')
+                cur.execute("SELECT current_schema()")
+                if cur.fetchone()[0] != schema:  # defence in depth: never run tenant SQL in another schema
+                    raise RuntimeError(f"search_path did not pin schema {schema!r}")
         except BaseException:
             self._pool.putconn(self._raw)
             raise

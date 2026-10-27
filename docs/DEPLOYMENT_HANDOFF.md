@@ -11,13 +11,13 @@ Browser ── https ──> Vercel (static React app, frontend/, free Hobby)
                      Render web service `ledgerline-api` (FREE plan, Singapore, Python 3.14.8)
                        │ psycopg pool, TLS (sslmode=require)
                        ▼
-                     Supabase PostgreSQL (free), shared pooler in SESSION mode (port 5432, IPv4)
+                     Neon PostgreSQL (free), DIRECT endpoint (hostname without -pooler), sslmode=require
                        schemas: <prefix>_control · <prefix>_t_<org_id> (ledger) · <prefix>_b_<org_id> (simulated bank)
 ```
 
 Why: the user has no card that Render's paid plan or Oracle/alwaysdata accept (Render declined the user's Indian debit card twice; alwaysdata email sign-up requires card validation from the user's network). PythonAnywhere free blocks outbound HTTPS to `api.sandbox.airwallex.com` (observed from its console). Render's free plan is available without a card in the user's "My Workspace" (observed: service created). Render free has no persistent disk, so all durable state moves to PostgreSQL.
 
-Free-tier behaviour to disclose: Render free instances spin down after inactivity and the first request can take 50 s or more; Supabase free projects pause after 1 week of inactivity, include 500 MB, and have no automatic backups (supabase.com/pricing, 27 Oct 2026). Neither is promised to stay free or always on.
+Free-tier behaviour to disclose: Render free instances spin down after inactivity and the first request can take 50 s or more. Neon free (neon.com/pricing, 27 Oct 2026): no card, permanent (not a trial), 1 GB storage per project, 100 CU-hours per project per month (compute suspends until the next period if exceeded), scale-to-zero after 5 idle minutes (cannot be disabled on Free), 6-hour history window, 1 manual snapshot, no scheduled snapshots. Supabase was not used: both free project slots in the user's account are occupied by other projects, which were not modified. Nothing is promised to stay free or always on.
 
 ## Current state (observed)
 
@@ -26,12 +26,13 @@ Free-tier behaviour to disclose: Render free instances spin down after inactivit
 | Public URL | **https://ledgerline-black-iota.vercel.app** (Vercel Hobby project `ledgerline`, root `frontend`, production branch `deploy/vercel-render`). `/api/*` is routed to Render by `frontend/vercel.json` `routes` (with an `x-ledgerline-edge` request-header transform from the Vercel env `LEDGERLINE_EDGE_SECRET`). |
 | Render free service `ledgerline-api` | Live at `https://ledgerline-api-4dt3.onrender.com`, branch `deploy/vercel-render`, auto-deploy on commit. **Still on ephemeral SQLite (`/tmp`)**: data is lost on restart until `LEDGERLINE_DATABASE_URL` is set. Env set by Claude (non-secret): `LEDGERLINE_ALLOWED_ORIGINS` and `LEDGERLINE_PUBLIC_URL` = the Vercel origin, `LEDGERLINE_TRUSTED_PROXY_HOPS=4`; `LEDGERLINE_SECRET_KEY` generated with Render's Generate button (regenerated once after it was displayed on screen; current value never displayed). |
 | Proxy calibration | Measured with `/api/health` (`forwarded_entries`, `client`): through Vercel the chain has 4 entries and Vercel overwrites a client-sent X-Forwarded-For; Render adds 3 entries after the connecting address. With hops=4 the server resolved this PC's real public address through Vercel, ignored a forged header through Vercel, and resolved a direct Render call to Render's internal peer (fail closed). Remaining gap until the edge secret is set on both sides: a direct caller to the Render URL who forges exactly one entry can choose its per-IP throttling identity; commit `1d7a90b` closes it once `LEDGERLINE_EDGE_SECRET` is set identically on Render and Vercel. |
-| Supabase | Being provisioned by Codex (user request). Claude does not create projects or handle database credentials. |
+| Neon | Being provisioned by Codex (user request). Claude does not create projects or handle database credentials. |
 | Fail-closed storage | `LEDGERLINE_REQUIRE_DATABASE=1` (commit `1d7a90b`) to be set on Render together with the database URL. |
 | Paid resources | None. |
 
 ## PostgreSQL storage (commits `8f8293b`, `022b520`)
 
+- Connection policy: transaction-mode poolers (Neon `-pooler` hostnames, Supabase port 6543, `pgbouncer=true`) are refused at startup, because the per-connection `search_path` that pins a tenant schema is session state those poolers drop; every checkout also verifies `current_schema()`. Pooled connections are validated on checkout (Neon suspends idle compute after 5 minutes). Transaction-scoped advisory locks (`pg_advisory_xact_lock`) are used, never session-level locks.
 - `backend/ledgerline/pg.py`: same connection surface as SQLite so the money code is unchanged. One schema per logical database; a connection's `search_path` is that schema only. `BEGIN IMMEDIATE` → `BEGIN` + `pg_advisory_xact_lock(schema)` (one writer per logical database, as in SQLite); READ COMMITTED reads. DDL: `INTEGER` → `BIGINT`, identity columns; dialect translation (`?`, `INSERT OR IGNORE`, `LIKE`→`ILIKE`, JSON, `PRAGMA table_info`); integral `NUMERIC` sums returned as `int`. Pool returns connections rolled back and reset.
 - Hardening: `REVOKE ALL` on Ledgerline schemas from `PUBLIC`, `anon`, `authenticated`; RLS enabled with no policies on every table. The server role owns the tables (bypasses RLS); tenant isolation is enforced in the application (session → membership → registry → that organization's schema).
 - Payer-agent signing keys: table `agent_keys` per organization, AES-256-GCM, key from HKDF(`LEDGERLINE_SECRET_KEY`), associated data `schema:customer_id`. Keys are created only when a sample organization is seeded; the agent only loads them (missing or undecryptable → error, never a new identity). The stdio MCP child receives the organization's keys via its environment (not argv) and has no database access.
@@ -44,12 +45,12 @@ Free-tier behaviour to disclose: Render free instances spin down after inactivit
 | Local SQLite suite (`backend\.venv\Scripts\python -m pytest -q`) at `022b520` | **192 passed, 8 skipped** (skips = live PostgreSQL tests) |
 | PostgreSQL translation/encryption unit tests | pass locally |
 | Live PostgreSQL tests (`tests/test_postgres.py`: walkthrough + restart continuity, tenant switching/isolation/privileges/RLS, concurrent refund execution, concurrent duplicate webhooks, concurrent FX execution, failed-transaction rollback + pool recovery, stdio MCP signing identity across restart and refusal with a different secret, random-company accuracy) | **not yet run** locally: running downloaded PostgreSQL binaries was refused by this machine's permission policy and the EDB installer download returned HTTP 403. They run in GitHub Actions job `postgres` (postgres:17 service container), together with the whole suite on PostgreSQL. Result: see the latest Actions run for the branch; recorded below when observed. |
-| Supabase session pooler | **not yet run** (needs the user's `backend\.env.test`) |
+| Neon direct endpoint | **not yet run** (needs `backend\.env.test`) |
 | Deployed end-to-end, restart persistence | **not yet run** |
 
 ## Blockers needing the user
 
-1. Supabase (Codex is handling): project, Session pooler URI with `?sslmode=require` into Render `LEDGERLINE_DATABASE_URL` and `backend\.env.test` `LEDGERLINE_TEST_DATABASE_URL`; then set `LEDGERLINE_REQUIRE_DATABASE=1`.
+1. Neon (Codex is handling): project in an Asia-Pacific region, the DIRECT connection string (no `-pooler`) with `?sslmode=require` into Render `LEDGERLINE_DATABASE_URL` and `backend\.env.test` `LEDGERLINE_TEST_DATABASE_URL`; then set `LEDGERLINE_REQUIRE_DATABASE=1`.
 2. Edge secret: generate `LEDGERLINE_EDGE_SECRET` in Render and paste the same value into Vercel (Production, Sensitive).
 3. Optional integrations, server-side only: `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY`, `LEDGERLINE_SANDBOX_ORGS`, `ANTHROPIC_API_KEY`.
 

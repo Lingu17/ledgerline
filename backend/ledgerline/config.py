@@ -108,7 +108,7 @@ class Settings:
     # Optional shared secret the edge proxy adds as X-Ledgerline-Edge. When set, X-Forwarded-For is trusted only on
     # requests carrying it, so a client calling the origin directly cannot choose its throttling identity.
     edge_secret: str | None = None
-    # PostgreSQL (e.g. Supabase, shared pooler in session mode): when set, every logical database is a
+    # PostgreSQL (direct, non-pooled connection, e.g. Neon): when set, every logical database is a
     # schema there instead of a SQLite file, and payer-agent signing keys are stored encrypted in it.
     database_url: str | None = None
     pg_schema_prefix: str = "ll"
