@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -250,7 +251,28 @@ CREATE TABLE IF NOT EXISTS audit_events (
 """
 
 
-def connect(db_path: Path) -> sqlite3.Connection:
+@dataclass(frozen=True)
+class PgTarget:
+    """A logical database stored as one PostgreSQL schema (see pg.py). Used wherever a SQLite path was."""
+    url: str
+    schema: str
+
+    @property
+    def parent(self) -> "PgTarget":  # code that mkdirs the parent of a db path gets a harmless object
+        return self
+
+    def mkdir(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    def __str__(self) -> str:
+        return f"postgresql schema {self.schema}"
+
+
+def connect(db_path: "Path | PgTarget") -> sqlite3.Connection:
+    if isinstance(db_path, PgTarget):
+        from .pg import PgConnection
+
+        return PgConnection(db_path.url, db_path.schema)  # type: ignore[return-value]
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path), timeout=10, isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row

@@ -7,7 +7,7 @@ import pytest
 from ledgerline import crypto, db
 from ledgerline.clock import iso
 from ledgerline.demo import run_step
-from ledgerline.payer_agents.keys import ensure_keys
+from ledgerline.payer_agents.keys import ensure_keys, key_location
 from ledgerline.reconcile import ReconcileError, invoice_views, key_registry, record_agent_answer
 from ledgerline.evidence import verify
 
@@ -47,7 +47,7 @@ def _verify(ctx, deposit_id, asked, envelope):
 
 
 def _sign(ctx, customer_id, claim):
-    return crypto.sign_claim(claim, ensure_keys(ctx.settings.data_dir)[customer_id])
+    return crypto.sign_claim(claim, ensure_keys(key_location(ctx.settings))[customer_id])
 
 
 def _by_name(v):

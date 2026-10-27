@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from ..payer_agents.keys import key_location
 from .. import claude_reader, db, demo, ledger, payouts, treasury, webhooks, workspace
 from ..clock import iso
 from ..context import AppContext, validate_policy
@@ -173,7 +174,7 @@ def ask_agent(request: Request, deposit_id: str, operator: str = Depends(require
         qs = [q for q in pending_agent_questions(conn) if q["deposit_id"] == deposit_id]
     if not qs:
         raise HTTPException(409, "deposit is not awaiting a payer agent answer")
-    answers, transport = explain_payments(ctx.settings.data_dir, qs, ctx.settings.payer_mcp_transport)
+    answers, transport = explain_payments(key_location(ctx.settings), qs, ctx.settings.payer_mcp_transport)
     with ctx.conn() as conn, db.transaction(conn):
         r = record_agent_answer(conn, ctx, deposit_id, qs[0]["customer_id"], answers[0], transport)
     payouts.auto_execute_ready(ctx, operator)

@@ -39,7 +39,7 @@ async def _call_all(target: Any, requests: list[dict[str, Any]]) -> list[dict[st
 
 
 def explain_payments(
-    data_dir: Path, requests: list[dict[str, Any]], transport: str = "stdio"
+    data_dir, requests: list[dict[str, Any]], transport: str = "stdio"
 ) -> tuple[list[dict[str, Any]], str]:
     """Call explain_payment for each request over one MCP session. Returns (answers, transport label)."""
     if not requests:
@@ -50,10 +50,15 @@ def explain_payments(
         target: Any = build_server(data_dir)
         label = "mcp/in-memory"
     else:
-        target = StdioServerParameters(
-            command=sys.executable,
-            args=["-m", "ledgerline.payer_agents.server", "--data-dir", str(data_dir)],
-            cwd=str(BACKEND_DIR),
-        )
+        from mcp.client.stdio import get_default_environment
+
+        from .keys import PgKeys, load_keys
+
+        if isinstance(data_dir, PgKeys):
+            env = {**get_default_environment(), "LEDGERLINE_AGENT_KEYS": json.dumps(load_keys(data_dir))}
+            args = ["-m", "ledgerline.payer_agents.server"]
+        else:
+            env, args = None, ["-m", "ledgerline.payer_agents.server", "--data-dir", str(data_dir)]
+        target = StdioServerParameters(command=sys.executable, args=args, cwd=str(BACKEND_DIR), env=env)
         label = "mcp/stdio"
     return anyio.run(_call_all, target, requests), label

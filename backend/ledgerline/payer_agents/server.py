@@ -6,6 +6,8 @@ Ledgerline launches it as a subprocess and talks to it with the MCP client SDK.
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -16,12 +18,12 @@ from mcp.server.mcpserver import MCPServer
 from .. import crypto
 from ..clock import iso
 from . import books
-from .keys import ensure_keys
+from .keys import EnvKeys, load_keys
 
 ANSWER_TTL = timedelta(minutes=10)
 
 
-def build_server(data_dir: Path, now_fn: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> MCPServer:
+def build_server(data_dir, now_fn: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> MCPServer:
     app = MCPServer(
         "ledgerline-payer-agents",
         instructions="Simulated customer accounts-payable agents (local demo). Answers are signed claims.",
@@ -37,7 +39,7 @@ def build_server(data_dir: Path, now_fn: Callable[[], datetime] = lambda: dateti
         reference: str = "",
     ) -> dict[str, Any]:
         """Ask a customer's AP agent what a received payment was for. Returns a signed claim or status 'unknown'."""
-        keys = ensure_keys(data_dir)
+        keys = load_keys(data_dir)  # never creates: a missing key means no agent, not a new identity
         if customer_id not in keys:
             return {"status": "no_agent", "customer_id": customer_id}
         entry = books.lookup(customer_id, currency, amount_minor)
@@ -64,9 +66,13 @@ def build_server(data_dir: Path, now_fn: Callable[[], datetime] = lambda: dateti
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--data-dir")
     args = parser.parse_args()
-    build_server(Path(args.data_dir)).run("stdio")
+    env_keys = os.environ.get("LEDGERLINE_AGENT_KEYS")
+    # Hosted mode: the parent passes the decrypted keys of this organization's agents through the child's
+    # environment (never argv, which is visible in process lists); the child has no database access.
+    location = EnvKeys(json.loads(env_keys)) if env_keys else Path(args.data_dir)
+    build_server(location).run("stdio")
 
 
 if __name__ == "__main__":

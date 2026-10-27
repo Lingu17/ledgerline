@@ -157,4 +157,7 @@ def migrate(conn: sqlite3.Connection, migrations: list[Migration]) -> list[int]:
         except BaseException:
             conn.execute("ROLLBACK")
             raise
+    from .pg import harden
+
+    harden(conn)  # no-op on SQLite
     return ran

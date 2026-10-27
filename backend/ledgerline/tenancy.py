@@ -34,7 +34,7 @@ def build_org_context(settings: Settings, org: dict[str, Any], clock: Clock) -> 
     s = dataclasses.replace(
         settings,
         data_dir=data_dir,
-        db_path=data_dir / "ledgerline.sqlite3",
+        db_path=settings.pg_target("t", org["id"]) if settings.postgres else data_dir / "ledgerline.sqlite3",
         webhook_secret=org["webhook_secret_local"],
         airwallex_webhook_secret=org.get("airwallex_webhook_secret"),
         airwallex_global_account_ids=json.loads(org.get("airwallex_global_accounts") or "{}"),
@@ -52,7 +52,7 @@ def build_org_context(settings: Settings, org: dict[str, Any], clock: Clock) -> 
         sandbox = AirwallexSandbox(s.airwallex_client_id, s.airwallex_api_key)
         provider: Any = sandbox
     else:
-        local_bank = LocalBank(data_dir / "local_bank.sqlite3", clock)
+        local_bank = LocalBank(settings.pg_target("b", org["id"]) if settings.postgres else data_dir / "local_bank.sqlite3", clock)
         provider = local_bank
     ctx = AppContext(settings=s, clock=clock, provider=provider, local_bank=local_bank, sandbox=sandbox)
     ctx.org = {k: org[k] for k in ("id", "name", "kind", "bank_mode")}

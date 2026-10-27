@@ -43,6 +43,9 @@ _ENV_KEYS = (
     "LEDGERLINE_SANDBOX_ORGS",
     "LEDGERLINE_CLAUDE_DAILY_LIMIT",
     "LEDGERLINE_EDGE_SECRET",
+    "LEDGERLINE_DATABASE_URL",
+    "LEDGERLINE_PG_SCHEMA_PREFIX",
+    "LEDGERLINE_SECRET_KEY",
 )
 
 
@@ -103,6 +106,22 @@ class Settings:
     # Optional shared secret the edge proxy adds as X-Ledgerline-Edge. When set, X-Forwarded-For is trusted only on
     # requests carrying it, so a client calling the origin directly cannot choose its throttling identity.
     edge_secret: str | None = None
+    # PostgreSQL (e.g. Supabase, shared pooler in session mode): when set, every logical database is a
+    # schema there instead of a SQLite file, and payer-agent signing keys are stored encrypted in it.
+    database_url: str | None = None
+    pg_schema_prefix: str = "ll"
+    # Server-side secret (32+ characters) from which the key-encryption key is derived. Required with PostgreSQL.
+    secret_key: str | None = None
+
+    @property
+    def postgres(self) -> bool:
+        return bool(self.database_url)
+
+    def pg_target(self, kind: str, org_id: str | None = None):
+        from .db import PgTarget
+        from .pg import schema_for
+
+        return PgTarget(self.database_url, schema_for(self.pg_schema_prefix, kind, org_id))
 
     @property
     def airwallex_configured(self) -> bool:
@@ -164,6 +183,20 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.sandbox_org_ids = frozenset(x.strip() for x in env.get("LEDGERLINE_SANDBOX_ORGS", "").split(",") if x.strip())
     s.claude_daily_limit = max(0, int(env.get("LEDGERLINE_CLAUDE_DAILY_LIMIT") or 25))
     s.edge_secret = env.get("LEDGERLINE_EDGE_SECRET") or None
+    s.database_url = env.get("LEDGERLINE_DATABASE_URL") or None
+    prefix = (env.get("LEDGERLINE_PG_SCHEMA_PREFIX") or "ll").strip().lower()
+    if prefix == "auto":  # tests: an isolated set of schemas per settings object
+        import secrets as _secrets
+
+        prefix = "x" + _secrets.token_hex(4)
+    s.pg_schema_prefix = prefix
+    s.secret_key = env.get("LEDGERLINE_SECRET_KEY") or None
+    if s.database_url:
+        if "sslmode=" not in s.database_url and not any(h in s.database_url for h in ("@localhost", "@127.0.0.1")):
+            raise ValueError("LEDGERLINE_DATABASE_URL must set sslmode=require (or verify-full) for a remote database")
+        if not s.secret_key or len(s.secret_key) < 32:
+            raise ValueError("LEDGERLINE_SECRET_KEY (32+ random characters) is required with LEDGERLINE_DATABASE_URL")
+        s.db_path = s.pg_target("t", "single")
     key_path = env.get("APPLE_PRIVATE_KEY_PATH")
     s.apple_private_key = Path(key_path).read_bytes() if key_path and Path(key_path).is_file() else None
     return s

@@ -13,7 +13,7 @@ from ledgerline import crypto, db, ledger, payouts, treasury, webhooks
 from ledgerline.clock import Clock, iso
 from ledgerline.evidence import verify
 from ledgerline.money import MoneyError, to_minor
-from ledgerline.payer_agents.keys import ensure_keys
+from ledgerline.payer_agents.keys import ensure_keys, key_location
 from ledgerline.payouts import PayoutError
 from ledgerline.providers.base import TransferResult
 from ledgerline.providers.local import LocalBank
@@ -118,7 +118,7 @@ def test_immediate_failed_refund_does_not_lose_cash(ctx, status, monkeypatch):
 
 # 4. Overpayment: evidence decides only the unapplied excess ----------------------------------
 def _sign(ctx, cid, claim):
-    return crypto.sign_claim(claim, ensure_keys(ctx.settings.data_dir)[cid])
+    return crypto.sign_claim(claim, ensure_keys(key_location(ctx.settings))[cid])
 
 
 def _claim(ctx, dep, cid, inv, reason, amount, issued=None, expires=None):

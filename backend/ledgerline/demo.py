@@ -9,6 +9,7 @@ from .clock import iso
 from .context import AppContext
 from .money import to_major
 from .payer_agents.client import explain_payments
+from .payer_agents.keys import key_location
 from .providers.base import ProviderError, ProviderUnsupported
 from .reconcile import pending_agent_questions, record_agent_answer
 from .scenario import reset_demo, scenario_deposit_payloads
@@ -68,7 +69,7 @@ def run_step(ctx: AppContext, step: str, actor: str) -> dict[str, Any]:
     result: dict[str, Any]
     if step == "seed":
         with ctx.conn() as conn:
-            reset_demo(conn, ctx.settings.data_dir, ctx.clock.now())
+            reset_demo(conn, key_location(ctx.settings), ctx.clock.now())
             with db.transaction(conn):
                 db.set_setting(conn, "demo_steps_done", [])
         if ctx.local_bank is not None:
@@ -166,7 +167,7 @@ def publish_payment_links(ctx: AppContext, actor: str) -> list[dict[str, Any]]:
 def ask_payer_agents(ctx: AppContext) -> dict[str, Any]:
     with ctx.conn() as conn:
         questions = pending_agent_questions(conn)
-    answers, transport = explain_payments(ctx.settings.data_dir, questions, ctx.settings.payer_mcp_transport)
+    answers, transport = explain_payments(key_location(ctx.settings), questions, ctx.settings.payer_mcp_transport)
     results = []
     for q, ans in zip(questions, answers):
         with ctx.conn() as conn, db.transaction(conn):
@@ -186,7 +187,7 @@ def scorecard(ctx: AppContext) -> dict[str, Any]:
         human_touched = {r["deposit_id"] for r in db.rows(conn, "SELECT deposit_id FROM approvals WHERE decided_by NOT LIKE 'policy:%' OR status='pending'")}
         escalated = [d for d in deps if d["status"] == "escalated"]
         auto = [d for d in deps if d["id"] not in human_touched and d["status"] in ("matched", "partially_applied", "credited", "refunded")]
-        live_refunds_per_deposit = db.rows(conn, "SELECT deposit_id, COUNT(*) AS n FROM operations WHERE kind='refund' AND status NOT IN ('failed','cancelled') GROUP BY deposit_id HAVING n > 1")
+        live_refunds_per_deposit = db.rows(conn, "SELECT deposit_id, COUNT(*) AS n FROM operations WHERE kind='refund' AND status NOT IN ('failed','cancelled') GROUP BY deposit_id HAVING COUNT(*) > 1")
         provider_dupes = 0
         if ctx.local_bank is not None:
             for d in deps:

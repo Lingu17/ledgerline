@@ -47,7 +47,7 @@ def build_context(settings: Settings, clock: Clock | None = None) -> AppContext:
         sandbox = AirwallexSandbox(settings.airwallex_client_id, settings.airwallex_api_key)
         provider = sandbox
     else:
-        local_bank = LocalBank(settings.data_dir / "local_bank.sqlite3", clock)
+        local_bank = LocalBank(settings.pg_target("b", "single") if settings.postgres else settings.data_dir / "local_bank.sqlite3", clock)
         provider = local_bank
     return AppContext(settings=settings, clock=clock, provider=provider, local_bank=local_bank, sandbox=sandbox)
 
@@ -56,7 +56,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     settings = settings or load_settings()
     clock = clock or Clock()
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    if settings.require_persistent_mount:
+    if settings.require_persistent_mount and not settings.postgres:
         # Deployment guard: databases, organization data and signing keys must never land on ephemeral disk.
         mount = Path(settings.require_persistent_mount).resolve()
         if not os.path.ismount(mount) or mount not in [settings.data_dir.resolve(), *settings.data_dir.resolve().parents]:
@@ -66,7 +66,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     if legacy.exists():
         log.warning("ignoring pre-SaaS single-tenant database %s; organizations live under %s", legacy, settings.data_dir / "orgs")
 
-    control = ControlPlane(settings.data_dir / "control.sqlite3", clock)
+    control = ControlPlane(settings.pg_target("control") if settings.postgres else settings.data_dir / "control.sqlite3", clock)
     app = FastAPI(title="Ledgerline", version="0.2.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
     app.state.settings = settings
     app.state.control = control
@@ -119,10 +119,13 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         try:
             with control.conn() as c:
                 schema = c.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
-            probe = settings.data_dir / ".health"
-            probe.write_text(str(time.time()), encoding="utf-8")
-            body = {"status": "ok", "version": app.version, "control_schema": schema,
-                    "storage": "persistent mount" if settings.require_persistent_mount else "local directory",
+            if settings.postgres:
+                storage = "postgresql"
+            else:
+                probe = settings.data_dir / ".health"
+                probe.write_text(str(time.time()), encoding="utf-8")
+                storage = "persistent mount" if settings.require_persistent_mount else "local directory"
+            body = {"status": "ok", "version": app.version, "control_schema": schema, "storage": storage,
                     "bank": settings.provider, "claude": "configured" if settings.claude_configured else "not configured",
                     # The caller's own address as resolved through trusted proxies (verifies proxy configuration).
                     "client": client_ip(request)}

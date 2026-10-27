@@ -67,12 +67,16 @@ class LocalBank:
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as c:
             c.executescript(_SCHEMA)
+            from ..pg import harden
+
+            harden(c)
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
         """Autocommit connection that is always closed (Windows keeps files locked otherwise)."""
-        c = sqlite3.connect(str(self.path), timeout=10, isolation_level=None)
-        c.row_factory = sqlite3.Row
+        from .. import db
+
+        c = db.connect(self.path)  # SQLite file locally; a PostgreSQL schema when LEDGERLINE_DATABASE_URL is set
         try:
             yield c
         finally:
@@ -80,7 +84,8 @@ class LocalBank:
 
     def reset(self) -> None:
         with self._lock, self._conn() as c:
-            c.executescript("DELETE FROM transfers; DELETE FROM conversions; DELETE FROM quotes;")
+            for table in ("transfers", "conversions", "quotes"):
+                c.execute(f"DELETE FROM {table}")
 
     def _result(self, r: sqlite3.Row) -> TransferResult:
         return TransferResult(r["id"], r["request_id"], r["status"].lower(), r["status"])

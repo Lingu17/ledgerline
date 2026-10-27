@@ -11,6 +11,9 @@ from ledgerline.providers.base import ProviderAmbiguous, ProviderUnsupported
 
 
 def test_explain_payment_over_stdio_mcp(tmp_path):
+    from ledgerline.payer_agents.keys import ensure_keys
+
+    ensure_keys(tmp_path)  # keys exist only once an organization is seeded; the agent never creates them
     answers, transport = explain_payments(tmp_path, [{
         "customer_id": "CUST-EASTGATE", "deposit_id": "DEP-1006", "currency": "GBP", "amount_minor": 480_000,
         "received_at": "2026-10-27T00:00:00Z", "reference": "INV-2238",
@@ -143,3 +146,13 @@ def test_payloads_follow_the_official_reference():
     d = parse_deposit_event(event)
     assert (d["provider_ref"], d["amount_minor"], d["payer_name"], d["reference"], d["global_account_id"]) == \
         ("dep_1", 125050, "ACME ROBOTICS INC", "INV 2231", "ga_usd")
+
+
+def test_payer_agent_never_creates_a_signing_identity(tmp_path):
+    """With no stored key the agent reports no_agent instead of minting a key that would not match the registry."""
+    from ledgerline.payer_agents.keys import keys_path
+
+    answers, _ = explain_payments(tmp_path, [{"customer_id": "CUST-EASTGATE", "deposit_id": "DEP-1006", "currency": "GBP",
+                                              "amount_minor": 480_000, "received_at": "2026-10-27T00:00:00Z", "reference": ""}],
+                                  transport="memory")
+    assert answers[0]["status"] == "no_agent" and not keys_path(tmp_path).exists()

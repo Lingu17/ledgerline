@@ -36,14 +36,14 @@ def wallet_position(conn: sqlite3.Connection, ctx: AppContext) -> dict[str, dict
                     (f"cash:{ccy}", ccy))
         credits = -_sum(conn, "SELECT COALESCE(SUM(debit_minor - credit_minor),0) FROM journal_lines WHERE account='customer_credit' AND currency = ?", (ccy,))
         unapplied = -_sum(conn, "SELECT COALESCE(SUM(debit_minor - credit_minor),0) FROM journal_lines WHERE account='unapplied_cash' AND currency = ?", (ccy,))
-        refunds_reserved = _sum(conn, "SELECT COALESCE(SUM(amount_minor),0) FROM operations WHERE kind='refund' AND currency = ? AND status IN ('pending','processing') AND COALESCE(json_extract(detail,'$.cash_out_posted'),0) = 0", (ccy,))
+        refunds_reserved = _sum(conn, "SELECT COALESCE(SUM(amount_minor),0) FROM operations WHERE kind='refund' AND currency = ? AND status IN ('pending','processing') AND COALESCE(CAST(json_extract(detail,'$.cash_out_posted') AS TEXT),'0') IN ('0','false')", (ccy,))
         obligations = db.rows(conn, "SELECT * FROM obligations WHERE currency = ? AND status = 'scheduled' ORDER BY due_at", (ccy,))
         due_soon = sum(o["amount_minor"] for o in obligations if parse_iso(o["due_at"]) <= horizon)
         reserve = policy["reserve_minor"][ccy]
         held = credits + unapplied + refunds_reserved
         # In-flight conversions (persisted when booked): the sell side is reserved, the buy side counts as pending cover.
         fx_out_reserved = _sum(conn, "SELECT COALESCE(SUM(amount_minor),0) FROM operations WHERE kind='fx_conversion' AND currency = ? AND status IN ('pending','processing')", (ccy,))
-        fx_in_pending = _sum(conn, "SELECT COALESCE(SUM(json_extract(detail,'$.buy_amount_minor')),0) FROM operations WHERE kind='fx_conversion' AND json_extract(detail,'$.buy_currency') = ? AND status IN ('pending','processing')", (ccy,))
+        fx_in_pending = _sum(conn, "SELECT COALESCE(SUM(CAST(json_extract(detail,'$.buy_amount_minor') AS BIGINT)),0) FROM operations WHERE kind='fx_conversion' AND json_extract(detail,'$.buy_currency') = ? AND status IN ('pending','processing')", (ccy,))
         out[ccy] = {
             "currency": ccy,
             "cash": cash,

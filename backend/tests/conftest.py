@@ -89,3 +89,23 @@ def q(ctx, sql, params=()):
 def one(ctx, sql, params=()):
     with ctx.conn() as conn:
         return db.row(conn, sql, params)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _drop_postgres_test_schemas():
+    """With LEDGERLINE_TEST_DATABASE_URL set, tests create throwaway schemas named x<8 hex>_...; drop them afterwards."""
+    yield
+    import os
+
+    url = os.environ.get("LEDGERLINE_TEST_DATABASE_URL")
+    if not url:
+        return
+    import psycopg
+
+    from ledgerline import pg
+
+    pg.close_all()
+    with psycopg.connect(url, autocommit=True) as c:
+        names = [r[0] for r in c.execute(r"SELECT nspname FROM pg_namespace WHERE nspname ~ '^x[0-9a-f]{8}_'").fetchall()]
+        for n in names:
+            c.execute(f'DROP SCHEMA "{n}" CASCADE')
