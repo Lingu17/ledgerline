@@ -47,7 +47,7 @@ Nothing below is "Live" yet: no Airwallex sandbox credentials or Anthropic API k
 | # | Requirement | Status | Evidence / gap |
 |---|---|---|---|
 | C1 | Frontend on Vercel, same-origin `/api` proxy | Prepared | `frontend/vercel.json` (rewrite, CSP, HSTS); needs a Vercel sign-in |
-| C2 | Backend with persistent storage | Prepared · **decision needed** | Render (`render.yaml`, Starter + 1 GB disk = $7.25/month) per brief; user asked for free: PythonAnywhere free account `Lingu10` has code installed at `6442442`, site creation blocked until the user creates a PythonAnywhere API token |
+| C2 | Backend with persistent storage | Prepared · **decision needed** | Render (`render.yaml`, Starter + 1 GB disk = $7.25/month) satisfies everything. Free options checked: Oracle Always Free and alwaysdata need card verification; **PythonAnywhere free blocks outbound HTTPS to `api.sandbox.airwallex.com`** (observed 27 Oct 2026 from its console: connection refused by the allow-list; `api.anthropic.com` and PyPI reachable) and its ASGI hosting is labelled experimental, so it cannot satisfy the live Airwallex requirement. Code is installed there (`Lingu10`, commit `6442442`) but no site was created |
 | C3 | Secure cookies, CSRF, origins through the public URL | Tested locally behind a proxy | Re-test on the deployed URL |
 | C4 | Judges cannot touch shared sandbox funds or other orgs | Done+tested | `LEDGERLINE_SANDBOX_ORGS` allow-list; readiness check hides shared account details; tenant isolation tests |
 | C5 | Health check, migrations, persistence guard, restart persistence | Done+tested locally | `/api/health`, startup migrations, `LEDGERLINE_REQUIRE_PERSISTENT_MOUNT`; deployed restart test pending |
