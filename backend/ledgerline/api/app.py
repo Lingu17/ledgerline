@@ -119,7 +119,11 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         supplied = request.headers.get("x-ledgerline-edge")
         if not supplied:
             return "missing"
-        return "valid" if same_secret(supplied, settings.edge_secret) else "invalid"
+        if same_secret(supplied, settings.edge_secret):
+            return "valid"
+        if supplied.startswith("$"):
+            return "invalid: unsubstituted placeholder"  # the edge sent its variable name, not its value
+        return "invalid" if len(supplied) == len(settings.edge_secret) else "invalid: length differs"
 
     @app.get("/api/health", include_in_schema=False)
     def health(request: Request) -> JSONResponse:
