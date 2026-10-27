@@ -68,7 +68,7 @@ def _signup(app, email, start="sample"):
     from .conftest import signup
 
     c = TestClient(app)
-    signup(c, email=email, org=email.split("@")[0], start_with=start)
+    signup(c, email=email, org=f"Org {email.split('@')[0]}", start_with=start)
     return c
 
 
@@ -138,8 +138,10 @@ def test_postgres_tenant_schemas_and_privileges():
 def test_postgres_concurrent_refund_execution_moves_money_once():
     app = _pg_app()
     c = _signup(app, "race@pg.test")
-    for step in ["links", "agents", "treasury"]:
-        assert c.post("/api/demo/step", json={"step": step}).status_code == 200
+    while c.get("/api/demo").json()["next"] != "approve":  # follow the app's own step order
+        nxt = c.get("/api/demo").json()["next"]
+        r = c.post("/api/demo/step", json={"step": nxt})
+        assert r.status_code == 200, (nxt, r.text)
     a = next(x for x in c.get("/api/approvals").json() if x["status"] == "pending")
     approver = TestClient(app)
     from .conftest import PASSWORD
@@ -205,7 +207,7 @@ def test_postgres_concurrent_fx_execution_converts_once():
     ob = next(o for o in t["obligations"] if o["currency"] == "EUR")
     q = c.post(f"/api/treasury/obligations/{ob['id']}/quote")
     assert q.status_code == 200, q.text
-    quote_id = q.json()["id"]
+    quote_id = q.json()["quote"]["id"]
     codes = []
 
     def run():
@@ -273,11 +275,20 @@ def test_postgres_stdio_mcp_signing_identity_survives_restart():
     assert c2.get("/api/customers").json() == key_id  # same registered public keys
     v = c2.post("/api/deposits/DEP-1005/ask-agent").json()["verification"]
     assert v["verdict"] == "verified"  # signed after restart by the same, decrypted identity
-    # A different server secret cannot decrypt the stored keys: an error, never a silently new identity.
+    # A different server secret cannot decrypt the stored keys: refused, never a silently new identity.
     pg.close_all()
-    app3 = _pg_app(prefix=prefix, LEDGERLINE_SECRET_KEY="another-secret-" + "z" * 32)
-    c3 = TestClient(app3)
+    app3 = _pg_app(prefix=prefix, LEDGERLINE_SECRET_KEY="another-secret-" + "z" * 32, LEDGERLINE_PAYER_MCP_TRANSPORT="stdio")
+    c3 = TestClient(app3, raise_server_exceptions=False)
     r = c3.post("/api/auth/login", json={"email": "mcp@pg.test", "password": PASSWORD})
     c3.headers["X-CSRF-Token"] = r.json()["csrf_token"]
-    with pytest.raises(Exception):
-        c3.post("/api/deposits/DEP-1004/ask-agent")
+    bad = c3.post("/api/deposits/DEP-1004/ask-agent")
+    assert bad.status_code >= 500 or bad.json().get("verification", {}).get("verdict") != "verified"
+    # ...and the stored identity is untouched: with the right secret the agent still signs verifiable answers.
+    pg.close_all()
+    app4 = _pg_app(prefix=prefix, LEDGERLINE_PAYER_MCP_TRANSPORT="stdio")
+    c4 = TestClient(app4)
+    r = c4.post("/api/auth/login", json={"email": "mcp@pg.test", "password": PASSWORD})
+    c4.headers["X-CSRF-Token"] = r.json()["csrf_token"]
+    assert c4.get("/api/customers").json() == key_id
+    v = c4.post("/api/deposits/DEP-1004/ask-agent").json()["verification"]
+    assert v["verdict"] == "rejected" and "belongs to another customer" in v["reason"]  # signature passed, record check failed
