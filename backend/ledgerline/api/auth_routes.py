@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from ..control import AuthError
-from .security import Principal, clear_session_cookie, require_role, require_session, set_session_cookie
+from .security import Principal, clear_session_cookie, client_ip, require_role, require_session, set_session_cookie
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ def _control(request: Request):
 
 
 def _ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+    return client_ip(request)
 
 
 def _ua(request: Request) -> str:
@@ -237,10 +237,13 @@ def integration_check(request: Request, p: Principal = Depends(require_role("own
         from ..providers.airwallex import AirwallexSandbox
 
         try:
-            AirwallexSandbox(s.airwallex_client_id, s.airwallex_api_key, timeout=10)._bearer()
-            out["airwallex"] = {"status": "ok", "detail": "sandbox authentication succeeded just now"}
+            r = AirwallexSandbox(s.airwallex_client_id, s.airwallex_api_key, timeout=10).readiness()
+            accounts = ", ".join(f"{a['currency']} {a['id']}" for a in r["global_accounts"]) or "none yet (create one in the sandbox)"
+            money = ", ".join(f"{b['currency']} {b['available_amount']}" for b in r["balances"]) or "no balances"
+            out["airwallex"] = {"status": "ok", "detail": f"sandbox authentication succeeded just now; global accounts: {accounts}; "
+                                                          f"available balances: {money}"[:600], **r}
         except Exception as exc:  # noqa: BLE001 - reported verbatim to the owner
-            out["airwallex"] = {"status": "error", "detail": f"sandbox authentication failed: {type(exc).__name__}: {exc}"[:300]}
+            out["airwallex"] = {"status": "error", "detail": f"sandbox check failed: {type(exc).__name__}: {exc}"[:300]}
     else:
         out["airwallex"] = {"status": "not_configured", "detail": "AIRWALLEX_CLIENT_ID / AIRWALLEX_API_KEY not set on the server"}
     if s.claude_configured:

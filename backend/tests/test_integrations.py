@@ -103,3 +103,25 @@ def test_payment_link_unavailable_is_reported_not_faked():
     aw = _adapter(FakeAirwallex())
     with pytest.raises(ProviderUnsupported):
         aw.create_payment_link(title="t", amount_minor=120_000, currency="GBP", reference="INV-2260")
+
+
+def test_airwallex_readiness_is_read_only_and_follows_the_hackathon_guide():
+    """Login, list global accounts, list current balances: GETs only, nothing created, no money moved."""
+    calls = []
+
+    def fake(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, request.url.path))
+        if request.url.path.endswith("/authentication/login"):
+            assert request.headers["x-client-id"] == "cid" and request.headers["x-api-key"] == "key"
+            return httpx.Response(201, json={"token": "t", "expires_at": "2099-01-01T00:00:00+00:00"})
+        assert request.headers["authorization"] == "Bearer t"
+        if request.url.path.endswith("/global_accounts"):
+            return httpx.Response(200, json={"items": [{"id": "ga_1", "currency": "USD", "status": "ACTIVE", "account_number": "x"}], "has_more": False})
+        if request.url.path.endswith("/balances/current"):
+            return httpx.Response(200, json=[{"currency": "USD", "available_amount": 1000.5, "total_amount": 1000.5}])
+        return httpx.Response(404)
+
+    r = AirwallexSandbox("cid", "key", transport=httpx.MockTransport(fake)).readiness()
+    assert r == {"global_accounts": [{"id": "ga_1", "currency": "USD", "status": "ACTIVE"}],
+                 "balances": [{"currency": "USD", "available_amount": 1000.5}]}
+    assert [m for m, _ in calls[1:]] == ["GET", "GET"]

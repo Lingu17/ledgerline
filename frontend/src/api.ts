@@ -29,13 +29,25 @@ function headers(json: boolean, mutating: boolean): HeadersInit {
   return h;
 }
 
+const UNAVAILABLE = "Ledgerline's server is not reachable right now. It may be restarting; try again in a minute.";
+
+// fetch() only rejects when the network fails (offline, DNS, proxy cut); give that a readable message.
+async function send(path: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(`/api${path}`, { credentials: "same-origin", ...init });
+  } catch {
+    throw new ApiError(0, UNAVAILABLE);
+  }
+}
+
 async function handle<T>(res: Response): Promise<T> {
   const text = await res.text();
   let body: any = null;
   try {
     body = text ? JSON.parse(text) : null;
   } catch {
-    body = { detail: text.slice(0, 200) };
+    // A gateway error page (HTML) from the hosting proxy, not an API answer.
+    body = { detail: [502, 503, 504].includes(res.status) ? UNAVAILABLE : text.slice(0, 200) };
   }
   if (res.status === 401 && !res.url.includes("/api/auth/")) unauthorizedListeners.forEach((fn) => fn());
   if (!res.ok) {
@@ -49,14 +61,13 @@ async function handle<T>(res: Response): Promise<T> {
 }
 
 export async function get<T>(path: string): Promise<T> {
-  return handle<T>(await fetch(`/api${path}`, { headers: headers(false, false), credentials: "same-origin" }));
+  return handle<T>(await send(path, { headers: headers(false, false) }));
 }
 
 export async function post<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
   return handle<T>(
-    await fetch(`/api${path}`, {
+    await send(path, {
       method,
-      credentials: "same-origin",
       headers: headers(body !== undefined, true),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
@@ -69,7 +80,7 @@ export function del<T>(path: string): Promise<T> {
 
 /** GET that also returns the X-Total-Count header for paginated lists. */
 export async function getPage<T>(path: string): Promise<{ items: T; total: number }> {
-  const res = await fetch(`/api${path}`, { headers: headers(false, false), credentials: "same-origin" });
+  const res = await send(path, { headers: headers(false, false) });
   const total = Number(res.headers.get("X-Total-Count") ?? "0");
   return { items: await handle<T>(res), total };
 }

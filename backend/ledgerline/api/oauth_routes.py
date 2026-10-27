@@ -24,7 +24,7 @@ from fastapi.responses import RedirectResponse, Response
 
 from ..control import AuthError
 from ..oidc import JWKSCache, OIDCError, authorization_url, configured_providers, email_verified, exchange_code, verify_id_token
-from .security import SESSION_COOKIE, require_session, set_session_cookie
+from .security import SESSION_COOKIE, client_ip, require_session, set_session_cookie
 
 router = APIRouter()
 log = logging.getLogger("ledgerline.oauth")
@@ -153,7 +153,7 @@ async def callback(request: Request, provider: str):
         token, _created = control.oauth_signin(
             provider=provider, subject=claims["sub"], email=claims.get("email"), verified=email_verified(claims),
             name=name if isinstance(name, str) else None, allow_signup=request.app.state.settings.allow_signup,
-            ip=request.client.host if request.client else "unknown", user_agent=request.headers.get("user-agent", "")[:200])
+            ip=client_ip(request), user_agent=request.headers.get("user-agent", "")[:200])
     except AuthError as exc:
         return _fail(request, str(exc))
     resp = RedirectResponse(rec["return_to"], status_code=303)

@@ -114,6 +114,19 @@ class AirwallexSandbox:
             raise ProviderError(f"{method} {path}: HTTP {resp.status_code} {code}".strip())
         return resp.json() if resp.content else {}
 
+    def readiness(self) -> dict[str, Any]:
+        """Read-only connection check from the Airwallex hackathon guide: authenticate, list global
+        accounts, list current wallet balances. Moves no money and creates nothing."""
+        self._bearer()
+        accounts = self._request("GET", "/global_accounts", params={"page_size": 50})
+        items = accounts.get("items", []) if isinstance(accounts, dict) else []
+        balances = self._request("GET", "/balances/current")
+        rows = balances if isinstance(balances, list) else balances.get("items", []) if isinstance(balances, dict) else []
+        return {
+            "global_accounts": [{"id": a.get("id"), "currency": a.get("currency"), "status": a.get("status")} for a in items],
+            "balances": [{"currency": b.get("currency"), "available_amount": b.get("available_amount")} for b in rows],
+        }
+
     # Deposits ------------------------------------------------------------
     def simulate_deposit(self, *, global_account_id: str, currency: str, amount_minor: int, payer_name: str,
                          reference: str) -> dict[str, Any]:

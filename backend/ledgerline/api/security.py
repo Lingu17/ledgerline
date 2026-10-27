@@ -38,6 +38,22 @@ class Principal:
         return self.session.role or ""
 
 
+def client_ip(request: Request) -> str:
+    """The browser's address, for sign-in throttling and audit.
+
+    Behind N trusted reverse proxies (LEDGERLINE_TRUSTED_PROXY_HOPS), each appends the address it
+    received the request from to X-Forwarded-For, and the socket peer is the last proxy. The client is
+    therefore N entries from the right of [X-Forwarded-For..., peer]. Anything further left was supplied
+    by the client and is ignored. With 0 hops the socket peer is used and the header is never trusted.
+    """
+    peer = request.client.host if request.client else "unknown"
+    hops = request.app.state.settings.trusted_proxy_hops
+    if hops <= 0:
+        return peer
+    chain = [x.strip() for x in request.headers.get("x-forwarded-for", "").split(",") if x.strip()] + [peer]
+    return chain[max(0, len(chain) - 1 - hops)]
+
+
 def set_session_cookie(request: Request, response: Response, token: str) -> None:
     secure = request.app.state.settings.cookie_secure
     response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="strict", secure=secure, path="/api",

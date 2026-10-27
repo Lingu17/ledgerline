@@ -37,6 +37,9 @@ _ENV_KEYS = (
     "APPLE_TEAM_ID",
     "APPLE_KEY_ID",
     "APPLE_PRIVATE_KEY_PATH",
+    "PORT",
+    "LEDGERLINE_TRUSTED_PROXY_HOPS",
+    "LEDGERLINE_REQUIRE_PERSISTENT_MOUNT",
 )
 
 
@@ -85,6 +88,10 @@ class Settings:
     apple_team_id: str | None = None
     apple_key_id: str | None = None
     apple_private_key: bytes | None = None
+    # Deployment: how many reverse proxies in front of us append to X-Forwarded-For (0 = use the socket peer),
+    # and a mount point the data directory must live on (refuse to start on ephemeral storage).
+    trusted_proxy_hops: int = 0
+    require_persistent_mount: str | None = None
 
     @property
     def airwallex_configured(self) -> bool:
@@ -114,7 +121,7 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
 
     s = Settings(db_path=db_path, data_dir=data_dir)
     s.host = env.get("LEDGERLINE_HOST", s.host)
-    s.port = int(env.get("LEDGERLINE_PORT", s.port))
+    s.port = int(env.get("LEDGERLINE_PORT") or env.get("PORT") or s.port)  # PORT: set by hosts such as Render
     # Default: the Vite dev server plus this server's own origin (built UI served by the API).
     s.allowed_origins = origins or (
         "http://127.0.0.1:5173", "http://localhost:5173", f"http://127.0.0.1:{s.port}", f"http://localhost:{s.port}",
@@ -138,6 +145,8 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.apple_client_id = env.get("APPLE_CLIENT_ID") or None
     s.apple_team_id = env.get("APPLE_TEAM_ID") or None
     s.apple_key_id = env.get("APPLE_KEY_ID") or None
+    s.trusted_proxy_hops = max(0, min(5, int(env.get("LEDGERLINE_TRUSTED_PROXY_HOPS") or 0)))
+    s.require_persistent_mount = env.get("LEDGERLINE_REQUIRE_PERSISTENT_MOUNT") or None
     key_path = env.get("APPLE_PRIVATE_KEY_PATH")
     s.apple_private_key = Path(key_path).read_bytes() if key_path and Path(key_path).is_file() else None
     return s

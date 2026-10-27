@@ -1,0 +1,54 @@
+# Render Blueprint for the Ledgerline API (backend). The frontend is hosted on Vercel and reaches this
+# service through a same-origin /api rewrite (frontend/vercel.json), so browsers only ever talk to Vercel.
+#
+# Persistence: every SQLite database, organization folder and payer-agent signing key lives under
+# /var/data/ledgerline on a Render persistent disk. The app refuses to start if that path is not a mount
+# (LEDGERLINE_REQUIRE_PERSISTENT_MOUNT), so it can never silently fall back to ephemeral storage.
+# Disks need a paid instance; a service with a disk runs as one instance and restarts without zero-downtime.
+services:
+  - type: web
+    name: ledgerline-api
+    runtime: python
+    plan: starter
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install --no-cache-dir -r requirements-lock.txt
+    # Migrations run at startup (control plane on boot, each organization's database on first open):
+    # Render disks are not attached during build or pre-deploy commands.
+    startCommand: python -m ledgerline
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: ledgerline-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.8
+      - key: LEDGERLINE_HOST
+        value: 0.0.0.0
+      - key: LEDGERLINE_DATA_DIR
+        value: /var/data/ledgerline
+      - key: LEDGERLINE_REQUIRE_PERSISTENT_MOUNT
+        value: /var/data
+      - key: LEDGERLINE_COOKIE_SECURE
+        value: "1"
+      # Browser -> Vercel edge -> Render proxy -> app: the client address is 2 hops from the socket peer.
+      - key: LEDGERLINE_TRUSTED_PROXY_HOPS
+        value: "2"
+      - key: LEDGERLINE_LOG_LEVEL
+        value: INFO
+      - key: LEDGERLINE_ALLOW_SIGNUP
+        value: "1"
+      # Set to the public Vercel origin (no trailing slash) after the frontend is created.
+      - key: LEDGERLINE_ALLOWED_ORIGINS
+        sync: false
+      - key: LEDGERLINE_PUBLIC_URL
+        sync: false
+      # Optional integrations. Leave unset until real credentials exist; the UI labels them unavailable.
+      - key: AIRWALLEX_CLIENT_ID
+        sync: false
+      - key: AIRWALLEX_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

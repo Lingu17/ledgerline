@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -54,6 +55,11 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     settings = settings or load_settings()
     clock = clock or Clock()
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    if settings.require_persistent_mount:
+        # Deployment guard: databases, organization data and signing keys must never land on ephemeral disk.
+        mount = Path(settings.require_persistent_mount).resolve()
+        if not os.path.ismount(mount) or mount not in [settings.data_dir.resolve(), *settings.data_dir.resolve().parents]:
+            raise RuntimeError(f"LEDGERLINE_DATA_DIR must be on the persistent mount {mount}; refusing to start on ephemeral storage")
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     legacy = settings.data_dir / "ledgerline.sqlite3"
     if legacy.exists():
@@ -105,6 +111,22 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
 
     app.include_router(auth_router, prefix="/api")
     app.include_router(oauth_router, prefix="/api")
+
+    @app.get("/api/health", include_in_schema=False)
+    def health() -> JSONResponse:
+        """Liveness and readiness for the host's health check: control database readable and data directory writable."""
+        try:
+            with control.conn() as c:
+                schema = c.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+            probe = settings.data_dir / ".health"
+            probe.write_text(str(time.time()), encoding="utf-8")
+            body = {"status": "ok", "version": app.version, "control_schema": schema,
+                    "storage": "persistent mount" if settings.require_persistent_mount else "local directory",
+                    "bank": settings.provider, "claude": "configured" if settings.claude_configured else "not configured"}
+            return JSONResponse(body, headers={"Cache-Control": "no-store"})
+        except Exception as exc:  # noqa: BLE001 - report unhealthy instead of crashing the probe
+            log.error("health check failed: %s", exc)
+            return JSONResponse({"status": "unavailable"}, status_code=503, headers={"Cache-Control": "no-store"})
     app.include_router(router, prefix="/api")
 
     if FRONTEND_DIST.is_dir():
