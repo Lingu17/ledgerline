@@ -11,8 +11,11 @@ from .conftest import PASSWORD, signup
 
 
 def _settings(tmp_path, **extra):
+    # These are SQLite/disk deployment checks (mount guard, local health): pinned to SQLite even when the suite
+    # runs on PostgreSQL (LEDGERLINE_TEST_ALL_ON_POSTGRES); PostgreSQL deployment behaviour is in test_postgres.py.
     return load_settings({"LEDGERLINE_DATA_DIR": str(tmp_path / "data"), "LEDGERLINE_PAYER_MCP_TRANSPORT": "memory",
-                          "GOOGLE_CLIENT_ID": "", "APPLE_CLIENT_ID": "", "ANTHROPIC_API_KEY": "", **extra})
+                          "GOOGLE_CLIENT_ID": "", "APPLE_CLIENT_ID": "", "ANTHROPIC_API_KEY": "",
+                          "LEDGERLINE_DATABASE_URL": "", "LEDGERLINE_REQUIRE_DATABASE": "0", **extra})
 
 
 def test_health_reports_ready_without_auth(tmp_path):
