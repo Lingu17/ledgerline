@@ -105,3 +105,18 @@ def test_withdrawn_sandbox_access_applies_to_cached_contexts(tmp_path):
     assert app.state.orgs.get(c.org_id).sandbox is not None
     app.state.settings.sandbox_org_ids = frozenset()
     assert c.get("/api/deposits").status_code == 403
+
+
+def test_hosted_mode_refuses_to_start_without_a_database(tmp_path):
+    with pytest.raises(ValueError, match="refusing to start on local storage"):
+        _settings(tmp_path, LEDGERLINE_REQUIRE_DATABASE="1", LEDGERLINE_DATABASE_URL="")
+
+
+def test_edge_header_placeholder_is_not_a_valid_secret(tmp_path):
+    """Before the Vercel variable exists, Vercel sends the literal "$LEDGERLINE_EDGE_SECRET": never accepted."""
+    app = create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="4", LEDGERLINE_EDGE_SECRET="real-edge-secret-0123456789abcdef"))
+    chain = "client, vercel, cf, lb"
+    assert _ip_of(app, {"X-Forwarded-For": chain, "X-Ledgerline-Edge": "$LEDGERLINE_EDGE_SECRET"}) == "10.0.0.5"
+    assert _ip_of(app, {"X-Forwarded-For": chain, "X-Ledgerline-Edge": "real-edge-secret-0123456789abcdef"}) == "client"
+    # Direct caller forging one extra entry, without the secret: not trusted.
+    assert _ip_of(app, {"X-Forwarded-For": "forged, me, cf, lb"}) == "10.0.0.5"

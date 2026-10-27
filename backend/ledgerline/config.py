@@ -47,6 +47,7 @@ _ENV_KEYS = (
     "LEDGERLINE_DATABASE_URL",
     "LEDGERLINE_PG_SCHEMA_PREFIX",
     "LEDGERLINE_SECRET_KEY",
+    "LEDGERLINE_REQUIRE_DATABASE",
 )
 
 
@@ -193,6 +194,10 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
         AUTO_PREFIXES.append(prefix)  # so a test run can drop exactly the schemas it created
     s.pg_schema_prefix = prefix
     s.secret_key = env.get("LEDGERLINE_SECRET_KEY") or None
+    if env.get("LEDGERLINE_REQUIRE_DATABASE", "0").strip().lower() in ("1", "true", "yes") and not env.get("LEDGERLINE_DATABASE_URL"):
+        # Hosted deployments set this so a missing database URL stops the service instead of silently
+        # writing accounts and money records to an ephemeral local SQLite file.
+        raise ValueError("LEDGERLINE_REQUIRE_DATABASE=1 but LEDGERLINE_DATABASE_URL is not set; refusing to start on local storage")
     if s.database_url:
         if "sslmode=" not in s.database_url and not any(h in s.database_url for h in ("@localhost", "@127.0.0.1")):
             raise ValueError("LEDGERLINE_DATABASE_URL must set sslmode=require (or verify-full) for a remote database")
