@@ -304,6 +304,9 @@ def test_migrations_recorded_and_legacy_tenant_upgraded(settings, tmp_path):
     app = create_app(settings)
     with app.state.control.conn() as c:
         assert [r[0] for r in c.execute("SELECT version FROM schema_migrations")] == [1, 2]
-        tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if app.state.settings.postgres:
+            tables = {r[0] for r in c.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()").fetchall()}
+        else:
+            tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"oauth_identities", "oauth_states"} <= tables
     create_app(settings)  # restart: nothing re-applied, no error
