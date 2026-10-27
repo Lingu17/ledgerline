@@ -55,6 +55,9 @@ def _parse_deposit(event: dict[str, Any], hints: dict[str, Any] | None = None) -
     data = event.get("data")
     if not isinstance(data, dict):
         raise WebhookRejected(400, "data must be an object")
+    # Documented envelope: the deposit resource is at data.object. A flat data object is also accepted.
+    if isinstance(data.get("object"), dict):
+        data = data["object"]
     dep_id = data.get("id")
     if not isinstance(dep_id, str) or not dep_id.strip():
         raise WebhookRejected(400, "data.id must be a non-empty string")
@@ -97,7 +100,7 @@ def _parse_deposit(event: dict[str, Any], hints: dict[str, Any] | None = None) -
         "payer_name": payer_name or hints.get("payer_name") or "UNKNOWN PAYER",
         "reference": reference if reference is not None else hints.get("reference", ""),
         "received_at": received_at,
-        "global_account_id": data.get("funding_source_id") if isinstance(data.get("funding_source_id"), str) else None,
+        "global_account_id": next((data[k] for k in ("global_account_id", "funding_source_id") if isinstance(data.get(k), str)), None),
     }
 
 

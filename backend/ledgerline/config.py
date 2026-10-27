@@ -40,6 +40,8 @@ _ENV_KEYS = (
     "PORT",
     "LEDGERLINE_TRUSTED_PROXY_HOPS",
     "LEDGERLINE_REQUIRE_PERSISTENT_MOUNT",
+    "LEDGERLINE_SANDBOX_ORGS",
+    "LEDGERLINE_CLAUDE_DAILY_LIMIT",
 )
 
 
@@ -92,10 +94,18 @@ class Settings:
     # and a mount point the data directory must live on (refuse to start on ephemeral storage).
     trusted_proxy_hops: int = 0
     require_persistent_mount: str | None = None
+    # The Airwallex credentials are the operator's single sandbox account. Only organizations listed here
+    # (by id) may switch to it; every other organization stays on the simulated bank.
+    sandbox_org_ids: frozenset[str] = frozenset()
+    # Shared Anthropic key: at most this many Claude calls per organization per UTC day.
+    claude_daily_limit: int = 25
 
     @property
     def airwallex_configured(self) -> bool:
         return bool(self.airwallex_client_id and self.airwallex_api_key)
+
+    def sandbox_allowed(self, org_id: str | None) -> bool:
+        return self.airwallex_configured and bool(org_id) and org_id in self.sandbox_org_ids
 
     @property
     def claude_configured(self) -> bool:
@@ -147,6 +157,8 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.apple_key_id = env.get("APPLE_KEY_ID") or None
     s.trusted_proxy_hops = max(0, min(5, int(env.get("LEDGERLINE_TRUSTED_PROXY_HOPS") or 0)))
     s.require_persistent_mount = env.get("LEDGERLINE_REQUIRE_PERSISTENT_MOUNT") or None
+    s.sandbox_org_ids = frozenset(x.strip() for x in env.get("LEDGERLINE_SANDBOX_ORGS", "").split(",") if x.strip())
+    s.claude_daily_limit = max(0, int(env.get("LEDGERLINE_CLAUDE_DAILY_LIMIT") or 25))
     key_path = env.get("APPLE_PRIVATE_KEY_PATH")
     s.apple_private_key = Path(key_path).read_bytes() if key_path and Path(key_path).is_file() else None
     return s

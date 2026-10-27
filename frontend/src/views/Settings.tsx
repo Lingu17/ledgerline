@@ -10,7 +10,7 @@ const CCYS: Ccy[] = ["USD", "EUR", "GBP"];
 interface OrgSettings {
   id: string; name: string; kind: string; bank_mode: "local" | "airwallex_sandbox";
   airwallex_global_accounts: Partial<Record<Ccy, string>>; airwallex_webhook_secret_set: boolean; webhook_path: string;
-  server: { airwallex_credentials_present: boolean; claude_key_present: boolean; claude_model: string };
+  server: { airwallex_credentials_present: boolean; claude_key_present: boolean; claude_model: string; sandbox_allowed: boolean; claude_daily_limit: number };
   control_audit: { id: number; at: string; actor: string; action: string; detail: string }[];
 }
 type CheckResult = Record<string, { status: string; detail: string }>;
@@ -128,7 +128,7 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
                   <select aria-label="Bank mode" value={org.bank_mode} disabled={!!busy}
                     onChange={(e) => run("bank", () => post("/organization", { bank_mode: e.target.value }, "PUT"), "Bank mode updated")}>
                     <option value="local">Local workspace (simulated bank)</option>
-                    <option value="airwallex_sandbox" disabled={!org.server.airwallex_credentials_present}>Airwallex sandbox{org.server.airwallex_credentials_present ? "" : " (server credentials missing)"}</option>
+                    <option value="airwallex_sandbox" disabled={!org.server.sandbox_allowed}>Airwallex sandbox{org.server.sandbox_allowed ? "" : org.server.airwallex_credentials_present ? " (reserved for operator-approved organizations)" : " (server credentials missing)"}</option>
                   </select>
                 ) : <Pill status="muted" label={org.bank_mode === "local" ? "Local simulation" : "Airwallex sandbox"} />}
               </td>

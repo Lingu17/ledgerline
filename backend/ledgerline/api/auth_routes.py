@@ -215,7 +215,8 @@ def org_settings(request: Request, p: Principal = Depends(require_role("viewer")
         "airwallex_webhook_secret_set": bool(org["airwallex_webhook_secret"]),
         "webhook_path": f"/api/webhooks/airwallex/{org['id']}",
         "server": {"airwallex_credentials_present": s.airwallex_configured, "claude_key_present": s.claude_configured,
-                   "claude_model": s.claude_model},
+                   "claude_model": s.claude_model, "sandbox_allowed": s.sandbox_allowed(org["id"]),
+                   "claude_daily_limit": s.claude_daily_limit},
         "control_audit": _control(request).control_audit(org["id"], 50) if p.role == "owner" else [],
     }
 
@@ -223,7 +224,7 @@ def org_settings(request: Request, p: Principal = Depends(require_role("viewer")
 @router.put("/organization")
 def update_org(request: Request, body: dict[str, Any], p: Principal = Depends(require_role("owner"))) -> dict[str, Any]:
     _control(request).update_org_settings(p.session.org_id, p.session.email, body,
-                                          sandbox_available=request.app.state.settings.airwallex_configured)
+                                          sandbox_available=request.app.state.settings.sandbox_allowed(p.session.org_id))
     request.app.state.orgs.invalidate(p.session.org_id)
     return org_settings(request, p)
 
@@ -233,7 +234,10 @@ def integration_check(request: Request, p: Principal = Depends(require_role("own
     """Actively probe each configured integration and report exactly what happened. Nothing is assumed."""
     s = request.app.state.settings
     out: dict[str, Any] = {}
-    if s.airwallex_configured:
+    if s.airwallex_configured and not s.sandbox_allowed(p.session.org_id):
+        out["airwallex"] = {"status": "restricted", "detail": "the server's Airwallex sandbox account is reserved for operator-approved "
+                                                              "organizations; this organization uses the simulated bank"}
+    elif s.airwallex_configured:
         from ..providers.airwallex import AirwallexSandbox
 
         try:

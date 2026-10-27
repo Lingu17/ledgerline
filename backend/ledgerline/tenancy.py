@@ -44,8 +44,11 @@ def build_org_context(settings: Settings, org: dict[str, Any], clock: Clock) -> 
     if s.provider == "airwallex_sandbox":
         from .providers.airwallex import AirwallexSandbox
 
-        if not s.airwallex_configured:
-            raise RuntimeError("organization is set to the Airwallex sandbox but server credentials are missing")
+        if not settings.sandbox_allowed(org["id"]):
+            # Shared sandbox credentials are reserved for operator-approved organizations (LEDGERLINE_SANDBOX_ORGS).
+            from .control import AuthError
+
+            raise AuthError(403, "this organization is not authorized to use the server's Airwallex sandbox credentials")
         sandbox = AirwallexSandbox(s.airwallex_client_id, s.airwallex_api_key)
         provider: Any = sandbox
     else:

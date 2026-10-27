@@ -86,7 +86,7 @@ def test_transfer_timeout_is_ambiguous_and_lookup_uses_request_id():
     with pytest.raises(ProviderAmbiguous):
         aw.create_transfer(request_id="rid-1", amount_minor=480_000, currency="GBP", destination="ben_1", reference="r")
     sent = json.loads(fake.calls[-1].content)
-    assert sent["request_id"] == "rid-1" and sent["transfer_amount"] == 4800.0 and sent["beneficiary_id"] == "ben_1"
+    assert sent["request_id"] == "rid-1" and sent["transfer_amount"] == "4800.00" and sent["beneficiary_id"] == "ben_1"
     found = aw.find_transfer("rid-1")
     assert found.provider_id == "tr1" and found.status == "sent"  # SENT normalised, not treated as final
 
@@ -125,3 +125,21 @@ def test_airwallex_readiness_is_read_only_and_follows_the_hackathon_guide():
     assert r == {"global_accounts": [{"id": "ga_1", "currency": "USD", "status": "ACTIVE"}],
                  "balances": [{"currency": "USD", "available_amount": 1000.5}]}
     assert [m for m, _ in calls[1:]] == ["GET", "GET"]
+
+
+def test_payloads_follow_the_official_reference():
+    """Checked against airwallex.com/docs (27 Oct 2026): transfer and conversion amounts are strings,
+    rejected/recalled approvals never move money, deposits name their global account in global_account_id."""
+    from ledgerline.providers.base import normalise_transfer_status
+    from ledgerline.webhooks import _parse_deposit as parse_deposit_event
+
+    assert normalise_transfer_status("approval_rejected") == "cancelled"
+    assert normalise_transfer_status("approval_recalled") == "cancelled"
+    assert normalise_transfer_status("in_approval") == "processing"
+    assert normalise_transfer_status("sent") == "sent"  # SENT is never final
+    event = {"id": "evt_1", "name": "deposit.settled", "data": {"object": {
+        "id": "dep_1", "amount": 1250.5, "currency": "USD", "status": "SETTLED", "settled_at": "2026-10-27T10:00:00Z",
+        "global_account_id": "ga_usd", "payer": {"name": "ACME ROBOTICS INC"}, "reference": "INV 2231"}}}
+    d = parse_deposit_event(event)
+    assert (d["provider_ref"], d["amount_minor"], d["payer_name"], d["reference"], d["global_account_id"]) == \
+        ("dep_1", 125050, "ACME ROBOTICS INC", "INV 2231", "ga_usd")

@@ -1,6 +1,6 @@
 # Deployment handoff (Claude → Codex)
 
-Status: **prepared, not yet deployed.** Waiting for the user's approval of the recurring Render cost and a sign-in to Render and Vercel (the browser pane is not signed in to either; Claude does not enter passwords).
+Status: **prepared, not yet deployed.** The user chose the free option: Oracle Cloud Always Free VM for the backend (`deploy/vm/`), Vercel Hobby for the frontend; Render (`render.yaml`, $7.25/month) is kept only as a documented paid alternative and was not purchased. Waiting for the user to create the Oracle account and sign in to Oracle and Vercel (Claude does not create accounts or enter passwords). Branch `deploy/vercel-render` at `6442442` adds the VM kit (setup.sh, hardened systemd unit, Caddy auto-HTTPS on sslip.io, nightly SQLite backups, update.sh). A deploy SSH key pair was generated locally at `~/.ssh/ledgerline_oracle` (private key never leaves this machine).
 
 ## Done
 

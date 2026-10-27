@@ -97,6 +97,30 @@ def _claude_read(ctx: AppContext, text: str) -> dict[str, Any]:
     return {"tool": "escalate", "input": {"reason": "model returned no tool call"}, "model": resp.model}
 
 
+_INV = re.compile(r"^INV-\d{3,6}$")
+
+
+def typed_proposal(raw: dict[str, Any]) -> dict[str, Any]:
+    """Validate the model's tool call against the declared schema before anything stores or shows it.
+    Anything off-schema becomes an escalation; the raw call is never trusted."""
+    tool, args = raw.get("tool"), raw.get("input")
+    schema = next((t["input_schema"] for t in TOOLS if t["name"] == tool), None)
+    reason = None
+    if schema is None or not isinstance(args, dict):
+        reason = f"model called an unknown tool {tool!r}"
+    elif set(args) != set(schema["required"]):
+        reason = "model output did not match the tool schema"
+    elif not all(isinstance(v, str) and len(v) <= 500 for v in args.values()):
+        reason = "model output had non-text or oversized fields"
+    elif tool == "propose_invoice_match" and not _INV.match(args["invoice_id"]):
+        reason = f"model proposed a malformed invoice id {args['invoice_id'][:40]!r}"
+    elif tool == "propose_customer_credit" and args["for_invoice_id"] and not _INV.match(args["for_invoice_id"]):
+        reason = f"model proposed a malformed invoice id {args['for_invoice_id'][:40]!r}"
+    if reason:
+        return {"tool": "escalate", "input": {"reason": reason}, **({"model": raw["model"]} if "model" in raw else {})}
+    return raw
+
+
 def _validate(conn: sqlite3.Connection, deposit: dict[str, Any], proposal: dict[str, Any]) -> list[dict[str, Any]]:
     invoices = invoice_views(conn)
     checks = [{"name": "signature", "label": "Signed by the registered customer key", "passed": False,
@@ -129,7 +153,18 @@ def read_remittance(ctx: AppContext, deposit_id: str, actor: str, text: str | No
     if not text:
         raise ValueError("no remittance text: paste the email or advice text to read")
     if ctx.settings.claude_configured:
-        proposal = _claude_read(ctx, text)
+        day = ctx.clock.now().strftime("%Y-%m-%d")
+        with ctx.conn() as conn:
+            used = conn.execute("SELECT COUNT(*) FROM audit_events WHERE action = 'evidence.extracted' AND at >= ? "
+                                "AND detail LIKE '%Claude API%'", (day,)).fetchone()[0]
+        if used >= ctx.settings.claude_daily_limit:
+            raise ValueError(f"this organization has used its {ctx.settings.claude_daily_limit} Claude reads for today; try again tomorrow")
+        try:
+            proposal = typed_proposal(_claude_read(ctx, text))
+        except Exception as exc:  # noqa: BLE001 - network/auth/rate-limit errors surface as a provider failure
+            from .providers.base import ProviderError
+
+            raise ProviderError(f"Claude API call failed: {type(exc).__name__}: {str(exc)[:200]}") from exc
         source, mode = "claude_extracted", f"Claude API ({proposal.get('model', ctx.settings.claude_model)})"
     else:
         proposal = _fixture_read(text)

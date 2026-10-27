@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 from ..clock import parse_iso
-from ..money import to_major, to_minor
+from ..money import CURRENCY_EXPONENT, to_major, to_minor
 from .base import (
     ConversionResult,
     PaymentLinkResult,
@@ -41,6 +41,11 @@ from .base import (
 
 SANDBOX_BASE_URL = "https://api.sandbox.airwallex.com/api/v1"
 TOKEN_SAFETY_MARGIN = timedelta(seconds=120)
+
+
+def _amount_str(amount_minor: int, currency: str) -> str:
+    """Exact decimal string ("1250.00"): the transfer and conversion APIs document amounts as strings."""
+    return f"{to_major(amount_minor, currency):.{CURRENCY_EXPONENT[currency]}f}"
 
 
 def _json_amount(value: Decimal) -> float:
@@ -149,7 +154,7 @@ class AirwallexSandbox:
         t = self._request("POST", "/transfers/create", money_out=True, body={
             "request_id": request_id,
             "beneficiary_id": destination,
-            "transfer_amount": _json_amount(to_major(amount_minor, currency)),
+            "transfer_amount": _amount_str(amount_minor, currency),
             "transfer_currency": currency,
             "source_currency": currency,
             "transfer_method": "LOCAL",
@@ -200,7 +205,7 @@ class AirwallexSandbox:
             "quote_id": quote.provider_quote_id,
             "sell_currency": quote.sell_currency,
             "buy_currency": quote.buy_currency,
-            "buy_amount": _json_amount(to_major(quote.buy_amount_minor, quote.buy_currency)),
+            "buy_amount": _amount_str(quote.buy_amount_minor, quote.buy_currency),
         })
         return self._conversion(c)
 

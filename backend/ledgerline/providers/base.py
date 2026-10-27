@@ -94,9 +94,10 @@ def normalise_transfer_status(raw: str) -> str:
         return "sent"
     if raw_u in {"FAILED"}:
         return "failed"
-    if raw_u in {"CANCELLED"}:
+    if raw_u in {"CANCELLED", "APPROVAL_REJECTED", "APPROVAL_RECALLED"}:
+        # Rejected or recalled in Airwallex's approval flow: never funded, nothing left the wallet.
         return "cancelled"
-    # IN_APPROVAL, SCHEDULED, PROCESSING, OVERDUE, CANCELLATION_REQUESTED, ... are all still in flight.
+    # IN_APPROVAL, APPROVAL_BLOCKED, SCHEDULED, PROCESSING, OVERDUE, CANCELLATION_REQUESTED, ... are still in flight.
     return "processing"
 
 
