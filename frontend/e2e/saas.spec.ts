@@ -155,3 +155,42 @@ test("phone width: no page-level horizontal overflow", async ({ browser }) => {
   }
   await ctx.close();
 });
+
+test("sign-up says which field is missing", async ({ page }) => {
+  await page.goto("/#/signup");
+  await page.getByRole("button", { name: "Create organization" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Enter your name.");
+  await page.getByLabel("Your name", { exact: true }).fill("E2E Owner");
+  await page.getByLabel("Organization", { exact: true }).fill("Acme");
+  await page.getByLabel("Work email", { exact: true }).fill(`v-${uniq()}@e2e.test`);
+  await page.getByRole("button", { name: "Create organization" }).click();
+  await expect(page.getByRole("alert")).toContainText("password of at least 12 characters");
+});
+
+test("dialogs opened from the sidebar are readable and keep focus while typing", async ({ page }) => {
+  await signUp(page, { org: `Dialog ${uniq()}`, email: `d-${uniq()}@e2e.test`, sample: false });
+  await page.locator(".org-button").click();
+  await page.getByRole("menuitem", { name: "New organization…" }).click();
+  const dialog = page.getByRole("dialog");
+  // Rendered at the top level, not inside the dark sidebar (whose text colour it used to inherit).
+  expect(await dialog.evaluate((d) => d.parentElement?.tagName)).toBe("BODY");
+  expect(await dialog.getByRole("heading").evaluate((h) => getComputedStyle(h).color)).not.toBe("rgb(255, 255, 255)");
+  const name = dialog.getByLabel("Name", { exact: true });
+  await name.click();
+  await page.keyboard.type("Second org", { delay: 20 });
+  await expect(name).toHaveValue("Second org");
+  await expect(name).toBeFocused();
+});
+
+test("amounts typed with thousands separators are accepted", async ({ page }) => {
+  await signUp(page, { org: `Commas ${uniq()}`, email: `c-${uniq()}@e2e.test`, sample: true });
+  await nav(page, "Customers");
+  await page.getByRole("button", { name: "New invoice" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Customer", { exact: true }).selectOption("CUST-ACME");
+  await dialog.getByLabel("Amount", { exact: false }).fill("1,250.50");
+  await dialog.getByLabel("Due date", { exact: true }).fill("2026-12-31");
+  await dialog.getByLabel("Description", { exact: true }).fill("Thousands separator check");
+  await dialog.getByRole("button", { name: "Create invoice" }).click();
+  await expect(page.getByText(/Invoice INV-\d+ created/)).toBeVisible();
+});

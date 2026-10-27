@@ -8,7 +8,7 @@ Built for the Agentic Banking Hackathon (Treasury & Ops). **Hackathon build, not
 
 ![Ledgerline finance operations workspace](docs/screenshots/workspace.png)
 
-Verification as of 28 Oct 2026: **215 backend tests** pass locally (8 PostgreSQL-only tests are skipped without a database URL; the whole suite last passed on PostgreSQL 17 in CI at `8a079a7`), **9 browser E2E tests**, strict frontend build, **32/32 live checks** through the public URL (`scripts/smoke_deploy.py`), and **0 npm audit findings**. Earlier independent review: [report](docs/INDEPENDENT_REVIEW.md). Live deployment details: [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md).
+Verification as of 28 Oct 2026: **224 backend tests** pass locally (8 PostgreSQL-only tests are skipped without a database URL; the whole suite last passed on PostgreSQL 17 in CI at `8a079a7`), **12 browser E2E tests**, strict frontend build, **32/32 live checks** through the public URL (`scripts/smoke_deploy.py`), and **0 npm audit findings**. Earlier independent review: [report](docs/INDEPENDENT_REVIEW.md). Live deployment details: [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md).
 
 ---
 

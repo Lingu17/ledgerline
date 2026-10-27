@@ -31,6 +31,25 @@ function AuthFrame({ title, children, foot }: { title: string; children: React.R
   );
 }
 
+// Same rules as the server (control.py), checked first so the person is told exactly what is missing.
+const EMAIL_RE = /^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$/;
+
+function signinProblem(f: { email: string; password: string }): string | null {
+  if (!EMAIL_RE.test(f.email.trim())) return "Enter your email address.";
+  if (!f.password) return "Enter your password.";
+  return null;
+}
+
+function signupProblem(f: { email: string; password: string; name: string; organization_name: string }): string | null {
+  if (!f.name.trim()) return "Enter your name.";
+  if (f.organization_name.trim().length < 2) return "Enter your organization's name (at least 2 characters).";
+  if (!EMAIL_RE.test(f.email.trim())) return "Enter a valid work email address.";
+  const p = f.password;
+  if (p.length < 12 || p.toLowerCase() === p || p.toUpperCase() === p || !/\d/.test(p))
+    return "Use a password of at least 12 characters with upper- and lower-case letters and a digit.";
+  return null;
+}
+
 export function SignIn({ initialMode = "signin" }: { initialMode?: "signin" | "signup" }) {
   const { setMe } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
@@ -42,7 +61,8 @@ export function SignIn({ initialMode = "signin" }: { initialMode?: "signin" | "s
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
-    if (mode === "signup" && f.password.length < 12) return setErr("Use at least 12 characters with upper- and lower-case letters and a digit.");
+    const problem = mode === "signup" ? signupProblem(f) : signinProblem(f);
+    if (problem) return setErr(problem);
     setBusy(true);
     try {
       const me = mode === "signin"

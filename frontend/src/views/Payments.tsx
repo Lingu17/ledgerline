@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { get, getPage, post, type Approval, type AuditEvent, type Customer, type Deposit, type Evidence, type Invoice, type Operation, type Plan } from "../api";
 import { Card, Checks, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
-import { CATEGORY_LABEL, SOURCE_LABEL, STATUS_LABEL, money, parseMajor, majorString, when, day } from "../format";
+import { CATEGORY_LABEL, SOURCE_LABEL, STATUS_LABEL, money, parseMajor, plainAmount, majorString, when, day } from "../format";
 import { go, type Route } from "../App";
 import { describe } from "./Inbox";
 import { useAuth } from "../auth";
@@ -192,10 +192,13 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
 
           <section>
             <h3 className="section-title">Audit</h3>
-            <table>
+            <table className="audit-table">
               <tbody>
                 {x.audit.map((a) => (
-                  <tr key={a.id}><td className="nowrap small muted">{when(a.at)}</td><td className="mono small">{a.action}</td><td className="small">{describe(a)}</td></tr>
+                  <tr key={a.id}>
+                    <td className="nowrap small muted">{when(a.at)}<div className="mono">{a.action}</div></td>
+                    <td className="small">{describe(a)}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -322,6 +325,11 @@ function ResolveForm({ x, onDone }: { x: DepositDetail; onDone: () => void }) {
     () => (invoices.data ?? []).filter((i) => i.customer_id === customer && i.currency === x.currency && i.status === "open" && i.remaining_minor > 0),
     [invoices.data, customer, x.currency],
   );
+  // Nothing to apply to: offer only what can succeed instead of an empty invoice list.
+  const noInvoices = !!customer && !!invoices.data && eligible.length === 0;
+  useEffect(() => {
+    if (noInvoices && action === "allocate") setAction("credit");
+  }, [noInvoices, action]);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const minor = parseMajor(amount);
@@ -330,17 +338,19 @@ function ResolveForm({ x, onDone }: { x: DepositDetail; onDone: () => void }) {
     if (action === "allocate" && !invoice) return setErr("Choose one of the payer's open invoices");
     if (note.trim().length < 3) return setErr("Add a short note for the audit trail");
     setErr(null);
-    const r = await run("resolve", () => post(`/deposits/${x.id}/resolve`, { action, amount, invoice_id: invoice || undefined, customer_id: customer || undefined, note }), "Decision recorded");
+    const r = await run("resolve", () => post(`/deposits/${x.id}/resolve`, { action, amount: plainAmount(amount), invoice_id: invoice || undefined, customer_id: customer || undefined, note }), "Decision recorded");
     if (r) onDone();
   };
   return (
     <form className="card card-body" onSubmit={submit} noValidate>
       <div className="row" style={{ marginBottom: 12 }}>
         <div className="segmented" role="group" aria-label="Resolution">
-          <button type="button" aria-pressed={action === "allocate"} onClick={() => setAction("allocate")}>Apply to invoice</button>
+          <button type="button" aria-pressed={action === "allocate"} onClick={() => setAction("allocate")} disabled={noInvoices}
+            title={noInvoices ? `This customer has no open ${x.currency} invoices` : undefined}>Apply to invoice</button>
           <button type="button" aria-pressed={action === "credit"} onClick={() => setAction("credit")}>Hold as credit</button>
         </div>
       </div>
+      {noInvoices && <p className="small muted" style={{ margin: "0 0 10px" }}>This customer has no open {x.currency} invoices, so the money can be held as their credit (or returned with <i>Propose return to sender</i>).</p>}
       <div className="form-grid">
         <Field id="rs-cust" label="Paying customer" hint={x.customer_id ? "Identified from the remitter name; cannot be changed" : "The remitter is unknown: identify who paid"}>
           <select id="rs-cust" value={customer} disabled={!!x.customer_id} onChange={(e) => setCustomer(e.target.value)}>
@@ -409,7 +419,7 @@ function RecordPayment({ onClose }: { onClose: () => void }) {
     if (Object.keys(v).length) return;
     setServerErr(null);
     try {
-      const r = await post<{ deposit_id: string; created: boolean }>("/payments", f);
+      const r = await post<{ deposit_id: string; created: boolean }>("/payments", { ...f, amount: plainAmount(f.amount) });
       await run("noop", async () => r, r.created ? `Recorded ${r.deposit_id}` : `Already recorded as ${r.deposit_id}`);
       onClose();
       go("payments", { deposit: r.deposit_id });

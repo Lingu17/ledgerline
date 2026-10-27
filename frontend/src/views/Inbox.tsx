@@ -55,8 +55,12 @@ export function Inbox() {
                 <dt>Bills due in window</dt><dd>{money(w.obligations_due_in_window, w.currency)}</dd>
                 {w.fx_out_reserved > 0 && (<><dt>Reserved for FX out</dt><dd>{money(w.fx_out_reserved, w.currency)}</dd></>)}
                 {w.fx_in_pending > 0 && (<><dt>Pending FX in (forecast)</dt><dd>{money(w.fx_in_pending, w.currency)}</dd></>)}
-                <dt className="free">Free to use</dt>
-                <dd className={`free ${w.free_after_commitments < 0 ? "neg" : ""}`}>{money(w.free_after_commitments, w.currency)}</dd>
+                {w.free_after_commitments < 0 ? (
+                  <><dt className="free" title="Commitments exceed cash in this currency">Short by</dt>
+                    <dd className="free neg">{money(-w.free_after_commitments, w.currency)}</dd></>
+                ) : (
+                  <><dt className="free">Free to use</dt><dd className="free">{money(w.free_after_commitments, w.currency)}</dd></>
+                )}
               </dl>
             </div>
           ))}

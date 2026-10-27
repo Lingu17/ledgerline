@@ -6,7 +6,7 @@
 .lp-nav-row { display: flex; align-items: center; gap: 28px; height: 64px; }
 .lp-logo { display: inline-flex; align-items: center; gap: 10px; color: #fff; font-weight: 600; font-size: 17px; letter-spacing: 0.01em; }
 .lp-links { display: flex; gap: 22px; margin-left: 12px; }
-.lp-links a { color: #b9c6d8; font-size: 14.5px; }
+.lp-links a { color: #b9c6d8; font-size: 14.5px; white-space: nowrap; }
 .lp-links a:hover { color: #fff; }
 .lp-nav-cta { margin-left: auto; display: flex; gap: 10px; }
 .lp-btn { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 16px; border-radius: 8px; font-weight: 600; font-size: 14.5px; border: 1px solid transparent; transition: transform 0.15s, background 0.15s; white-space: nowrap; }
@@ -49,8 +49,9 @@
 .lp-float small { color: #8ea2bd; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
 .lp-float b { font-size: 16px; }
 .lp-float span { color: var(--lp-mint); font-size: 12px; font-family: var(--mono); }
-.lp-float-a { left: -24px; bottom: -6px; }
-.lp-float-b { right: -8px; top: -4px; animation-delay: -3s; }
+/* Outside the card's content: below its bottom-left corner and above its top-right corner. */
+.lp-float-a { left: -24px; bottom: -58px; }
+.lp-float-b { right: -8px; top: -58px; animation-delay: -3s; }
 @keyframes lp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 
 .lp-cases { background: var(--lp-navy-2); color: #fff; padding: 28px 0 32px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
@@ -116,12 +117,16 @@
 
 @media (max-width: 1000px) {
   .lp-hero-grid, .lp-safety, .lp-faq-wrap { grid-template-columns: 1fr; }
+  .lp-links { gap: 16px; margin-left: 0; }
   .lp-globe { right: -30%; width: 120%; opacity: 0.5; }
-  .lp-stage { width: 100%; max-width: 520px; margin: 24px auto 0; }
+  .lp-stage { width: 100%; max-width: 520px; margin: 72px auto 48px; }
   .lp-steps, .lp-features, .lp-integrations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-steps li::after { display: none; }
   .lp-case-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .lp-roles { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+  .lp-links { display: none; }
 }
 @media (max-width: 640px) {
   .lp-wrap { padding: 0 16px; }

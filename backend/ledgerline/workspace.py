@@ -49,6 +49,21 @@ def _payer_names(conn, names: Any, exclude_customer: str | None = None) -> list[
     return out
 
 
+_LEGAL_SUFFIXES = {"LTD", "LIMITED", "INC", "LLC", "LLP", "GMBH", "AG", "AS", "SA", "SAS", "BV", "NV", "PLC", "PTE", "CO", "CORP", "AB", "OY", "SRL", "SPA"}
+
+
+def _customer_slug(name: str) -> str:
+    """'Harbour Lane Ltd' -> HARBOURLANE: legal suffixes dropped, cut at a word boundary (at most 16 characters)."""
+    words = re.findall(r"[A-Z0-9]+", name.upper())
+    core = [w for w in words if w not in _LEGAL_SUFFIXES] or words
+    slug = ""
+    for w in core:
+        if slug and len(slug) + len(w) > 16:
+            break
+        slug += w
+    return slug[:16] or "CUSTOMER"
+
+
 def create_customer(ctx: AppContext, body: dict[str, Any], actor: str) -> dict[str, Any]:
     name = _text(body.get("name"), "name", 2, 80)
     country = body.get("country")
@@ -68,7 +83,7 @@ def create_customer(ctx: AppContext, body: dict[str, Any], actor: str) -> dict[s
         key_id = crypto.key_id_for(pub)
     with ctx.conn() as conn, db.transaction(conn):
         payers = _payer_names(conn, body.get("payer_names"))
-        slug = re.sub(r"[^A-Z0-9]+", "", name.upper())[:12] or "CUSTOMER"
+        slug = _customer_slug(name)
         cid = f"CUST-{slug}"
         if db.row(conn, "SELECT id FROM customers WHERE id = ?", (cid,)):
             cid = f"{cid}-{uuid.uuid4().hex[:4].upper()}"
@@ -213,12 +228,12 @@ def resolve_deposit(ctx: AppContext, deposit_id: str, body: dict[str, Any], acto
             if inv.status != "open" or inv.remaining_minor < amount:
                 raise InputError(f"{inv.id} has only {fmt(inv.remaining_minor, inv.currency)} outstanding")
             actions = [{"type": "allocate", "invoice_id": inv.id, "amount_minor": amount}]
-            summary = f"Operator allocated {amount} to {inv.id}: {note}"
+            summary = f"Operator applied {fmt(amount, d['currency'])} to {inv.id}: {note}"
         else:
             if db.row(conn, "SELECT id FROM credits WHERE deposit_id = ?", (deposit_id,)):
                 raise InputError("this deposit already funded a customer credit")
             actions = [{"type": "credit", "customer_id": customer_id, "amount_minor": amount, "earmark_invoice_id": None}]
-            summary = f"Operator held {amount} as customer credit: {note}"
+            summary = f"Operator held {fmt(amount, d['currency'])} as customer credit: {note}"
         plan = {"category": "operator_resolution", "summary": summary, "customer_id": customer_id, "actions": actions}
         result = _store_and_apply(conn, ctx, d, plan, kind="operator", evidence_id=None)
         audit.record(conn, iso(ctx.clock.now()), actor, "deposit.resolved_by_operator", "deposit", deposit_id,

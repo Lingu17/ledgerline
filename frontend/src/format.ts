@@ -6,12 +6,12 @@ function group(minor: number): string {
 
 /** Minor units -> "USD 4,985.00". String math only; the UI never sums across currencies. */
 export function money(minor: number, ccy: string, opts: { sign?: boolean } = {}): string {
-  const sign = minor < 0 ? "-" : opts.sign && minor > 0 ? "+" : "";
+  const sign = minor < 0 ? "−" : opts.sign && minor > 0 ? "+" : ""; // U+2212, a true minus sign
   return `${ccy} ${sign}${group(minor)}`;
 }
 
 export function amountOnly(minor: number): string {
-  return (minor < 0 ? "-" : "") + group(minor);
+  return (minor < 0 ? "−" : "") + group(minor);
 }
 
 /** "1,250.00" -> 125000, or null when not a plain 2-dp decimal. */
@@ -20,6 +20,11 @@ export function parseMajor(input: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
   const [w, f = ""] = t.split(".");
   return Number(w) * 100 + Number((f + "00").slice(0, 2));
+}
+
+/** What parseMajor accepted, in the plain form the API requires ("1,250.50" -> "1250.50"). */
+export function plainAmount(input: string): string {
+  return input.trim().replace(/,/g, "");
 }
 
 export function majorString(minor: number): string {

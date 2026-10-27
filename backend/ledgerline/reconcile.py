@@ -221,7 +221,8 @@ def _allocate(conn, now, deposit, invoice_id, amount):
     if inv is None or inv.currency != deposit["currency"]:
         raise ReconcileError(f"cannot allocate {deposit['currency']} to {invoice_id}")
     if amount > inv.remaining_minor:
-        raise ReconcileError(f"allocation {amount} would overpay {invoice_id} (remaining {inv.remaining_minor})")
+        raise ReconcileError(f"allocating {fmt(amount, inv.currency)} would overpay {invoice_id} "
+                             f"({fmt(inv.remaining_minor, inv.currency)} remaining)")
     if amount > deposit_buckets(conn, deposit["id"])["unapplied"]:
         raise ReconcileError(f"allocation exceeds unapplied cash on {deposit['id']}")
     # One row per (deposit, invoice). A later allocation of the same deposit to the same invoice (an operator
@@ -368,7 +369,7 @@ def record_agent_answer(conn: sqlite3.Connection, ctx: AppContext, deposit_id: s
     elif claim["reason"] == "invoice_payment":
         plan = {
             "category": "verified_invoice_payment",
-            "summary": f"Verified: payment for {claim['invoice_id']}. Unapplied {amount} allocated.",
+            "summary": f"Verified: payment for {claim['invoice_id']}. {fmt(amount, deposit['currency'])} applied.",
             "customer_id": claim["customer_id"],
             "actions": [{"type": "allocate", "invoice_id": claim["invoice_id"], "amount_minor": amount}],
         }

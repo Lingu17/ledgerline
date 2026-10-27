@@ -171,15 +171,16 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--re
 .segmented button { border: 0; background: #fff; padding: 0 12px; height: 30px; cursor: pointer; border-right: 1px solid var(--line); }
 .segmented button:last-child { border-right: 0; }
 .segmented button[aria-pressed="true"] { background: var(--nav); color: #fff; }
+.segmented button:disabled { color: var(--ink-3); background: var(--surface-2); cursor: not-allowed; }
 
 /* ---------------------------------------------------------------- KPI-ish tiles (derived from backend) */
 .wallets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .wallet { padding: 14px 16px; }
 .wallet .ccy { font-size: 12px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.06em; }
 .wallet .cash { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 2px 0 10px; }
-.wallet dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin: 0; font-size: 12.5px; }
+.wallet dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 0; margin: 0; font-size: 12.5px; }
 .wallet dt { color: var(--ink-3); }
-.wallet dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.wallet dd { margin: 0; padding-left: 10px; text-align: right; font-variant-numeric: tabular-nums; }
 .wallet .free { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 4px; font-weight: 600; }
 .neg { color: var(--red); }
 
@@ -191,7 +192,9 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--re
 }
 .drawer-head { background: var(--surface); padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .drawer-head h2 { margin: 0; font-size: 16px; }
-.drawer-body { padding: 16px 20px 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.drawer-body { padding: 16px 20px 40px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 16px; }
+.drawer-body td { overflow-wrap: anywhere; }
+.audit-table td:first-child { width: 1%; }
 .modal {
   position: fixed; z-index: 31; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto;
@@ -258,6 +261,7 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--re
 @media (max-width: 1100px) {
   .split, .grid-3 { grid-template-columns: 1fr; }
   .wallets { grid-template-columns: 1fr 1fr; }
+  .wallets > .wallet:last-child:nth-child(odd) { grid-column: 1 / -1; } /* no empty cell beside the last wallet */
 }
 @media (max-width: 820px) {
   .shell { grid-template-columns: 1fr; }
@@ -307,7 +311,14 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--re
 table.integrations td:nth-child(1) { width: 26%; }
 table.integrations td:nth-child(2) { width: 230px; }
 table.integrations select { width: 100%; max-width: 230px; }
-@media (max-width: 820px) { table.integrations td:nth-child(2) { width: auto; } }
+@media (max-width: 820px) {
+  /* Phones: each integration stacks (name, control, explanation) instead of three squeezed columns. */
+  table.integrations, table.integrations tbody, table.integrations tr, table.integrations td { display: block; width: auto !important; }
+  table.integrations tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  table.integrations tr:last-child { border-bottom: 0; }
+  table.integrations td { border-bottom: 0; padding: 4px 12px; }
+  table.integrations select { max-width: none; }
+}
 
 /* ---------------------------------------------------------------- sign in with Google / Apple */
 .oauth { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }

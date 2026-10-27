@@ -45,6 +45,10 @@ def _check(name: str, label: str, passed: bool, detail: str) -> dict[str, Any]:
     return {"name": name, "label": label, "passed": passed, "detail": detail}
 
 
+# How a failed check reads in an escalation reason (the labels describe the check passing).
+_FAILED = {"signature": "Signature check failed", "binding": "Freshness and binding check failed", "records": "Records check failed"}
+
+
 def _structure_errors(envelope: Any) -> list[str]:
     if not isinstance(envelope, dict):
         return ["envelope is not an object"]
@@ -168,5 +172,5 @@ def verify(
     ]
     failed = [c for c in checks if not c["passed"]]
     if failed:
-        return Verification(checks, "rejected", "; ".join(f"{c['label']}: {c['detail']}" for c in failed), claim)
+        return Verification(checks, "rejected", "; ".join(f"{_FAILED.get(c['name'], c['label'])}: {c['detail']}" for c in failed), claim)
     return Verification(checks, "verified", "all three checks passed", claim)

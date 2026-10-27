@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ApiError } from "../api";
 import { STATUS_LABEL, money, tone } from "../format";
 
@@ -138,12 +139,17 @@ export function Card({ title, actions, children, pad = true }: { title?: ReactNo
 
 function useFocusTrap(onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
+  // Callers pass a new onClose on every render; keep the latest without re-running the effect (re-running would
+  // move focus back to the first control on every keystroke in a field whose state lives in the caller).
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     const node = ref.current;
     node?.querySelector<HTMLElement>("button, input, select, textarea, [tabindex]")?.focus();
+    lockScroll(1);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") close.current();
       if (e.key === "Tab" && node) {
         const items = Array.from(node.querySelectorAll<HTMLElement>("button:not([disabled]), input, select, textarea, a[href], [tabindex='0']"));
         if (!items.length) return;
@@ -161,15 +167,24 @@ function useFocusTrap(onClose: () => void) {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      lockScroll(-1);
       prev?.focus();
     };
-  }, [onClose]);
+  }, []);
   return ref;
+}
+
+// The page behind an open drawer or dialog does not scroll; nested ones (a dialog over a drawer) are counted.
+let scrollLocks = 0;
+function lockScroll(delta: number) {
+  scrollLocks = Math.max(0, scrollLocks + delta);
+  document.body.style.overflow = scrollLocks > 0 ? "hidden" : "";
 }
 
 export function Drawer({ title, subtitle, onClose, children }: { title: ReactNode; subtitle?: ReactNode; onClose: () => void; children: ReactNode }) {
   const ref = useFocusTrap(onClose);
-  return (
+  // Rendered at the end of <body> so no ancestor (the sidebar's colours or its transform on phones) affects it.
+  return createPortal(
     <>
       <div className="scrim" onClick={onClose} />
       <div className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" ref={ref}>
@@ -182,13 +197,14 @@ export function Drawer({ title, subtitle, onClose, children }: { title: ReactNod
         </div>
         <div className="drawer-body">{children}</div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const ref = useFocusTrap(onClose);
-  return (
+  return createPortal(
     <>
       <div className="scrim modal-scrim" onClick={onClose} />
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={ref}>
@@ -198,7 +214,8 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 

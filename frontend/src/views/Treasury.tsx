@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { get, post, type Operation, type Wallet } from "../api";
 import { Card, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { useAuth } from "../auth";
-import { parseMajor } from "../format";
+import { parseMajor, plainAmount } from "../format";
 import { money, when, day } from "../format";
 
 interface Obligation { id: string; payee: string; currency: string; amount_minor: number; due_at: string; description: string; status: string }
@@ -127,7 +127,7 @@ export function Treasury({ localMode }: { localMode: boolean }) {
                 const det = typeof c.detail === "string" ? JSON.parse(c.detail) : c.detail;
                 return (
                   <tr key={c.id}>
-                    <td><div className="mono">{c.id}</div><div className="secondary">{when(c.created_at)}{c.needs_reconciliation ? " · outcome unknown, reservation held" : ""}</div></td>
+                    <td style={{ minWidth: 140 }}><div className="mono nowrap">{c.id}</div><div className="secondary">{when(c.created_at)}{c.needs_reconciliation ? " · outcome unknown, reservation held" : ""}</div></td>
                     <td><Pill status={c.status} /></td>
                     <td className="num"><Money minor={c.amount_minor} ccy={c.currency} /></td>
                     <td className="num"><Money minor={det.buy_amount_minor} ccy={det.buy_currency} /></td>
@@ -155,9 +155,11 @@ function ObligationForm({ onClose }: { onClose: () => void }) {
     <Modal title="Add an obligation" onClose={onClose}>
       <form noValidate onSubmit={async (e) => {
         e.preventDefault();
-        if (f.payee.trim().length < 2 || (parseMajor(f.amount) ?? 0) <= 0 || !f.due_date) return setErr("Payee, an amount like 9000.00 and a due date are required.");
+        if (f.payee.trim().length < 2) return setErr("Enter who is being paid.");
+        if ((parseMajor(f.amount) ?? 0) <= 0) return setErr("Enter an amount greater than zero, like 9000.00.");
+        if (!f.due_date) return setErr("Choose a due date.");
         setErr(null);
-        if (await run("ob", () => post("/treasury/obligations", f), "Obligation added")) onClose();
+        if (await run("ob", () => post("/treasury/obligations", { ...f, amount: plainAmount(f.amount) }), "Obligation added")) onClose();
       }}>
         <div className="form-grid">
           <Field id="ob-payee" label="Payee" wide><input id="ob-payee" type="text" value={f.payee} onChange={set("payee")} /></Field>
@@ -181,7 +183,7 @@ function OpeningForm({ onClose }: { onClose: () => void }) {
     <Modal title="Set an opening balance" onClose={onClose}>
       <form noValidate onSubmit={async (e) => {
         e.preventDefault();
-        if (await run("open", () => post("/treasury/opening-balance", { currency: ccy, amount }), `${ccy} opening balance set`)) onClose();
+        if (await run("open", () => post("/treasury/opening-balance", { currency: ccy, amount: plainAmount(amount) }), `${ccy} opening balance set`)) onClose();
       }}>
         <p className="small muted" style={{ marginTop: 0 }}>Once per currency, before any cash activity in it. Later corrections need an explicit journal adjustment.</p>
         <div className="form-grid">

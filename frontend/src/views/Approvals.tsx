@@ -101,7 +101,7 @@ export function Approvals({ localMode }: { localMode: boolean }) {
               <tbody>
                 {history.map((a) => (
                   <tr key={a.id}>
-                    <td><div className="mono">{a.id}</div><div className="secondary">{a.scope.destination}</div></td>
+                    <td style={{ minWidth: 140 }}><div className="mono nowrap">{a.id}</div><div className="secondary">{a.scope.destination}</div></td>
                     <td><Pill status={a.status} /></td>
                     <td className="num"><Money minor={a.scope.amount_minor} ccy={a.scope.currency} /></td>
                     <td className="hide-sm small">{a.invalidated_reason ?? (a.decided_by ? `${a.decided_by} · ${when(a.decided_at)}` : a.reason)}</td>

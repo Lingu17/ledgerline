@@ -3,7 +3,7 @@ import { get, getPage, post, type AuditEvent, type Customer, type Invoice } from
 import { useAuth } from "../auth";
 import { Card, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { PAGE_SIZE, Pager } from "../components/Pager";
-import { day, money, parseMajor, when } from "../format";
+import { day, money, parseMajor, plainAmount, when } from "../format";
 import { go, type Route } from "../App";
 
 function useDebounced(v: string, ms = 200) {
@@ -48,9 +48,9 @@ export function Customers({ route }: { route: Route }) {
               <tbody>
                 {customers.data.map((c) => (
                   <tr key={c.id}>
-                    <td><div className="primary-text">{c.name}</div><div className="secondary mono">{c.id} · {c.country}</div></td>
+                    <td style={{ minWidth: 150 }}><div className="primary-text">{c.name}</div><div className="secondary mono nowrap">{c.id} · {c.country}</div></td>
                     <td className="hide-sm small">{c.payer_names.join(", ")}</td>
-                    <td className="small">{c.agent_key_id ? <><Pill status="matched" label="Key registered" /><div className="secondary mono">{c.agent_key_id}</div></> : <span className="muted">None</span>}</td>
+                    <td className="small">{c.agent_key_id ? <><Pill status="matched" label="Key registered" /><div className="secondary mono hide-sm" title={c.agent_key_id}>{c.agent_key_id}</div></> : <span className="muted">None</span>}</td>
                     <td className="num">{c.credits.length ? c.credits.map((cr, i) => <div key={i}><Money minor={cr.amount_minor} ccy={cr.currency} /></div>) : <span className="muted">—</span>}</td>
                     <td className="num">{op && <button className="btn small" onClick={() => setEditing(c)}>Edit</button>}</td>
                   </tr>
@@ -76,8 +76,8 @@ export function Customers({ route }: { route: Route }) {
                 <tbody>
                   {invoices.data.items.map((i) => (
                     <tr key={i.id} className="clickable" tabIndex={0} onClick={() => go("customers", { invoice: i.id })} onKeyDown={(e) => e.key === "Enter" && go("customers", { invoice: i.id })}>
-                      <td><div className="mono">{i.id}</div><div className="secondary">{i.description}</div></td>
-                      <td className="small">{i.customer_name}</td>
+                      <td style={{ minWidth: 140 }}><div className="mono nowrap">{i.id}</div><div className="secondary">{i.description}</div></td>
+                      <td className="small" style={{ minWidth: 110 }}>{i.customer_name}</td>
                       <td className="nowrap small">{day(i.due_at)}</td>
                       <td className="num"><Money minor={i.effective_amount_minor} ccy={i.currency} />{i.adjustments.length > 0 && <div className="secondary">adjusted</div>}</td>
                       <td className="num"><b>{money(i.remaining_minor, i.currency)}</b></td>
@@ -175,7 +175,7 @@ function InvoiceDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   if (adj.kind !== "void" && (parseMajor(adj.amount) ?? 0) <= 0) return setErr("Enter an amount like 100.00");
                   if (adj.reason.trim().length < 3) return setErr("Give a reason for the audit trail");
                   setErr(null);
-                  const r = await run("adj", () => post(`/invoices/${x.id}/adjustments`, adj), adj.kind === "void" ? "Invoice voided" : "Adjustment posted");
+                  const r = await run("adj", () => post(`/invoices/${x.id}/adjustments`, { ...adj, amount: plainAmount(adj.amount) }), adj.kind === "void" ? "Invoice voided" : "Adjustment posted");
                   if (r) setAdj({ kind: "decrease", amount: "", reason: "" });
                 }}>
                   <div className="form-grid">
@@ -214,8 +214,10 @@ function CustomerForm({ onClose, existing }: { onClose: () => void; existing?: C
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payer_names = f.payer_names.split(",").map((s) => s.trim()).filter(Boolean);
-    if (f.name.trim().length < 2 || !/^[A-Z]{2}$/.test(f.country) || !payer_names.length || f.refund_beneficiary.trim().length < 2)
-      return setErr("Name, 2-letter country code, at least one remitter name and a refund account are required.");
+    if (f.name.trim().length < 2) return setErr("Enter the customer's legal name.");
+    if (!/^[A-Z]{2}$/.test(f.country)) return setErr("Enter a 2-letter country code, e.g. GB.");
+    if (!payer_names.length) return setErr("Add at least one remitter name as it appears on bank statements.");
+    if (f.refund_beneficiary.trim().length < 2) return setErr("Enter the account refunds should go to.");
     setErr(null);
     const body: Record<string, unknown> = { name: f.name, country: f.country, payer_names, refund_beneficiary: f.refund_beneficiary };
     if (f.agent_public_key || !existing) body.agent_public_key = f.agent_public_key || null;
@@ -259,10 +261,13 @@ function NewInvoice({ customers, onClose }: { customers: Customer[]; onClose: ()
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const minor = parseMajor(f.amount);
-    if (!f.customer_id || minor === null || minor <= 0 || !f.due_date || !f.description.trim()) return setErr("All fields are required; amount like 1250.00.");
+    if (!f.customer_id) return setErr("Choose the customer to bill.");
+    if (minor === null || minor <= 0) return setErr("Enter an amount greater than zero, like 1250.00.");
+    if (!f.due_date) return setErr("Choose a due date.");
+    if (!f.description.trim()) return setErr("Add a short description of what is billed.");
     setErr(null);
     try {
-      const inv = await post<{ id: string }>("/invoices", f);
+      const inv = await post<{ id: string }>("/invoices", { ...f, amount: plainAmount(f.amount) });
       await run("i", async () => null, `Invoice ${inv.id} created`);
       onClose();
     } catch (ex) {

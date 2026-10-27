@@ -32,7 +32,14 @@ export function go(page: string, params?: Record<string, string>) {
 function useRoute() {
   const [route, setRoute] = useState<Route>(parseHash);
   useEffect(() => {
-    const on = () => setRoute(parseHash());
+    let page = parseHash().page;
+    const on = () => {
+      const next = parseHash();
+      // A different page starts at the top instead of keeping the previous page's scroll position.
+      if (next.page !== page) window.scrollTo(0, 0);
+      page = next.page;
+      setRoute(next);
+    };
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);
   }, []);

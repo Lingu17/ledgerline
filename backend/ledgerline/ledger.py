@@ -5,7 +5,7 @@ import sqlite3
 from typing import Any
 
 from . import db
-from .money import CURRENCY_EXPONENT
+from .money import CURRENCY_EXPONENT, fmt
 
 
 def _s(conn, sql, params=()) -> int:
@@ -43,15 +43,16 @@ def conservation(conn: sqlite3.Connection) -> dict[str, Any]:
         refunds_out_returned = _s(conn, "SELECT COALESCE(SUM(debit_minor),0) FROM journal_lines WHERE account = ? AND currency = ? AND entry_id IN (SELECT id FROM journal_entries WHERE memo LIKE 'Refund % returned')", (f"cash:{ccy}", ccy))
         refunds_out = _s(conn, "SELECT COALESCE(SUM(credit_minor),0) FROM journal_lines WHERE account = ? AND currency = ? AND entry_id IN (SELECT id FROM journal_entries WHERE memo LIKE 'Refund % funds leave wallet')", (f"cash:{ccy}", ccy))
         cash_expected = opening + deposits + fx_in - fx_out - refunds_out + refunds_out_returned
+        m = lambda v: fmt(v, ccy)  # noqa: E731 - details are read by people: show money, not minor units
         checks = [
             {"name": "deposit_conservation", "passed": deposits == rhs,
-             "detail": f"deposits {deposits} vs allocated+credits+refunds+unapplied {rhs}"},
-            {"name": "journal_trial_balance", "passed": trial == 0, "detail": f"sum(debits - credits) = {trial}"},
+             "detail": f"deposits {m(deposits)} vs allocated + credits + refunds + unapplied {m(rhs)}"},
+            {"name": "journal_trial_balance", "passed": trial == 0, "detail": f"sum(debits − credits) = {m(trial)}"},
             {"name": "refund_liability", "passed": refund_payable == refunds_pending,
-             "detail": f"refund_payable {refund_payable} vs refunds not yet paid {refunds_pending}"},
+             "detail": f"refund payable {m(refund_payable)} vs refunds not yet paid {m(refunds_pending)}"},
             {"name": "cash_walk", "passed": cash == cash_expected,
-             "detail": f"journal cash {cash} vs opening+deposits±FX-refunds {cash_expected}"},
-            {"name": "no_negative_unapplied", "passed": unapplied >= 0, "detail": f"unapplied {unapplied}"},
+             "detail": f"journal cash {m(cash)} vs opening + deposits ± FX − refunds {m(cash_expected)}"},
+            {"name": "no_negative_unapplied", "passed": unapplied >= 0, "detail": f"unapplied {m(unapplied)}"},
         ]
         balanced = all(c["passed"] for c in checks)
         out["all_balanced"] = out["all_balanced"] and balanced
