@@ -55,7 +55,7 @@ class Site:
 def full(site: Site, save: str | None) -> None:
     h = site.client().get("/health")
     check("health endpoint ok through the frontend proxy", h.status_code == 200 and h.json().get("status") == "ok", h.text)
-    check("backend reports persistent storage", h.json().get("storage") == "persistent mount", h.text)
+    check("backend reports durable storage", h.json().get("storage") in ("persistent mount", "postgresql"), h.text)
     page = httpx.get(site.base, timeout=60)
     check("frontend serves the app", page.status_code == 200 and "<div id=\"root\">" in page.text)
     check("frontend sends a Content-Security-Policy", "content-security-policy" in page.headers)

@@ -14,6 +14,16 @@ Codex's review of `eeaf1e6` reproduced five issues; all are fixed with regressio
 | 4 | Wrong JSON types → 500 | Typed pydantic bodies (`StrictStr`, strict numbers) for create/update customer and invoice; wrong types are 422 before database binding or key decoding. Domain functions also type-check `agent_public_key` and `customer_id`. | `test_input_validation.py`: 422 and state unchanged |
 | 5 | Non-ASCII `x-ledgerline-edge` crashed `compare_digest` | `security.same_secret` compares bytes with a length bound; malformed proof is simply untrusted. Same helper for `X-CSRF-Token`. | `test_deployment.py` |
 
+## Live deployment, 27 Oct 2026 (observed)
+
+- Neon project `ledgerline` (`red-grass-80303368`), AWS ap-southeast-1, branch `production`, database `neondb`, role `neondb_owner`, **direct** endpoint `ep-bold-moon-aouxj5l5.c-2.ap-southeast-1.aws.neon.tech` (pooling off), `sslmode=require&channel_binding=require`. Connection string pasted into Render by the user; never in chat or Git.
+- Render `ledgerline-api` env added: `LEDGERLINE_DATABASE_URL`, `LEDGERLINE_REQUIRE_DATABASE=1`, `LEDGERLINE_EDGE_SECRET` (Render-generated). Existing `LEDGERLINE_SECRET_KEY` kept, so encrypted signing identities stay decryptable. `/api/health` now reports `"storage":"postgresql"`, `control_schema` 3.
+- `scripts/smoke_deploy.py https://ledgerline-black-iota.vercel.app`: **32/32** (signup/login/logout/reload, cookies, CSRF/origin, empty and sample workspaces, customer/invoice/payment, signed MCP evidence, walkthrough incl. approvals, FX treasury conversion and refund lifecycle, four-eyes, ledger, tenant isolation).
+- Extra live checks (roles, CSV import, audit, malformed input, malformed edge header): **14/14**.
+- Render **Restart service** → `--verify`: **8/8** (accounts, invoice balance, payment decision, ledger, refund lifecycle, payer-agent signing keys via MCP).
+- **Open:** `LEDGERLINE_EDGE_SECRET` is set on Render but not yet on Vercel, so Vercel requests carry no valid proof and the API resolves clients to Render's internal peer (observed `client` 10.x through Vercel). Sign-in throttling then groups all users together until the same value is set in Vercel (Production) and Vercel redeploys.
+- Not run: Airwallex sandbox API (no scoped API keys; browser login alone is not API connectivity) and Claude API (no `ANTHROPIC_API_KEY` on the server).
+
 ## Selected architecture (user decision)
 
 ```
@@ -57,8 +67,8 @@ Free-tier behaviour to disclose: Render free instances spin down after inactivit
 | Local SQLite suite at `50a229a` | **195 passed, 8 skipped** (skips = live PostgreSQL tests needing a database URL) |
 | PostgreSQL translation/encryption unit tests | pass locally |
 | Real PostgreSQL 17 (GitHub Actions job `postgres`, service container), commit `8a079a7`, run 40520577449 | **PASS**: `tests/test_postgres.py` (walkthrough and restart continuity, tenant switching/isolation, privileges and RLS, concurrent refund execution, concurrent duplicate webhooks, concurrent FX execution, failed-transaction rollback and pool recovery, stdio MCP signing identity across restart and refusal with a wrong secret, random-company accuracy) **and the whole backend suite with every app on PostgreSQL** (`LEDGERLINE_TEST_ALL_ON_POSTGRES=1`). Earlier runs found and fixed: test-only bugs, a lazily created `agent_keys` table (now tenant migration v3), and one SQLite-only catalog query in a test. Same run: backend on Linux and Windows (SQLite), frontend build and Playwright e2e passed. |
-| Neon direct endpoint | **not yet run** (needs `backend\.env.test`) |
-| Deployed end-to-end, restart persistence | **not yet run** |
+| Neon direct endpoint | live service only (see above); `backend\.env.test` suite run not done |
+| Deployed end-to-end, restart persistence | **PASS** 27 Oct (see above) |
 
 ## Blockers needing the user
 
