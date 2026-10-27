@@ -70,6 +70,10 @@ class OrgRegistry:
     def get(self, org_id: str) -> AppContext:
         with self._lock:
             ctx = self._cache.get(org_id)
+            if ctx is not None and ctx.sandbox is not None and not self.settings.sandbox_allowed(org_id):
+                # Allow-list checked at every use, so withdrawing access applies even to a cached context.
+                self._cache.pop(org_id, None)
+                ctx = None
             if ctx is None:
                 org = self.control.org(org_id)
                 if org is None:

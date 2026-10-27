@@ -13,11 +13,11 @@ Two supported backends, same frontend (Vercel, free) and same same-origin `/api`
 4. With the public IP `A.B.C.D`, the hostname is `A-B-C-D.sslip.io` (resolves to the IP; Let's Encrypt works on it). Then:
    ```
    ssh ubuntu@A.B.C.D
-   curl -fsSLO https://raw.githubusercontent.com/Lingu17/ledgerline/main/deploy/vm/setup.sh
-   sudo bash setup.sh A-B-C-D.sslip.io https://<vercel-origin> main
+   curl -fsSLO https://raw.githubusercontent.com/Lingu17/ledgerline/<tested-commit>/deploy/vm/setup.sh
+   sudo bash setup.sh A-B-C-D.sslip.io https://<vercel-origin> <tested-commit>
    ```
 5. Set the rewrite destination in `frontend/vercel.json` to `https://A-B-C-D.sslip.io/api/:path*`, push, and import the repo into Vercel with **Root Directory `frontend`**.
-6. Updates: `sudo bash /opt/ledgerline/src/deploy/vm/update.sh main`. Optional API keys: edit `/etc/ledgerline/ledgerline.env` (root-owned, mode 640) and `sudo systemctl restart ledgerline`.
+6. Updates: `sudo bash /opt/ledgerline/src/deploy/vm/update.sh <tested-commit>`. Optional API keys: edit `/etc/ledgerline/ledgerline.env` (root-owned, mode 640) and `sudo systemctl restart ledgerline`.
 
 Data: `/var/lib/ledgerline` (mode 700, owned by the service user) on the boot volume, which persists across reboots and service restarts. Backups: `ledgerline-backup.timer` runs `deploy/vm/backup.py` daily at 03:15, 7 kept, under `/var/lib/ledgerline/backups`. These protect against bad writes, not against losing the volume.
 

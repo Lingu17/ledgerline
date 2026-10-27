@@ -42,6 +42,7 @@ _ENV_KEYS = (
     "LEDGERLINE_REQUIRE_PERSISTENT_MOUNT",
     "LEDGERLINE_SANDBOX_ORGS",
     "LEDGERLINE_CLAUDE_DAILY_LIMIT",
+    "LEDGERLINE_EDGE_SECRET",
 )
 
 
@@ -99,6 +100,9 @@ class Settings:
     sandbox_org_ids: frozenset[str] = frozenset()
     # Shared Anthropic key: at most this many Claude calls per organization per UTC day.
     claude_daily_limit: int = 25
+    # Optional shared secret the edge proxy adds as X-Ledgerline-Edge. When set, X-Forwarded-For is trusted only on
+    # requests carrying it, so a client calling the origin directly cannot choose its throttling identity.
+    edge_secret: str | None = None
 
     @property
     def airwallex_configured(self) -> bool:
@@ -159,6 +163,7 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.require_persistent_mount = env.get("LEDGERLINE_REQUIRE_PERSISTENT_MOUNT") or None
     s.sandbox_org_ids = frozenset(x.strip() for x in env.get("LEDGERLINE_SANDBOX_ORGS", "").split(",") if x.strip())
     s.claude_daily_limit = max(0, int(env.get("LEDGERLINE_CLAUDE_DAILY_LIMIT") or 25))
+    s.edge_secret = env.get("LEDGERLINE_EDGE_SECRET") or None
     key_path = env.get("APPLE_PRIVATE_KEY_PATH")
     s.apple_private_key = Path(key_path).read_bytes() if key_path and Path(key_path).is_file() else None
     return s

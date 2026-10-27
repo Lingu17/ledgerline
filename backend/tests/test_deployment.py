@@ -68,3 +68,40 @@ def test_forwarded_header_is_ignored_without_trusted_proxies(tmp_path):
         _fail_logins(c, f"10.0.0.{i}", 1, email=f"u{i}@northbeam.test")
     # Varying X-Forwarded-For does not escape the per-address budget when no proxy is trusted.
     assert _fail_logins(c, "10.9.9.9", 1, email="fresh@northbeam.test") == [429]
+
+
+def _ip_of(app, headers):
+    from starlette.requests import Request
+
+    from ledgerline.api.security import client_ip
+
+    scope = {"type": "http", "app": app, "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+             "client": ("10.0.0.5", 1234), "method": "GET", "path": "/"}
+    return client_ip(Request(scope))
+
+
+def test_short_forwarded_chain_fails_closed(tmp_path):
+    """Codex review finding 1: a direct client must not choose its identity by sending a short X-Forwarded-For."""
+    app = create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="2"))
+    assert _ip_of(app, {"X-Forwarded-For": "client, edge"}) == "client"
+    assert _ip_of(app, {"X-Forwarded-For": "forged"}) == "10.0.0.5"  # too short: never the leftmost, client-chosen entry
+    assert _ip_of(app, {}) == "10.0.0.5"
+
+
+def test_edge_secret_gates_forwarded_header_trust(tmp_path):
+    app = create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="2", LEDGERLINE_EDGE_SECRET="edge-test-secret"))
+    assert _ip_of(app, {"X-Forwarded-For": "client, edge", "X-Ledgerline-Edge": "edge-test-secret"}) == "client"
+    assert _ip_of(app, {"X-Forwarded-For": "forged, edge"}) == "10.0.0.5"
+    assert _ip_of(app, {"X-Forwarded-For": "forged, edge", "X-Ledgerline-Edge": "wrong"}) == "10.0.0.5"
+
+
+def test_withdrawn_sandbox_access_applies_to_cached_contexts(tmp_path):
+    """Codex review finding 5: revocation takes effect at use time, without an explicit cache invalidation."""
+    app = create_app(_settings(tmp_path, AIRWALLEX_CLIENT_ID="cid", AIRWALLEX_API_KEY="key"))
+    c = TestClient(app)
+    signup(c, email="ops@deploy.test", start_with="empty")
+    app.state.settings.sandbox_org_ids = frozenset({c.org_id})
+    assert c.put("/api/organization", json={"bank_mode": "airwallex_sandbox"}).status_code == 200
+    assert app.state.orgs.get(c.org_id).sandbox is not None
+    app.state.settings.sandbox_org_ids = frozenset()
+    assert c.get("/api/deposits").status_code == 403

@@ -47,11 +47,8 @@ echo "== user, code, Python $PY"
 id ledgerline >/dev/null 2>&1 || useradd --system --home "$APP" --shell /usr/sbin/nologin ledgerline
 install -d -o ledgerline -g ledgerline -m 700 "$DATA"
 install -d -o ledgerline -g ledgerline "$APP"
-if [[ -d $APP/src/.git ]]; then
-  sudo -u ledgerline git -C "$APP/src" fetch -q origin && sudo -u ledgerline git -C "$APP/src" checkout -q "$REF" && sudo -u ledgerline git -C "$APP/src" reset -q --hard "origin/$REF" 2>/dev/null || sudo -u ledgerline git -C "$APP/src" reset -q --hard "$REF"
-else
-  sudo -u ledgerline git clone -q "$REPO" "$APP/src" && sudo -u ledgerline git -C "$APP/src" checkout -q "$REF"
-fi
+[[ -d $APP/src/.git ]] || sudo -u ledgerline git clone -q "$REPO" "$APP/src"
+sudo -u ledgerline bash "$APP/src/deploy/vm/checkout.sh" "$APP/src" "$REF" 2>/dev/null   || { sudo -u ledgerline git -C "$APP/src" fetch -q origin "$REF" && sudo -u ledgerline git -C "$APP/src" checkout -q --detach FETCH_HEAD; }
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 sudo -u ledgerline env UV_PYTHON_INSTALL_DIR="$APP/python" uv python install "$PY"
 sudo -u ledgerline env UV_PYTHON_INSTALL_DIR="$APP/python" uv venv -q --allow-existing --python "$PY" "$APP/venv"
@@ -91,8 +88,20 @@ systemctl enable --now ledgerline.service ledgerline-backup.timer
 systemctl restart ledgerline.service
 systemctl reload caddy || systemctl restart caddy
 
-echo "== health"
+echo "== health (local)"
+ok=0
 for i in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:8000/api/health; then echo; break; fi; sleep 2
+  if curl -fsS http://127.0.0.1:8000/api/health; then echo; ok=1; break; fi; sleep 2
 done
-echo "Done. Public API: https://$HOST/api/health (the certificate is issued on first request)."
+if [[ $ok -ne 1 ]]; then
+  echo "FAILED: the API did not become healthy on 127.0.0.1:8000" >&2
+  journalctl -u ledgerline -n 40 --no-pager >&2 || true
+  exit 1
+fi
+echo "== health (public HTTPS; the certificate is issued on the first request)"
+for i in $(seq 1 20); do
+  if curl -fsS "https://$HOST/api/health" >/dev/null; then echo "public HTTPS ok: https://$HOST/api/health"; exit 0; fi; sleep 3
+done
+echo "FAILED: https://$HOST/api/health is not reachable (check ports 80/443 in the cloud firewall and DNS)" >&2
+journalctl -u caddy -n 40 --no-pager >&2 || true
+exit 1

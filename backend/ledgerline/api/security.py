@@ -43,15 +43,22 @@ def client_ip(request: Request) -> str:
 
     Behind N trusted reverse proxies (LEDGERLINE_TRUSTED_PROXY_HOPS), each appends the address it
     received the request from to X-Forwarded-For, and the socket peer is the last proxy. The client is
-    therefore N entries from the right of [X-Forwarded-For..., peer]. Anything further left was supplied
-    by the client and is ignored. With 0 hops the socket peer is used and the header is never trusted.
+    therefore N entries from the right of [X-Forwarded-For..., peer]; anything further left was supplied
+    by the client and is ignored. Fails closed: a chain too short for N hops, or (with LEDGERLINE_EDGE_SECRET)
+    a request without the edge's secret header, uses the address nearest to us instead of a client-chosen one.
     """
     peer = request.client.host if request.client else "unknown"
-    hops = request.app.state.settings.trusted_proxy_hops
+    settings = request.app.state.settings
+    hops = settings.trusted_proxy_hops
     if hops <= 0:
         return peer
     chain = [x.strip() for x in request.headers.get("x-forwarded-for", "").split(",") if x.strip()] + [peer]
-    return chain[max(0, len(chain) - 1 - hops)]
+    edge_ok = settings.edge_secret is None or hmac.compare_digest(
+        request.headers.get("x-ledgerline-edge", ""), settings.edge_secret)
+    if not edge_ok or len(chain) < hops + 1:
+        # Not via the authenticated edge, or not enough proxy hops: trust only what our own proxy appended.
+        return chain[-2] if len(chain) >= 2 and peer in ("unknown", "127.0.0.1", "::1") else peer
+    return chain[len(chain) - 1 - hops]
 
 
 def set_session_cookie(request: Request, response: Response, token: str) -> None:
