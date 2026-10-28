@@ -51,12 +51,12 @@ test("home page explains the product and leads to sign-up", async ({ page }) => 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Every incoming payment");
 });
 
-test("Google and Apple buttons are shown, and honest when the server has no OAuth credentials", async ({ page }) => {
+test("Google sign-in explains missing credentials and Apple is absent from the login form", async ({ page }) => {
   await page.goto("/#/signin");
   const google = page.getByRole("button", { name: "Continue with Google" });
   const apple = page.getByRole("button", { name: "Continue with Apple" });
   await expect(google).toBeDisabled();
-  await expect(apple).toBeDisabled();
+  await expect(apple).toHaveCount(0);
   await expect(page.getByText("have not been set up by this server's administrator")).toBeVisible();
   await page.screenshot({ path: "test-results/signin-oauth.png" });
   // A provider error coming back from the server is explained on the sign-in page.

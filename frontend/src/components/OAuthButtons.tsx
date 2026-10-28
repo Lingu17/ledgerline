@@ -63,10 +63,10 @@ export function ProviderLogo({ id }: { id: ProviderId }) {
   );
 }
 
-/** "Continue with Google / Apple". Unconfigured providers stay visible but disabled, with the reason. */
+/** Google sign-in; unavailable Google configuration is explained on the form. */
 export function OAuthButtons({ returnTo, verb = "Continue" }: { returnTo?: string; verb?: string }) {
   const providers = useProviders();
-  const ids: ProviderId[] = ["google", "apple"];
+  const ids: ProviderId[] = ["google"];
   const anyMissing = providers && ids.some((id) => !providers[id]?.configured);
   return (
     <div className="oauth">
