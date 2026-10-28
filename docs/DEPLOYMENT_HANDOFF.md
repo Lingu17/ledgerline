@@ -8,6 +8,7 @@ Updated 28 October 2026. Branch `deploy/vercel-render`. No HackerEarth save/subm
 - Executed on the live deployment, owner account, allowlisted organization: EUR 1.23 → INV-2301 and EUR 4,000.00 → INV-2302 (settled, exact match); EUR→GBP conversion `OP-CBAA2582` (EUR 1,811.36 → GBP 1,501.00, settled; quote reuse refused; reserves kept); EUR 12.50 with a vague reference escalated, then allocated to INV-2303 by the operator; EUR 5.00 unknown reference escalated, return-to-sender approval `APR-B40BC448` pending a second real approver. Ledger balanced in every currency after each step. Airwallex sandbox emails confirmed the deposits and the conversion.
 - `ANTHROPIC_API_KEY` added to Render; health reports Claude configured. The first live read was refused by Anthropic (account credit too low); nothing was stored or applied.
 - Details: [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md).
+- Neon isolated rerun of `tests/test_postgres.py` (started 23:44 IST, 13 minutes before the review branch expired): 8 passed, 5 failed, 1 error in 17.5 minutes; the failures are pool/connection timeouts, and the branch endpoint was gone when checked afterwards ("endpoint could not be found"). This is not a pass and not a code finding; the same tests passed on PostgreSQL 17 in CI. A fresh Neon test branch is needed to repeat it.
 
 ## Latest review continuation
 
