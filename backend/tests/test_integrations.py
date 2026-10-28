@@ -130,6 +130,25 @@ def test_airwallex_readiness_is_read_only_and_follows_the_hackathon_guide():
     assert [m for m, _ in calls[1:]] == ["GET", "GET"]
 
 
+def test_readiness_reports_supported_deposit_currencies_for_multicurrency_accounts():
+    def fake(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/authentication/login"):
+            return httpx.Response(201, json={"token": "test-only", "expires_at": "2099-01-01T00:00:00+00:00"})
+        if request.url.path.endswith("/global_accounts"):
+            return httpx.Response(200, json={"items": [{"id": "ga_multi", "status": "ACTIVE", "supported_features": [
+                {"currency": "USD", "type": "DEPOSIT"}, {"currency": "EUR", "type": "DEPOSIT"},
+                {"currency": "EUR", "type": "DEPOSIT"}, {"currency": "GBP", "type": "DIRECT_DEBIT"},
+                {"currency": None}, {"currency": "not a currency"}, None,
+            ]}]})
+        if request.url.path.endswith("/balances/current"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(404)
+
+    result = AirwallexSandbox("test-client", "test-key", transport=httpx.MockTransport(fake)).readiness()
+    assert result["global_accounts"] == [{"id": "ga_multi", "currency": None, "status": "ACTIVE",
+                                           "supported_currencies": ["EUR", "USD"]}]
+
+
 def test_payloads_follow_the_official_reference():
     """Checked against airwallex.com/docs (27 Oct 2026): transfer and conversion amounts are strings,
     rejected/recalled approvals never move money, deposits name their global account in global_account_id."""

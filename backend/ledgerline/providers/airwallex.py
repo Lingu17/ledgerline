@@ -127,8 +127,23 @@ class AirwallexSandbox:
         items = accounts.get("items", []) if isinstance(accounts, dict) else []
         balances = self._request("GET", "/balances/current")
         rows = balances if isinstance(balances, list) else balances.get("items", []) if isinstance(balances, dict) else []
+        summaries = []
+        for account in items:
+            summary = {"id": account.get("id"), "currency": account.get("currency"), "status": account.get("status")}
+            # Current multi-currency accounts report receiving currencies in supported_features.
+            # https://www.airwallex.com/docs/accounts/get-started/global-accounts
+            features = account.get("supported_features")
+            if isinstance(features, list):
+                summary["supported_currencies"] = sorted({
+                    feature["currency"] for feature in features
+                    if isinstance(feature, dict) and feature.get("type") in (None, "DEPOSIT")
+                    and isinstance(feature.get("currency"), str)
+                    and len(feature["currency"]) == 3 and feature["currency"].isascii()
+                    and feature["currency"].isupper()
+                })
+            summaries.append(summary)
         return {
-            "global_accounts": [{"id": a.get("id"), "currency": a.get("currency"), "status": a.get("status")} for a in items],
+            "global_accounts": summaries,
             "balances": [{"currency": b.get("currency"), "available_amount": b.get("available_amount")} for b in rows],
         }
 

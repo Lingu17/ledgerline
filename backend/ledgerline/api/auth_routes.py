@@ -242,7 +242,10 @@ def integration_check(request: Request, p: Principal = Depends(require_role("own
 
         try:
             r = AirwallexSandbox(s.airwallex_client_id, s.airwallex_api_key, timeout=10).readiness()
-            accounts = ", ".join(f"{a['currency']} {a['id']}" for a in r["global_accounts"]) or "none yet (create one in the sandbox)"
+            accounts = ", ".join(
+                f"{'/'.join(a.get('supported_currencies') or ([a['currency']] if a.get('currency') else [])) or 'currency not reported'} {a['id']}"
+                for a in r["global_accounts"]
+            ) or "none yet (create one in the sandbox)"
             money = ", ".join(f"{b['currency']} {b['available_amount']}" for b in r["balances"]) or "no balances"
             out["airwallex"] = {"status": "ok", "detail": f"sandbox authentication succeeded just now; global accounts: {accounts}; "
                                                           f"available balances: {money}"[:600], **r}

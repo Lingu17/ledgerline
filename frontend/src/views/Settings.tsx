@@ -134,7 +134,7 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
               </td>
               <td className="small">
                 Airwallex API credentials are set by the server operator ({org.server.airwallex_credentials_present ? "present" : "not set"}).
-                The sandbox adapter follows the documented endpoints but has not been executed against the live sandbox in this build.
+                  Run readiness check to verify the current sandbox connection. Results appear below; checking the connection does not move money.
                 {check?.airwallex && <div style={{ marginTop: 4 }}><Pill status={tone(check.airwallex.status)} label={check.airwallex.status.replace("_", " ")} /> {check.airwallex.detail}</div>}
               </td>
             </tr>
