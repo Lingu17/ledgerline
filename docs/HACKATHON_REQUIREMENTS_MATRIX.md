@@ -48,9 +48,9 @@ Live as of 28 Oct 2026: the deployment itself (section C). No Airwallex or Claud
 |---|---|---|---|
 | C1 | Frontend on Vercel, same-origin `/api` proxy | Done (live) | https://ledgerline-black-iota.vercel.app (Vercel Hobby); `frontend/vercel.json` route, CSP, HSTS |
 | C2 | Backend with persistent storage | Done (live, free) | Render Free + Neon Free PostgreSQL; `/api/health` `"storage":"postgresql"`; `LEDGERLINE_REQUIRE_DATABASE=1` refuses local fallback. No paid resources. Free-tier spin-down and Neon limits disclosed in `DEPLOYMENT.md` |
-| C3 | Secure cookies, CSRF, origins through the public URL | Done+tested live | `scripts/smoke_deploy.py` 32/32 through the Vercel URL (27 Oct). Edge-proof check (`edge_proof: valid`) still to be observed after the Vercel redeploy |
+| C3 | Secure cookies, CSRF, origins through the public URL | Done+tested live | Codex public workflow 32/32 on `a528ca9` (28 Oct); valid edge proof, stable client identity under spoofed forwarding headers and direct-origin forged-proof refusal verified. |
 | C4 | Judges cannot touch shared sandbox funds or other orgs | Done+tested | `LEDGERLINE_SANDBOX_ORGS` allow-list; readiness check hides shared account details; tenant isolation tests |
-| C5 | Health check, migrations, persistence guard, restart persistence | Done+tested live | Data created on one Render instance verified 8/8 on another after a redeploy; restart-only check to be repeated |
+| C5 | Health check, migrations, persistence guard, restart persistence | Done+tested live | Redeploy continuity verified earlier; Codex independently confirmed an actual Render instance change on 28 Oct, then passed 8/8 account/data/ledger/refund/MCP signing-key checks. |
 | C6 | Judge docs: JUDGE_QUICKSTART, DEMO_SCRIPT, INTEGRATION_EVIDENCE, SUBMISSION_DRAFT, DEPLOYMENT_HANDOFF | Partial | DEPLOYMENT and DEPLOYMENT_HANDOFF current; integration evidence for Airwallex/Claude needs real credentials |
 
 ## D. Our own product improvements (not event requirements)
@@ -65,5 +65,5 @@ Product home page with 3D globe; Google/Apple sign-in (needs OAuth clients); ran
 | `LEDGERLINE_SANDBOX_ORGS` | Server environment | Which organization (yours) may use the sandbox account |
 | Airwallex webhook secret + registered URL | Ledgerline Settings (owner) + sandbox web app | B1 |
 | `ANTHROPIC_API_KEY` (optional `LEDGERLINE_CLAUDE_MODEL`, default `claude-opus-5-5`) | Server environment only | B6 live extraction |
-| Vercel email verification, then a production redeploy | Vercel | Valid edge proof (C3) |
+| Vercel edge proof | Complete | Corrected production deployment verified valid, with spoof refusal; no email code is needed. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` + redirect URI `https://ledgerline-black-iota.vercel.app/api/auth/oauth/google/callback` | Google Cloud console + Render environment | Optional Google sign-in (D) |

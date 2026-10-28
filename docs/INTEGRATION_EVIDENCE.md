@@ -4,6 +4,8 @@ Only observed results are listed. Mocked or simulated calls are labelled as such
 
 ## Live, observed (27 Oct 2026)
 
+Update independently verified by Codex on 28 Oct at code `a528ca9`: public synthetic workflow **32/32**; authenticated edge proof valid with forwarding/proof spoof refusal; actual Render restart confirmed by instance `b9fnc` → `djx6n`, followed by **8/8** saved-account/data/ledger/refund/signing-key checks. GitHub Actions run [40569405112](https://github.com/Lingu17/ledgerline/actions/runs/40569405112) passed all five jobs, including PostgreSQL. Isolated Neon full walkthrough/new-app continuity passed in 217.73 seconds. This does not constitute Airwallex or Anthropic integration verification.
+
 | What | Evidence |
 |---|---|
 | Public app | `GET https://ledgerline-black-iota.vercel.app/api/health` → `{"status":"ok", ...}` through Vercel's same-origin rewrite to Render (response header `x-vercel-id: bom1::...`); CSP, HSTS and `X-Frame-Options: DENY` present on the page |
@@ -11,7 +13,7 @@ Only observed results are listed. Mocked or simulated calls are labelled as such
 | Session cookie over HTTPS | Sign-up response `Set-Cookie: ll_session=...; HttpOnly; Secure; SameSite=strict; Path=/api` |
 | Real MCP subprocess on the free instance | `POST /api/deposits/DEP-1006/ask-agent` → verification `verified` (stdio transport; completed calls took 8.4-9.3 s on Render Free). One call in a Codex smoke run (`DEP-1004`) ended in a connection reset with no server log line; cause not established (see `DEPLOYMENT_HANDOFF.md`); Codex's stable rerun passed 32/32 |
 | Neon PostgreSQL storage | `/api/health` → `"storage":"postgresql"`, `control_schema` 3; `scripts/smoke_deploy.py` through the Vercel URL 32/32 (Claude; Codex rerun 32/32 as reported); data created on one Render instance read back 8/8 on another after a redeploy |
-| Edge proof (Vercel → Render) | **Not yet valid as last observed**: `/api/health` through Vercel showed `"edge_proof":"invalid"`; the corrected Vercel value awaits a production redeploy |
+| Edge proof (Vercel → Render) | **Verified valid on 28 Oct** after corrected deployment; public forwarding-header identity stable under spoofing, direct-origin forged proof refused. No signing-encryption key change. |
 | Real PostgreSQL 17 | GitHub Actions job `postgres` (service container) runs `tests/test_postgres.py` and the whole suite on PostgreSQL; see the Actions run for the deployed commit |
 
 ## Not live yet (no credentials)

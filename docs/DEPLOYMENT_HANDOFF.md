@@ -1,6 +1,18 @@
 # Deployment handoff (Claude → Codex)
 
-Last updated 27 Oct 2026. Branch `deploy/vercel-render` (not merged to `main`). This file states only what was observed; anything not yet executed is marked **not yet run**.
+Last updated 28 Oct 2026. Branch `deploy/vercel-render` (not merged to `main`). This file states only what was observed; anything not yet executed is marked **not yet run**.
+
+## Independent verification update — 28 Oct 2026
+
+- Code and deployment baseline: `a528ca9`. All five GitHub Actions jobs succeeded, including the PostgreSQL 17 whole-backend job: [run 40569405112](https://github.com/Lingu17/ledgerline/actions/runs/40569405112).
+- Codex's current-source public smoke completed **32/32** through Vercel. Public health reported PostgreSQL storage and valid authenticated edge proof. Spoofed incoming forwarding/proof headers through Vercel were overwritten; a forged proof sent directly to Render was refused. The resolved frontend client address was public.
+- Actual Render restart: event `evt-dbgphbvb9u1s738uq870`, 28 Oct 06:39:43 UTC. After logs confirmed instance replacement `b9fnc` → `djx6n`, the saved-account verification passed **8/8**, including data, refund history, balanced ledger and retained signing identity over MCP. A preliminary verification on the old instance is excluded from this evidence.
+- Isolated Neon branch `ledgerline-review-20261027` is schema-only and expires 28 Oct 23:57 IST. Its direct connection is only in gitignored `backend/.env.test`. On `a528ca9`, the full walkthrough/new-app restart-continuity test passed in 217.73 seconds; bounded-wait regressions passed **6/6**. Earlier focused Neon checks passed, but were started before the pool-wait changes. A consolidated current-source PostgreSQL rerun and whole-backend Neon run are **in progress / not yet claimed passed**.
+- Vercel email verification is not a blocker: the authenticated Vercel connector completed the corrected deployment. `LEDGERLINE_SECRET_KEY` was not changed.
+- Current remaining setup: neither Google variable was present in the saved Render environment when checked. The existing Google client secret cannot be viewed/downloaded again, and no matching downloaded credential file was found. The user must create/copy the needed credential and paste it into Render; Codex does not type secrets or complete provider sign-in. Apple remains disabled. Airwallex sandbox and Anthropic calls remain **not live verified**.
+- Free backend cold starts remain an observed limitation: an idle public request returned 502, then the direct backend and public route recovered. Do not promise always-on hosting.
+
+The dated sections below retain earlier observations. This update supersedes earlier edge-proof, Neon-provisioning, restart and Vercel-email blockers.
 
 ## Review fixes after `eeaf1e6` (27 Oct 2026)
 
@@ -70,15 +82,15 @@ Free-tier behaviour to disclose: Render free instances spin down after inactivit
 | Local SQLite suite at `aa85cfd`+ (review fixes) | **213 passed, 8 skipped** (Claude, and independently Codex); frontend build passed; Codex: browser suite 9/9 |
 | PostgreSQL translation/encryption unit tests | pass locally |
 | Real PostgreSQL 17 (GitHub Actions job `postgres`, service container), commit `8a079a7`, run 40520577449 | **PASS**: `tests/test_postgres.py` (walkthrough and restart continuity, tenant switching/isolation, privileges and RLS, concurrent refund execution, concurrent duplicate webhooks, concurrent FX execution, failed-transaction rollback and pool recovery, stdio MCP signing identity across restart and refusal with a wrong secret, random-company accuracy) **and the whole backend suite with every app on PostgreSQL** (`LEDGERLINE_TEST_ALL_ON_POSTGRES=1`). Earlier runs found and fixed: test-only bugs, a lazily created `agent_keys` table (now tenant migration v3), and one SQLite-only catalog query in a test. Same run: backend on Linux and Windows (SQLite), frontend build and Playwright e2e passed. |
-| Neon, isolated test run | **not yet run**: needs a Neon test branch and its direct URL in the gitignored `backend\.env.test` (`LEDGERLINE_TEST_DATABASE_URL=`); no local PostgreSQL or Docker on this PC |
+| Neon, isolated test run | Review branch and gitignored test settings exist. Current-source full walkthrough/new-app continuity passed; earlier focused tests passed on earlier code. Consolidated current-source suite and whole-backend Neon run remain in progress, not yet claimed passed. |
 | Deployed end-to-end | **PASS** 27 Oct: 32/32 smoke + 14/14 extra (roles, CSV import, audit, malformed input, malformed edge header) |
-| Persistence across process replacement | **PASS** (redeploy `481e388`, see above); a restart-only check is still to be repeated on a new instance |
+| Persistence across process replacement | **PASS** across redeploy earlier; Codex actual restart on 28 Oct confirmed instance replacement before the 8/8 persistence probe, including signing identity. |
 
-## Blockers needing the user
+## Remaining setup requiring the user
 
-1. Vercel email verification (reported by Codex) so production can be redeployed with the corrected `LEDGERLINE_EDGE_SECRET`; then check `/api/health` through Vercel shows `"edge_proof":"valid"` and the real client address.
-2. Neon isolated tests: a Neon child branch (e.g. `tests`) and its direct connection string written by the user into `backend\.env.test`.
-3. Optional integrations, server-side only (user pastes secrets into Render): `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` + `LEDGERLINE_SANDBOX_ORGS`; `ANTHROPIC_API_KEY`; Google sign-in `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` with redirect URI `https://ledgerline-black-iota.vercel.app/api/auth/oauth/google/callback`. None exist in `backend/.env` (checked by key name only). Apple sign-in needs a paid Apple Developer membership, so it stays disabled.
+1. Google sign-in: user pastes `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` into Render, then completes real provider sign-in. Production callback: `https://ledgerline-black-iota.vercel.app/api/auth/oauth/google/callback`. Google Cloud project `ledgerline-512919`, client "Ledgerline web", is in Testing mode; the user controls test users/publication.
+2. Airwallex sandbox: user signs in, creates a suitably scoped key and pastes `AIRWALLEX_CLIENT_ID` / `AIRWALLEX_API_KEY` into Render. Limit `LEDGERLINE_SANDBOX_ORGS` to the operator organization before readiness/mutation tests. Webhook registration and per-organization secret also remain to be verified.
+3. Anthropic: user supplies `ANTHROPIC_API_KEY` server-side before any real extraction can be verified. Existing budget controls remain mandatory. No paid purchase is authorized. Apple remains disabled without an existing appropriate developer membership.
 
 ## Superseded
 

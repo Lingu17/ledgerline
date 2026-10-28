@@ -8,7 +8,7 @@ Built for the Agentic Banking Hackathon (Treasury & Ops). **Hackathon build, not
 
 ![Ledgerline finance operations workspace](docs/screenshots/workspace.png)
 
-Verification as of 28 Oct 2026: **224 backend tests** pass locally (8 PostgreSQL-only tests are skipped without a database URL; the whole suite last passed on PostgreSQL 17 in CI at `8a079a7`), **12 browser E2E tests**, strict frontend build, **32/32 live checks** through the public URL (`scripts/smoke_deploy.py`), and **0 npm audit findings**. Earlier independent review: [report](docs/INDEPENDENT_REVIEW.md). Live deployment details: [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md).
+Verification as of 28 Oct 2026: **224 backend tests** pass locally (8 PostgreSQL-only tests are skipped without a database URL), **12 browser E2E tests**, strict frontend build, and **0 npm audit findings**. All five CI jobs, including the whole backend suite on PostgreSQL 17, passed at `a528ca9` ([run 40569405112](https://github.com/Lingu17/ledgerline/actions/runs/40569405112)). Codex independently verified **32/32 public workflow checks**, valid Vercel edge proof with spoof refusal, and **8/8 persistence checks after a confirmed Render instance replacement**. The isolated Neon walkthrough also passed on that commit; a consolidated Neon rerun is tracked in the deployment handoff. These checks use synthetic workspaces, not live Airwallex or Anthropic execution. Earlier independent review: [report](docs/INDEPENDENT_REVIEW.md). Live deployment details: [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md).
 
 ---
 
