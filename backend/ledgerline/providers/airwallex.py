@@ -222,8 +222,8 @@ class AirwallexSandbox:
             "buy_amount": _json_amount(to_major(buy_amount_minor, buy_currency)),
             "validity": "MIN_1",
         })
-        if q.get("usage") and q["usage"] != "SINGLE_USE":
-            raise ProviderError(f"expected a single-use quote, got {q['usage']}")
+        # Airwallex chooses `usage` (the sandbox returns MULTI_USE); single use is enforced locally when a
+        # conversion consumes the quote, so a multi-use quote is never spent twice by Ledgerline.
         return Quote(
             provider_quote_id=q["quote_id"],
             sell_currency=sell_currency,

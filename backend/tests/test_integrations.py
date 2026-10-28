@@ -33,6 +33,7 @@ class FakeAirwallex:
         self.calls = []
         self.logins = 0
         self.fail_transfer = None
+        self.quote_usage = "SINGLE_USE"
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.calls.append(request)
@@ -48,7 +49,7 @@ class FakeAirwallex:
         body = json.loads(request.content) if request.content else {}
         if path == "/fx/quotes/create":
             return httpx.Response(201, json={"quote_id": "q1", "sell_amount": 4907.61, "buy_amount": body["buy_amount"],
-                                             "client_rate": 0.92, "usage": "SINGLE_USE",
+                                             "client_rate": 0.92, "usage": self.quote_usage,
                                              "valid_to_at": (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()})
         if path == "/transfers/create":
             if self.fail_transfer == "timeout":
@@ -205,3 +206,11 @@ def test_payer_agent_never_creates_a_signing_identity(tmp_path):
                                               "amount_minor": 480_000, "received_at": "2026-10-27T00:00:00Z", "reference": ""}],
                                   transport="memory")
     assert answers[0]["status"] == "no_agent" and not keys_path(tmp_path).exists()
+
+
+def test_multi_use_provider_quote_is_accepted():
+    """Airwallex picks quote usage itself (the sandbox returns MULTI_USE); Ledgerline still spends a quote once."""
+    fake = FakeAirwallex()
+    fake.quote_usage = "MULTI_USE"
+    q = _adapter(fake).create_quote(sell_currency="USD", buy_currency="EUR", buy_amount_minor=451_500)
+    assert q.provider_quote_id == "q1" and q.buy_amount_minor == 451_500
