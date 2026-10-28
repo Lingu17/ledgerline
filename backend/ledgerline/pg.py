@@ -387,24 +387,36 @@ def harden(conn: "PgConnection") -> None:
     if not isinstance(conn, PgConnection):
         return
     s = conn.schema
-    with conn._raw.cursor() as cur, bounded(conn._raw, "schema hardening"):
-        cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = %s ORDER BY tablename", (s,))
-        tables = tuple(r[0] for r in cur.fetchall())
-    key = (conn._pool.name or "", s, tables)
-    if key in _hardened:
-        return
-    with conn._raw.cursor() as cur, bounded(conn._raw, "schema hardening"):
-        cur.execute(f'REVOKE ALL ON SCHEMA "{s}" FROM PUBLIC')
-        cur.execute("SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated')")
-        api_roles = [r[0] for r in cur.fetchall()]
-        for role in api_roles:
-            cur.execute(f'REVOKE ALL ON SCHEMA "{s}" FROM {role}')
-            cur.execute(f'REVOKE ALL ON ALL TABLES IN SCHEMA "{s}" FROM {role}')
-            cur.execute(f'REVOKE ALL ON ALL SEQUENCES IN SCHEMA "{s}" FROM {role}')
-            cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{s}" REVOKE ALL ON TABLES FROM {role}')
-        for t in tables:
-            cur.execute(f'ALTER TABLE "{s}"."{t}" ENABLE ROW LEVEL SECURITY')
-    _hardened.add(key)
+    # PostgreSQL catalog ACL updates can fail with "tuple concurrently updated"
+    # when the first requests harden the same schema simultaneously. Use the same
+    # transaction-scoped schema lock as migrations/writers, including across processes.
+    owns_transaction = not conn._in_tx
+    if owns_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    try:
+        with conn._raw.cursor() as cur, bounded(conn._raw, "schema hardening"):
+            cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = %s ORDER BY tablename", (s,))
+            tables = tuple(r[0] for r in cur.fetchall())
+        key = (conn._pool.name or "", s, tables)
+        if key not in _hardened:
+            with conn._raw.cursor() as cur, bounded(conn._raw, "schema hardening"):
+                cur.execute(f'REVOKE ALL ON SCHEMA "{s}" FROM PUBLIC')
+                cur.execute("SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated')")
+                api_roles = [r[0] for r in cur.fetchall()]
+                for role in api_roles:
+                    cur.execute(f'REVOKE ALL ON SCHEMA "{s}" FROM {role}')
+                    cur.execute(f'REVOKE ALL ON ALL TABLES IN SCHEMA "{s}" FROM {role}')
+                    cur.execute(f'REVOKE ALL ON ALL SEQUENCES IN SCHEMA "{s}" FROM {role}')
+                    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{s}" REVOKE ALL ON TABLES FROM {role}')
+                for t in tables:
+                    cur.execute(f'ALTER TABLE "{s}"."{t}" ENABLE ROW LEVEL SECURITY')
+        if owns_transaction:
+            conn.execute("COMMIT")
+            _hardened.add(key)
+    except BaseException:
+        if owns_transaction:
+            conn.execute("ROLLBACK")
+        raise
 
 
 def split_statements(script: str) -> Iterable[str]:

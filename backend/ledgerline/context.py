@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Iterator
@@ -60,15 +61,22 @@ class AppContext:
     claude: Any | None = None
     org: dict[str, Any] | None = None
     _initialised: bool = field(default=False, repr=False)
+    _init_lock: Any = field(default_factory=threading.Lock, repr=False)
 
     def connect(self) -> sqlite3.Connection:
-        conn = db.connect(self.settings.db_path)
         if not self._initialised:
-            from .migrations import TENANT, migrate
-
-            migrate(conn, TENANT)
-            self._initialised = True
-        return conn
+            with self._init_lock:
+                if not self._initialised:
+                    from .migrations import TENANT, migrate
+                    conn = db.connect(self.settings.db_path)
+                    try:
+                        migrate(conn, TENANT)
+                    except BaseException:
+                        conn.close()
+                        raise
+                    self._initialised = True
+                    return conn
+        return db.connect(self.settings.db_path)
 
     @contextmanager
     def conn(self) -> Iterator[sqlite3.Connection]:

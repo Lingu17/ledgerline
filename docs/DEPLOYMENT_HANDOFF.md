@@ -2,6 +2,12 @@
 
 Updated 28 October 2026. Branch `deploy/vercel-render`. No HackerEarth save/submission is authorized.
 
+## Latest review continuation
+
+Sandbox input/finality commit739936e was confirmed live on Render and Vercel. CI40733133154 passed all five jobs (including the whole backend on PostgreSQL), and public smoke passed32/32. The owner readiness check on that release returned real Airwallex authentication/accounts/balances and retained the saved webhook secret across deployment.
+
+A historical production audit failure exposed a separate startup race: concurrent requests ran schema ACL hardening at once, producing PostgreSQL `tuple concurrently updated`. The follow-up uses a context initialization lock, closes failed initialization connections, and holds the existing transaction-scoped schema advisory lock throughout hardening. Focused local tests46/46 passed. Real Neon privilege isolation passed; the new concurrent-hardening test passed in22.27 seconds after correcting its signup fixture from invalid `workspace` to valid `empty`. Final CI and deployed follow-up revision must still be verified separately.
+
 ## Current infrastructure
 
 - Frontend: https://ledgerline-black-iota.vercel.app — existing Vercel Hobby project, root frontend, same-origin /api proxy.

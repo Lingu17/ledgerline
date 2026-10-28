@@ -62,6 +62,29 @@ def test_key_encryption_is_bound_to_organization_and_customer():
 
 
 # --------------------------------------------------------------------------- live PostgreSQL
+@needs_pg
+def test_postgres_concurrent_schema_hardening_uses_transaction_lock():
+    from concurrent.futures import ThreadPoolExecutor
+    from ledgerline import db
+    app = _pg_app()
+    client = _signup(app, 'hardening-race@test.example', start='empty')
+    ctx = app.state.orgs.get(client.org_id)
+    with ctx.conn() as conn:
+        schema = conn.schema
+    for key in list(pg._hardened):
+        if key[1] == schema:
+            pg._hardened.discard(key)
+    barrier = threading.Barrier(4)
+    def harden(_):
+        with ctx.conn() as conn:
+            barrier.wait(timeout=30)
+            pg.harden(conn)
+            assert not conn._in_tx
+            return db.row(conn, 'SELECT COUNT(*) AS n FROM schema_migrations')['n']
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        assert list(executor.map(harden, range(4))) == [3] * 4
+
+
 def _pg_app(prefix=None, **extra):
     from ledgerline.api.app import create_app
     from ledgerline.config import load_settings
