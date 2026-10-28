@@ -4,7 +4,7 @@ Audit date: 27 Oct 2026 (build phase day 1; deadline 13 Nov 2026, 11:59 PM IST).
 
 Status key: **Done+tested** = implemented with automated tests passing locally · **Live** = verified against the real external service · **Partial** · **Missing** · **Blocked** = needs something only the user/organizer can provide.
 
-Observed on 28 Oct 2026: deployment, Google sign-in and owner-only Airwallex read-only authentication/accounts/balances are connected. The approved deposit webhook is registered and its secret saved. Signed Airwallex delivery and money actions remain unverified. Anthropic is not configured. Configuration is not execution evidence.
+Observed on 28 Oct 2026: deployment, Google sign-in and owner-only Airwallex read-only authentication/accounts/balances are connected. The approved deposit webhook is registered and its secret saved. Sandbox deposits (settled, reconciled) and one EUR→GBP FX conversion (settled) were executed live on 28 Oct; a refund awaits a second approver. Signed webhook delivery remains unverified. Anthropic key is set; the first real call was refused for missing account credit. Configuration is not execution evidence.
 
 Final reviewed runtime `9f07166`: [CI40734890246](https://github.com/Lingu17/ledgerline/actions/runs/40734890246) all five jobs succeeded, including253/253 whole-backend PostgreSQL tests and13/13 PostgreSQL-specific tests. Final public smoke32/32; redeploy continuity8/8 after confirmed instance replacement; concurrent first-page API reads5/5. HackerEarth Build Phase still has0 submissions (read-only observation); detailed submission fields/rubric are not certified. No source-sharing permission or public repository visibility change was made.
 
@@ -34,7 +34,7 @@ Final reviewed runtime `9f07166`: [CI40734890246](https://github.com/Lingu17/led
 | B3 | Clean match / bank-fee write-off / partial / duplicate / no reference / wrong currency | Done+tested | `test_matching.py`, accuracy harness (250 seeds, 64,215 checks, 0 mismatches) |
 | B4 | Payment link for the exact balance; draft if links unavailable | Done+tested (local) · **Blocked** live | Sandbox `POST /pa/payment_links/create` payload matches the docs; local mode stores a labelled "Draft, not sent" note and never shows a URL |
 | B5 | Payer agent over MCP, signed `explain_payment`, three checks | Done+tested | Real stdio MCP subprocess, Ed25519, replay/expiry/binding/records checks; malicious claim rejected (DEP-1004) |
-| B6 | Claude reads emails/PDFs when no agent | Partial / blocked live | Pasted text extraction and strict tools/budgets are implemented. Direct PDF ingestion is missing; actual model invocation needs `ANTHROPIC_API_KEY`. A deterministic fixture is not Claude execution. |
+| B6 | Claude reads emails/PDFs when no agent | Partial / blocked live | Pasted text extraction and strict tools/budgets are implemented. Direct PDF ingestion is missing; the key is now set, but a successful model call needs Anthropic account credit (first live call refused, nothing applied). A deterministic fixture is not Claude execution. |
 | B7 | Apparent duplicate becomes advance credit after signed evidence | Done+tested | DEP-1005 → verified_advance_credit; plan v1, evidence, v2 and journal preserved |
 | B8 | FX: quote and convert only the shortfall above reserve | Done+tested (local) · **Blocked** live | Reserves, settled-only spendability, pending FX never spendable; sandbox quote/conversion payloads checked against docs |
 | B9 | Refund over limit approved by a person, duplicate lock, SENT not final | Done+tested | Partial unique index, UUIDv5 ids, scope hash, SENT keeps liability; status map updated for approval_rejected/recalled |
@@ -63,10 +63,10 @@ Product home page; Google sign-in (configured, user completed real login); Apple
 
 | Setting | Where | Unblocks |
 |---|---|---|
-| `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Saved on Render | Read-only API connection observed; does not prove B4/B8 money actions |
+| `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Saved on Render | Live sandbox deposits and FX conversion executed and reconciled; transfer/refund pending a second approver |
 | `LEDGERLINE_SANDBOX_ORGS` | Configured for the operator's one organization | Judges remain on isolated local simulations |
 | Airwallex webhook secret + registered URL | Saved in owner settings and sandbox web app | Configuration complete; delivery proof pending |
-| `ANTHROPIC_API_KEY` (optional `LEDGERLINE_CLAUDE_MODEL`, default `claude-opus-5-5`) | Server environment only | B6 live extraction |
+| `ANTHROPIC_API_KEY` (optional `LEDGERLINE_CLAUDE_MODEL`, default `claude-opus-5-5`) | Set on Render (28 Oct) | B6 live extraction needs account credit |
 | Vercel edge proof | Complete | Corrected production deployment verified valid, with spoof refusal; no email code is needed. |
 | Google OAuth configuration | Saved; exact public callback verified | User completed Google login/onboarding. Testing-mode access remains controlled by the owner. |
 

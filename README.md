@@ -23,9 +23,9 @@ Latest independent review: runtime `9f07166` is deployed. [CI40734890246](https:
 | Matching rules, ledger, approvals, locks, pause, FX reserve logic | **Real, tested** | Integer minor units, serialized writer transactions (SQLite `BEGIN IMMEDIATE`; on PostgreSQL a transaction-scoped advisory lock per schema). |
 | Payer agents (`explain_payment`) | **Real MCP protocol, simulated agents** | An MCP server subprocess (stdio) using the official `mcp` SDK. The six customer agents are local simulations with their own Ed25519 keys; one is deliberately dishonest. |
 | Bank (transfers, FX, deposits) — default | **Simulated bank ("Local workspace")** | A per-organization "bank" (SQLite file locally, PostgreSQL schema when hosted) with fault injection. No network, no money. Shown as a *Local workspace* badge; simulated actions are labelled. |
-| Airwallex sandbox adapter | **Read-only connection verified** | Operator readiness returned real authentication, global accounts and balances on 28 Oct. A dedicated EUR account and deposit webhook/secret are configured. Signed delivery, transfers, FX and payment links remain unverified; judge organizations use local simulations. See the integration evidence. |
+| Airwallex sandbox adapter | **Deposits and FX verified live (sandbox)** | 28 Oct: three simulated EUR deposits settled at Airwallex and were reconciled (exact match, escalation for an unknown reference, operator allocation); one EUR→GBP conversion was quoted and settled, the quote could not be reused, and reserves held. A refund is proposed and waits for a second approver. Signed webhook delivery, transfers and payment links remain unverified; judge organizations use local simulations. See the integration evidence. |
 | Webhooks | **Real verification** | Per-organization URL and secret; HMAC-SHA256 over `x-timestamp` + raw body; skew limit; event-id dedupe in the same transaction; documented flat `deposit.settled` shape. |
-| Claude evidence reader | **Optional** | With `ANTHROPIC_API_KEY`, Claude must answer through strict typed proposal tools. Without it, offline rules produce the same shape, labelled "Claude not invoked". Advisory only; never moves money. |
+| Claude evidence reader | **Optional** | With `ANTHROPIC_API_KEY`, Claude must answer through strict typed proposal tools. Without it, offline rules produce the same shape, labelled "Claude not invoked". Advisory only; never moves money. Live: key set on Render; the first real call was refused by Anthropic for missing account credit and Ledgerline applied nothing. |
 | Email (invitations, balance requests) | **Not sent** | Owners copy one-time invitation links; balance requests are recorded as drafts. |
 
 ## Prerequisites (Windows)
@@ -203,8 +203,8 @@ Financial rules the code enforces (unchanged from the single-tenant build, all r
 
 ## Known limitations
 
-- Airwallex adapter not executed against the live sandbox; beneficiary creation not automated; Airwallex API credentials are server-wide rather than per organization.
-- Sign in with Google / Apple is tested only against fake providers that sign real RS256 tokens (`tests/test_oauth.py`); it has not been run against real Google or Apple accounts. Apple needs HTTPS. Provider-only accounts cannot add a password yet.
+- Airwallex sandbox: deposits and FX executed live; transfers/refunds not yet executed (need a second approver); beneficiary creation not automated; Airwallex API credentials are server-wide rather than per organization.
+- Sign in with Google / Apple is tested only against fake providers that sign real RS256 tokens (`tests/test_oauth.py`); Google sign-in has been completed with a real account on the deployment; Apple has not been run. Apple needs HTTPS. Provider-only accounts cannot add a password yet.
 - No email delivery (invitation links are copied manually), no enterprise SSO (SAML) or MFA, no password reset flow (an owner can re-invite; `manage create-owner` bootstraps).
 - Payer agents are local simulations; real deployments would discover each customer's MCP endpoint and key at onboarding.
 - The hosted PostgreSQL mode has been run as one Render instance only; several instances have not been tested.

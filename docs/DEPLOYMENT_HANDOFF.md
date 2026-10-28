@@ -2,6 +2,13 @@
 
 Updated 28 October 2026. Branch `deploy/vercel-render`. No HackerEarth save/submission is authorized.
 
+## Live sandbox money actions — 28 Oct 2026 (Claude)
+
+- Code `a4c9f2c` fixed a live-only bug: Airwallex sandbox returns `usage: MULTI_USE` quotes and the request cannot ask for single use; Ledgerline now enforces single use itself. Backend 254 passed / 9 skipped.
+- Executed on the live deployment, owner account, allowlisted organization: EUR 1.23 → INV-2301 and EUR 4,000.00 → INV-2302 (settled, exact match); EUR→GBP conversion `OP-CBAA2582` (EUR 1,811.36 → GBP 1,501.00, settled; quote reuse refused; reserves kept); EUR 12.50 with a vague reference escalated, then allocated to INV-2303 by the operator; EUR 5.00 unknown reference escalated, return-to-sender approval `APR-B40BC448` pending a second real approver. Ledger balanced in every currency after each step. Airwallex sandbox emails confirmed the deposits and the conversion.
+- `ANTHROPIC_API_KEY` added to Render; health reports Claude configured. The first live read was refused by Anthropic (account credit too low); nothing was stored or applied.
+- Details: [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md).
+
 ## Latest review continuation
 
 Sandbox input/finality commit739936e was confirmed live on Render and Vercel. CI40733133154 passed all five jobs (including the whole backend on PostgreSQL), and public smoke passed32/32. The owner readiness check on that release returned real Airwallex authentication/accounts/balances and retained the saved webhook secret across deployment.
