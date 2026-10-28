@@ -6,6 +6,8 @@ Status key: **Done+tested** = implemented with automated tests passing locally Â
 
 Observed on 28 Oct 2026: deployment, Google sign-in and owner-only Airwallex read-only authentication/accounts/balances are connected. The approved deposit webhook is registered and its secret saved. Signed Airwallex delivery and money actions remain unverified. Anthropic is not configured. Configuration is not execution evidence.
 
+Final reviewed runtime `9f07166`: [CI40734890246](https://github.com/Lingu17/ledgerline/actions/runs/40734890246) all five jobs succeeded, including253/253 whole-backend PostgreSQL tests and13/13 PostgreSQL-specific tests. Final public smoke32/32; redeploy continuity8/8 after confirmed instance replacement; concurrent first-page API reads5/5. HackerEarth Build Phase still has0 submissions (read-only observation); detailed submission fields/rubric are not certified. No source-sharing permission or public repository visibility change was made.
+
 ## A. Event requirements (HackerEarth / Airwallex)
 
 | # | Requirement (source) | Status | Evidence / gap |

@@ -14,6 +14,8 @@ Verification as of 28 Oct 2026: **224 backend tests** pass locally (8 PostgreSQL
 
 ## What is real and what is simulated
 
+Latest independent review: runtime `9f07166` is deployed. [CI40734890246](https://github.com/Lingu17/ledgerline/actions/runs/40734890246) passed all five jobs, including253 whole-backend PostgreSQL tests. Public smoke32/32, confirmed redeploy continuity8/8, and concurrent first-tenant reads5/5 passed. Sandbox input/finality and PostgreSQL initialization races were fixed. This does not certify the unverified live banking/model actions or close the remaining proposal gaps; see [requirements matrix](docs/HACKATHON_REQUIREMENTS_MATRIX.md).
+
 | Part | In this build | Notes |
 |---|---|---|
 | Accounts, organizations, roles, sessions | **Real, tested** | scrypt password hashes, HttpOnly SameSite=Strict session cookie, CSRF token, login throttling, idle/absolute expiry, server-side logout. |
