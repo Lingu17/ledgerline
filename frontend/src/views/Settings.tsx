@@ -25,6 +25,7 @@ export function Settings() {
       <PauseCard st={s.data} />
       <OrgCard org={org.data} />
       <IntegrationsCard st={s.data} org={org.data} />
+      {org.data.server.sandbox_allowed && org.data.bank_mode === 'airwallex_sandbox' && <SandboxReceipts />}
       <PolicyEditor policy={s.data.policy} />
       <div className="grid-2">
         <AccountCard />
@@ -180,6 +181,52 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
       )}
     </Card>
   );
+}
+
+interface SandboxReceipt {
+  request_id: string; currency: string; amount_minor: number; reference: string;
+  status: string; provider_status?: string; deposit_id?: string; error_type?: string;
+}
+
+function SandboxReceipts() {
+  const { can } = useAuth();
+  const owner = can('owner');
+  const toast = useToast();
+  const list = useLoad(() => owner ? get<SandboxReceipt[]>('/integrations/sandbox/deposits') : Promise.resolve([]), [owner]);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [currency, setCurrency] = useState<Ccy>('EUR');
+  const [amount, setAmount] = useState('1.23');
+  const [payer, setPayer] = useState('Ledgerline sandbox verification');
+  const [reference, setReference] = useState('Ledgerline verification');
+  const [busy, setBusy] = useState(false);
+  if (!owner) return null;
+  const submit = async (sync: boolean) => {
+    setBusy(true);
+    try {
+      if (sync) await post('/integrations/sandbox/deposits/sync');
+      else {
+        const minor = parseMajor(amount);
+        if (minor === null || minor <= 0) throw new Error('Enter a positive sandbox amount with at most two decimal places.');
+        await post('/integrations/sandbox/deposits', { request_id: requestId, currency, amount: majorString(minor), payer_name: payer, reference });
+      }
+      toast(sync ? 'Provider receipts checked; only settled funds are posted.' : 'Simulation request recorded. Check its status below.');
+      list.reload();
+    } catch (e) { toast((e as Error).message, 'error'); }
+    finally { setBusy(false); }
+  };
+  return <Card title="Sandbox deposit verification">
+    <p className="small muted">Airwallex sandbox only: no real money. Uses the dedicated account saved above. A pending response is not a settled receipt. Reusing this request ID cannot submit the same deposit twice.</p>
+    <form className="form-grid" onSubmit={e => { e.preventDefault(); void submit(false); }}>
+      <Field id="sandbox-currency" label="Sandbox receiving currency"><select id="sandbox-currency" value={currency} onChange={e => setCurrency(e.target.value as Ccy)}>{CCYS.map(c => <option key={c}>{c}</option>)}</select></Field>
+      <Field id="sandbox-amount" label="Sandbox deposit amount"><input id="sandbox-amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} required /></Field>
+      <Field id="sandbox-payer" label="Synthetic payer name"><input id="sandbox-payer" value={payer} onChange={e => setPayer(e.target.value)} maxLength={100} required /></Field>
+      <Field id="sandbox-reference" label="Sandbox reference"><input id="sandbox-reference" value={reference} onChange={e => setReference(e.target.value)} maxLength={100} required /></Field>
+      <div className="wide small muted">Request ID: {requestId}</div>
+      <div className="wide form-actions"><button className="btn primary" disabled={busy}>Simulate sandbox deposit</button><button type="button" className="btn" disabled={busy} onClick={() => void submit(true)}>Sync sandbox receipts</button><button type="button" className="btn" disabled={busy} onClick={() => setRequestId(crypto.randomUUID())}>New deposit request</button></div>
+    </form>
+    {list.error && <ErrorNote error={list.error} onRetry={list.reload} />}
+    {list.data && <div className="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Status</th><th>Provider</th></tr></thead><tbody>{list.data.map(r => <tr key={r.request_id}><td>{r.reference}{r.deposit_id && <div className="small">{r.deposit_id}</div>}</td><td>{r.currency} {(r.amount_minor / 100).toFixed(2)}</td><td>{r.status.replaceAll('_', ' ')}</td><td>{r.provider_status || r.error_type || 'Waiting'}</td></tr>)}</tbody></table></div>}
+  </Card>;
 }
 
 function PolicyEditor({ policy }: { policy: Policy }) {

@@ -267,6 +267,47 @@ def integration_check(request: Request, p: Principal = Depends(require_role("own
     return out
 
 
+class SandboxDepositBody(BaseModel):
+    request_id: str = Field(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    currency: Literal['USD', 'EUR', 'GBP']
+    amount: str = Field(strict=True, min_length=1, max_length=20)
+    payer_name: str = Field(strict=True, min_length=1, max_length=100)
+    reference: str = Field(strict=True, min_length=1, max_length=100)
+
+
+def _sandbox_context(request: Request, p: Principal):
+    if not request.app.state.settings.sandbox_allowed(p.session.org_id) or p.ctx.sandbox is None:
+        raise HTTPException(403, 'sandbox actions are reserved for the allowlisted operator organization in sandbox mode')
+    return p.ctx
+
+
+@router.get('/integrations/sandbox/deposits')
+def sandbox_deposits(request: Request, p: Principal = Depends(require_role('owner'))):
+    from ..sandbox_receipts import records
+    return records(_sandbox_context(request, p))
+
+
+@router.post('/integrations/sandbox/deposits')
+def sandbox_deposit(request: Request, body: SandboxDepositBody, p: Principal = Depends(require_role('owner'))):
+    from ..sandbox_receipts import SandboxReceiptError, create
+    ctx = _sandbox_context(request, p)
+    if not body.payer_name.strip() or not body.reference.strip():
+        raise HTTPException(422, 'payer name and reference must not be blank')
+    try:
+        return create(ctx, body.request_id.lower(), body.currency, body.amount, body.payer_name.strip(), body.reference.strip(), p.actor)
+    except SandboxReceiptError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post('/integrations/sandbox/deposits/sync')
+def sandbox_deposits_sync(request: Request, p: Principal = Depends(require_role('owner'))):
+    from ..sandbox_receipts import SandboxReceiptError, sync
+    try:
+        return sync(_sandbox_context(request, p), p.actor)
+    except SandboxReceiptError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 def auth_error_handler(_request: Request, exc: AuthError):
     from fastapi.responses import JSONResponse
 

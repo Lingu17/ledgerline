@@ -178,6 +178,11 @@ class AirwallexSandbox:
         return out
 
     # Transfers -------------------------------------------------------------
+    def get_deposit(self, deposit_id: str) -> dict[str, Any]:
+        out = self._request("GET", f"/deposits/{deposit_id}")
+        out.setdefault("id", out.get("deposit_id") or deposit_id)
+        return out
+
     def _transfer(self, t: dict[str, Any]) -> TransferResult:
         return TransferResult(t["id"], t.get("request_id", ""), normalise_transfer_status(t.get("status", "")), t.get("status", ""))
 
