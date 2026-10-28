@@ -14,6 +14,6 @@ Use a fresh **Sample data** organization at https://ledgerline-black-iota.vercel
 | 3:20 | Walkthrough → Bank SENT, then PAID | SENT keeps the liability; only PAID is final. |
 | 3:40 | Ledger / scorecard | Deposits = matched + credits + refunds + unapplied, to the cent, per currency. Scorecard: 6 deposits, 4 settled without a person, 1 approval, 1 escalation with a reason, 0 double payments. |
 
-Close with the honesty line: "This deployment uses a simulated bank; the Airwallex sandbox adapter and Claude reader are built but not connected here."
+Close with the honesty line: "Judge workspaces use a simulated bank and simulated payer agents over real MCP. Operator-only Airwallex readiness is connected and webhook configuration is saved; live signed deposit delivery and banking actions remain unverified. The Claude reader currently uses labelled offline rules."
 
 Figures checked on 28 Oct 2026 against a fresh sample organization (local run of the same code): DEP-1005 verified → advance credit; DEP-1004 rejected on the records check (INV-2253 belongs to Brightwave); DEP-1006 refunded after one approval; scorecard 6 deposits, 4 settled without a person, 1 approval, 1 escalation, 0 double payments, ledger balanced.

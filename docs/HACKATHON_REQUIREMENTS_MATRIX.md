@@ -4,7 +4,7 @@ Audit date: 27 Oct 2026 (build phase day 1; deadline 13 Nov 2026, 11:59 PM IST).
 
 Status key: **Done+tested** = implemented with automated tests passing locally · **Live** = verified against the real external service · **Partial** · **Missing** · **Blocked** = needs something only the user/organizer can provide.
 
-Live as of 28 Oct 2026: the deployment itself (section C). No Airwallex or Claude integration is live: no Airwallex sandbox API keys or Anthropic API key exist on this machine or the server.
+Observed on 28 Oct 2026: deployment, Google sign-in and owner-only Airwallex read-only authentication/accounts/balances are connected. The approved deposit webhook is registered and its secret saved. Signed Airwallex delivery and money actions remain unverified. Anthropic is not configured. Configuration is not execution evidence.
 
 ## A. Event requirements (HackerEarth / Airwallex)
 
@@ -20,19 +20,19 @@ Live as of 28 Oct 2026: the deployment itself (section C). No Airwallex or Claud
 | A8 | Webhooks: verify signature on raw bytes, dedupe by event id, tolerate out-of-order (guide/docs) | Done+tested | HMAC-SHA256(x-timestamp + raw body) per official docs; `webhook_events` dedupe; deposits idempotent on provider id; envelope `data.object` now accepted (fixed 27 Oct after doc check) |
 | A9 | Stable `request_id` reused on retries (guide) | Done+tested | UUIDv5 per operation; ambiguous results looked up by request_id |
 | A10 | Amounts in major units (guide) | Done+tested | Exact decimal strings for transfers/conversions per API reference (fixed 27 Oct); integer minor units internally |
-| A11 | Verify connection: list global accounts, simulate deposit, list balances (guide) | Partial / **Blocked** | Read-only readiness check (login, global accounts, balances) implemented and unit-tested; simulate-deposit implemented; not run live: needs `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` |
+| A11 | Verify connection: list global accounts, simulate deposit, list balances (guide) | Partial | Real owner readiness returned authentication, accounts and balances. Dedicated EUR receiving account exists. Actual deposit simulation/settled delivery is still unverified. |
 | A12 | Treasury & Ops track positioning (proposal) | Done | README/landing describe Treasury & Ops (Adaptive Treasury Controller); not a connected-account platform |
 
 ## B. Shortlisted proposal promises
 
 | # | Promise | Status | Evidence / gap |
 |---|---|---|---|
-| B1 | Listen for `deposit.settled` webhooks | Done+tested (local) · **Blocked** live | Per-org webhook URL `/api/webhooks/airwallex/{org_id}`; needs sandbox webhook registration + secret |
+| B1 | Listen for `deposit.settled` webhooks | Tested locally; configured externally | Per-org webhook and secret saved. No verified external delivery yet. Nested envelopes now retain simulation payer/reference hints. |
 | B2 | Fallback: poll `GET /deposits` if webhooks unreliable | **Missing** | Documented in proposal; not implemented. Planned: owner-triggered "Sync deposits" using `from_created_at` |
 | B3 | Clean match / bank-fee write-off / partial / duplicate / no reference / wrong currency | Done+tested | `test_matching.py`, accuracy harness (250 seeds, 64,215 checks, 0 mismatches) |
 | B4 | Payment link for the exact balance; draft if links unavailable | Done+tested (local) · **Blocked** live | Sandbox `POST /pa/payment_links/create` payload matches the docs; local mode stores a labelled "Draft, not sent" note and never shows a URL |
 | B5 | Payer agent over MCP, signed `explain_payment`, three checks | Done+tested | Real stdio MCP subprocess, Ed25519, replay/expiry/binding/records checks; malicious claim rejected (DEP-1004) |
-| B6 | Claude reads emails/PDFs when no agent | Done+tested (fixture) · **Blocked** live | Strict tools + output validation; calls reserved before dispatch against per-org and server-wide daily caps (failed calls count); live call needs `ANTHROPIC_API_KEY` |
+| B6 | Claude reads emails/PDFs when no agent | Partial / blocked live | Pasted text extraction and strict tools/budgets are implemented. Direct PDF ingestion is missing; actual model invocation needs `ANTHROPIC_API_KEY`. A deterministic fixture is not Claude execution. |
 | B7 | Apparent duplicate becomes advance credit after signed evidence | Done+tested | DEP-1005 → verified_advance_credit; plan v1, evidence, v2 and journal preserved |
 | B8 | FX: quote and convert only the shortfall above reserve | Done+tested (local) · **Blocked** live | Reserves, settled-only spendability, pending FX never spendable; sandbox quote/conversion payloads checked against docs |
 | B9 | Refund over limit approved by a person, duplicate lock, SENT not final | Done+tested | Partial unique index, UUIDv5 ids, scope hash, SENT keeps liability; status map updated for approval_rejected/recalled |
@@ -55,15 +55,25 @@ Live as of 28 Oct 2026: the deployment itself (section C). No Airwallex or Claud
 
 ## D. Our own product improvements (not event requirements)
 
-Product home page with 3D globe; Google/Apple sign-in (needs OAuth clients); randomized accuracy harness; Playwright browser suite; nightly SQLite backups for VM hosting.
+Product home page; Google sign-in (configured, user completed real login); Apple hidden from login by user choice; randomized reference-model harness; Playwright browser suite. VM backup scripts are alternatives, not deployed Neon backups.
 
 ## Exact settings still needed from the user
 
 | Setting | Where | Unblocks |
 |---|---|---|
-| `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Server environment only | A11, B1, B4, B8 live verification |
-| `LEDGERLINE_SANDBOX_ORGS` | Server environment | Which organization (yours) may use the sandbox account |
-| Airwallex webhook secret + registered URL | Ledgerline Settings (owner) + sandbox web app | B1 |
+| `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Saved on Render | Read-only API connection observed; does not prove B4/B8 money actions |
+| `LEDGERLINE_SANDBOX_ORGS` | Configured for the operator's one organization | Judges remain on isolated local simulations |
+| Airwallex webhook secret + registered URL | Saved in owner settings and sandbox web app | Configuration complete; delivery proof pending |
 | `ANTHROPIC_API_KEY` (optional `LEDGERLINE_CLAUDE_MODEL`, default `claude-opus-5-5`) | Server environment only | B6 live extraction |
 | Vercel edge proof | Complete | Corrected production deployment verified valid, with spoof refusal; no email code is needed. |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` + redirect URI `https://ledgerline-black-iota.vercel.app/api/auth/oauth/google/callback` | Google Cloud console + Render environment | Optional Google sign-in (D) |
+| Google OAuth configuration | Saved; exact public callback verified | User completed Google login/onboarding. Testing-mode access remains controlled by the owner. |
+
+## Sandbox input review — 28 October
+
+Checked against [developer lab](https://airwallexdev.com/), [builder guide](https://airwallexdev.com/guide) and official [deposit simulation](https://www.airwallex.com/docs/api/simulation/deposits/create) / [webhook](https://www.airwallex.com/docs/developer-tools/webhooks/listen-for-webhook-events) references. REST is supported; Airwallex Developer MCP is not configured here. Payer-agent stdio MCP is a separate integration.
+
+- Simulation amounts are positive integer minor units internally, converted to major-unit JSON numbers. Currency is not sent: the selected Global Account determines it. A pre-dispatch account lookup now refuses the wrong, unknown or ambiguous receiving currency.
+- Sandbox simulation responses never manufacture settled receipts. The walkthrough waits for authenticated settled webhooks; retries retain a durable attempt marker and ambiguous submissions require reconciliation.
+- Transfers/conversions use exact major-unit strings and stable request IDs; approval, reserve, pause and finality rules stay in code.
+- New regressions cover nested webhook hints, invalid amounts, wrong/ambiguous account currencies and pending/ambiguous deposit simulations. Provider mocks prove code behavior, not live Airwallex acceptance.
+- Full compliance is not certified: B2 polling, B12 beneficiary creation, direct PDF ingestion, real model execution, live sandbox money-action proof and the recorded demo remain open.

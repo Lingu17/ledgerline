@@ -22,10 +22,10 @@ Ordinary work without the walkthrough: create an organization with **An empty wo
 |---|---|
 | Matching rules, ledger, approvals, locks, roles, tenant isolation | Real application code |
 | Storage | Real PostgreSQL (Neon free tier); your organization survives backend restarts and redeploys |
-| Sign in with Google / Apple | Buttons shown but disabled: not configured on this server |
+| Sign in with Google / Apple | Google configured and real user login observed; Testing mode may restrict accounts. Apple hidden from login by user choice. Email/password remains available. |
 | Payer agents | Simulated customer agents, real MCP protocol and real Ed25519 signatures |
 | Bank | Built-in **simulated bank** (labelled in the top bar). No real money |
-| Airwallex sandbox | Adapter implemented; **not connected** on this deployment (no credentials) |
+| Airwallex sandbox | Operator-only API readiness connected; webhook configuration saved. Judge workspaces use local simulations. Live signed delivery/money actions remain unverified. |
 | Claude remittance reading | Implemented; **not connected** (no API key); a labelled deterministic reader is used |
 
 See `docs/INTEGRATION_EVIDENCE.md` for exactly what has and has not been verified.

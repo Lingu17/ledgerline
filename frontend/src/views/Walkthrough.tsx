@@ -45,7 +45,10 @@ export function Walkthrough() {
               <div>
                 {can("operator") && s.next === step.id && step.id !== "seed" && (
                   <button className="btn primary small" disabled={!!busy || !!s.blocked}
-                    onClick={() => run("step", () => post("/demo/step", { step: step.id }), `${step.title}: done`)}>
+                    onClick={() => run("step", () => post("/demo/step", { step: step.id }),
+                      step.id === "deposits" && s.provider.includes("AIRWALLEX")
+                        ? "Sandbox receipts checked. Pending deposits wait for Airwallex settled webhooks."
+                        : `${step.title}: done`)}>
                     {busy === "step" ? "Running…" : "Run"}
                   </button>
                 )}

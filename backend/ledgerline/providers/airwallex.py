@@ -12,8 +12,8 @@ Paths and payloads follow https://www.airwallex.com/docs/api (checked 2026-10-27
   POST /simulation/transfers/{id}/transition  {next_status}
   POST /pa/payment_links/create         {title, reusable, amount, currency, reference}
 
-This adapter has NOT been executed against the sandbox in this build (no
-credentials were available); it is covered by tests against a mocked transport.
+Read-only authentication/accounts/balances have been exercised against the sandbox.
+Money-action verification is tracked separately in docs/INTEGRATION_EVIDENCE.md.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 from ..clock import parse_iso
-from ..money import CURRENCY_EXPONENT, to_major, to_minor
+from ..money import CURRENCY_EXPONENT, to_major, to_minor, validate_minor
 from .base import (
     ConversionResult,
     PaymentLinkResult,
@@ -150,10 +150,26 @@ class AirwallexSandbox:
     # Deposits ------------------------------------------------------------
     def simulate_deposit(self, *, global_account_id: str, currency: str, amount_minor: int, payer_name: str,
                          reference: str) -> dict[str, Any]:
+        validate_minor(amount_minor)
+        amount = _json_amount(to_major(amount_minor, currency))
+        if not isinstance(global_account_id, str) or not global_account_id or any(c not in
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in global_account_id):
+            raise ProviderError("invalid global account id")
+        # Verify BEFORE creating anything: Airwallex ignores a currency field on this API.
+        account = self._request("GET", f"/global_accounts/{global_account_id}")
+        if account.get("currency"):
+            currencies = {account["currency"]}
+        else:
+            features = account.get("supported_features")
+            currencies = {f.get("currency") for f in (features if isinstance(features, list) else [])
+                          if isinstance(f, dict) and f.get("type") in (None, "DEPOSIT")
+                          and isinstance(f.get("currency"), str)}
+        if currencies != {currency}:
+            raise ProviderError("deposit simulation requires a global account dedicated to the requested currency")
         # `currency` is NOT sent: the global account determines it. It is used only to format the amount.
         out = self._request("POST", "/simulation/deposit/create", body={
             "global_account_id": global_account_id,
-            "amount": _json_amount(to_major(amount_minor, currency)),
+            "amount": amount,
             "payer_name": payer_name,
             "reference": reference,
         })

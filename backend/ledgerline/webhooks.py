@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import time
 from typing import Any
 
@@ -36,8 +37,10 @@ def verify_signature(secret: str, timestamp_ms: str | None, signature: str | Non
                      now_ms: int, tolerance_s: int) -> None:
     if not timestamp_ms or not signature:
         raise WebhookRejected(401, "missing x-timestamp or x-signature")
-    if not timestamp_ms.isdigit():
+    if not re.fullmatch(r"[0-9]{1,16}", timestamp_ms):
         raise WebhookRejected(401, "malformed x-timestamp")
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", signature.strip()):
+        raise WebhookRejected(401, "malformed x-signature")
     if abs(now_ms - int(timestamp_ms)) > tolerance_s * 1000:
         raise WebhookRejected(401, "timestamp outside tolerance")
     expected = sign(secret, timestamp_ms, raw_body)
@@ -126,6 +129,8 @@ def handle(ctx: AppContext, *, raw_body: bytes, timestamp_ms: str | None, signat
         result: dict[str, Any] = {"status": "ignored", "event_id": event["id"]}
         if event["name"] in DEPOSIT_EVENTS:
             data = event.get("data")
+            if isinstance(data, dict) and isinstance(data.get("object"), dict):
+                data = data["object"]
             hint = db.row(conn, "SELECT payer_name, reference FROM deposit_hints WHERE provider_ref = ?",
                           (data.get("id"),)) if isinstance(data, dict) and isinstance(data.get("id"), str) else None
             fields = _parse_deposit(event, hint)

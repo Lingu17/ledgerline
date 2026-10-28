@@ -58,6 +58,8 @@ class FakeAirwallex:
             return httpx.Response(200, json={"items": [{"id": "tr1", "request_id": request.url.params["request_id"], "status": "SENT"}]})
         if path == "/simulation/deposit/create":
             return httpx.Response(201, json={"id": "dep1", "currency": "USD", "amount": body["amount"], "status": "SETTLED"})
+        if path == "/global_accounts/ga_usd":
+            return httpx.Response(200, json={"id": "ga_usd", "currency": "USD", "status": "ACTIVE"})
         if path == "/pa/payment_links/create":
             return httpx.Response(404, json={"code": "not_found"})
         return httpx.Response(404)
@@ -100,6 +102,34 @@ def test_deposit_simulation_does_not_send_currency():
     aw.simulate_deposit(global_account_id="ga_usd", currency="USD", amount_minor=500_000, payer_name="P", reference="R")
     body = json.loads(fake.calls[-1].content)
     assert "currency" not in body and body["amount"] == 5000.0 and body["global_account_id"] == "ga_usd"
+
+
+@pytest.mark.parametrize("account", [
+    {"currency": "EUR"},
+    {"supported_features": [{"type": "DEPOSIT", "currency": "USD"}, {"type": "DEPOSIT", "currency": "EUR"}]},
+    {"supported_features": [{"type": "DIRECT_DEBIT", "currency": "USD"}]},
+    {},
+])
+def test_simulation_refuses_wrong_or_ambiguous_currency_before_creating(account):
+    from ledgerline.providers.base import ProviderError
+    calls = []
+    def fake(request):
+        calls.append(request.url.path)
+        if request.url.path.endswith('/authentication/login'):
+            return httpx.Response(201, json={"token": "test-only", "expires_at": "2099-01-01T00:00:00Z"})
+        return httpx.Response(200, json=account)
+    aw = _adapter(fake)
+    with pytest.raises(ProviderError, match="dedicated"):
+        aw.simulate_deposit(global_account_id="ga_usd", currency="USD", amount_minor=100, payer_name="Test", reference="Test")
+    assert not any(p.endswith('/simulation/deposit/create') for p in calls)
+
+
+@pytest.mark.parametrize("amount", [True, 0, -1, 1.5])
+def test_simulation_rejects_invalid_amount_before_network(amount):
+    fake = FakeAirwallex()
+    with pytest.raises(ValueError):
+        _adapter(fake).simulate_deposit(global_account_id="ga_usd", currency="USD", amount_minor=amount, payer_name="Test", reference="Test")
+    assert not fake.calls
 
 
 def test_payment_link_unavailable_is_reported_not_faked():

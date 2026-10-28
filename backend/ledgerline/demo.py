@@ -77,6 +77,8 @@ def run_step(ctx: AppContext, step: str, actor: str) -> dict[str, Any]:
         result = {"seeded": True}
     elif step == "deposits":
         result = {"webhooks": ingest_scenario_deposits(ctx)}
+        if any(item.get("status") == "awaiting_webhook" for item in result["webhooks"]):
+            return {"step": step, "result": result, "state": state(ctx)}
     elif step == "links":
         result = {"links": publish_payment_links(ctx, actor)}
     elif step == "agents":
@@ -123,20 +125,40 @@ def ingest_scenario_deposits(ctx: AppContext) -> list[dict[str, Any]]:
     """
     out = []
     payloads = scenario_deposit_payloads(ctx.clock.now())
+    if ctx.sandbox is not None:
+        missing = sorted({f["currency"] for f in payloads} - set(ctx.settings.airwallex_global_account_ids))
+        if missing:
+            raise DemoError(f"configure dedicated sandbox global accounts for {', '.join(missing)} before simulating deposits")
     for fields in payloads:
         source = "local_simulated_webhook"
         if ctx.sandbox is not None:
             gid = ctx.settings.airwallex_global_account_ids.get(fields["currency"])
-            if not gid:
-                raise DemoError(f"AIRWALLEX_GLOBAL_ACCOUNT_IDS has no {fields['currency']} global account")
-            created = ctx.sandbox.simulate_deposit(global_account_id=gid, currency=fields["currency"],
-                                                   amount_minor=fields["amount_minor"], payer_name=fields["payer_name"],
-                                                   reference=fields["reference"])
-            fields = {**fields, "provider_ref": created["id"]}
+            # Simulation has no documented request_id. Reserve the attempt durably before
+            # dispatch, so a timeout/retry cannot silently create the same deposit twice.
+            marker = f"sandbox_demo_deposit:{fields['provider_ref']}"
             with ctx.conn() as conn, db.transaction(conn):
-                conn.execute("INSERT OR IGNORE INTO deposit_hints VALUES (?,?,?,?)",
-                             (created["id"], fields["payer_name"], fields["reference"], iso(ctx.clock.now())))
-            source = "airwallex_sandbox_simulation"
+                attempt = db.get_setting(conn, marker, None)
+                if attempt is None:
+                    db.set_setting(conn, marker, {"status": "submitting"})
+            if attempt is None:
+                created = ctx.sandbox.simulate_deposit(global_account_id=gid, currency=fields["currency"],
+                                                       amount_minor=fields["amount_minor"], payer_name=fields["payer_name"],
+                                                       reference=fields["reference"])
+                if not isinstance(created.get("id"), str) or not created["id"]:
+                    raise DemoError("sandbox response has no deposit id; reconcile the attempt before retrying")
+                attempt = {"id": created["id"]}
+                with ctx.conn() as conn, db.transaction(conn):
+                    db.set_setting(conn, marker, attempt)
+                    conn.execute("INSERT OR IGNORE INTO deposit_hints VALUES (?,?,?,?)",
+                                 (created["id"], fields["payer_name"], fields["reference"], iso(ctx.clock.now())))
+            if not attempt.get("id"):
+                raise DemoError("sandbox deposit attempt needs reconciliation; it will not be automatically repeated")
+            with ctx.conn() as conn:
+                received = db.row(conn, "SELECT id FROM deposits WHERE provider_ref = ?", (attempt["id"],))
+            out.append({"status": "processed" if received else "awaiting_webhook", "provider_ref": attempt["id"]})
+            # Only Airwallex's authenticated settled event may make sandbox money spendable.
+            # Never manufacture a local SETTLED event from a PENDING simulation response.
+            continue
         body = build_deposit_event("evt_" + uuid.uuid4().hex[:16], fields, str(to_major(fields["amount_minor"], fields["currency"])))
         ts = str(int(ctx.clock.now().timestamp() * 1000))
         secret = ctx.settings.webhook_secret

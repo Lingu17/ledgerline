@@ -16,13 +16,25 @@ Update independently verified by Codex on 28 Oct at code `a528ca9`: public synth
 | Edge proof (Vercel → Render) | **Verified valid on 28 Oct** after corrected deployment; public forwarding-header identity stable under spoofing, direct-origin forged proof refused. No signing-encryption key change. |
 | Real PostgreSQL 17 | GitHub Actions job `postgres` (service container) runs `tests/test_postgres.py` and the whole suite on PostgreSQL; see the Actions run for the deployed commit |
 
-## Not live yet (no credentials)
+## External integration state — observed 28 October 2026
 
 | Integration | State | Needed |
 |---|---|---|
-| Airwallex sandbox | Adapter implemented; payloads checked against airwallex.com/docs (transfers and conversions amounts as strings, deposit events at `data.object`, `global_account_id`, transfer statuses including approval states); read-only readiness check (login → global accounts → balances) unit-tested with a mock transport only | `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` on Render; `LEDGERLINE_SANDBOX_ORGS` to allow one operator organization |
-| Signed Airwallex webhooks | HMAC-SHA256 over `x-timestamp` + raw body per the docs, dedupe by event id; tested with locally signed events only | Webhook URL registered in the sandbox web app + secret in Settings |
+| Airwallex sandbox | **Real read-only connection observed.** Owner readiness returned authentication success, two global accounts (ids redacted) and wallet balances. Dedicated EUR account created in Germany; only the approved operator organization is allowlisted. | Deposit simulation, FX and transfer execution still need real response evidence. |
+| Signed Airwallex webhooks | Approved deposit.settled subscription registered. After saving, Ledgerline displays **organization Airwallex secret**, the Set hint, and an empty write-only secret input. HMAC over raw bytes and event-id dedupe tested locally. | Actual external delivery unverified. A Send test event attempt produced no observed receipt; it is not a pass. Test-event signatures may use a separate secret per official docs; never trust a caller-supplied secret header as authority. |
 | Claude API extraction | Strict tool schema, output validated (`typed_proposal`); each call reserved in the database before dispatch against a per-organization and a server-wide daily cap (failed calls count); tested with a stubbed client only, including 6 simultaneous requests at a cap of 1 | `ANTHROPIC_API_KEY` on Render |
-| Payment links | Sandbox `POST /pa/payment_links/create` payload matches docs; locally a labelled draft, never a fake URL | Airwallex credentials with payment links enabled |
+| Payment links | Adapter implemented; locally a labelled draft, never a fake URL | Scoped key/API capability and a real call remain unverified. |
 
-When credentials are added, Settings → Integrations → **Check connections** performs the live calls and reports the provider's actual response; record those (with ids redacted) here.
+Google sign-in: configured provider and exact public callback verified; the user completed real Google login and organization onboarding. Google OAuth Testing mode may restrict judge accounts; email/password remains available. Apple is hidden from login by user choice and no paid membership was purchased.
+
+## Independent sandbox input regressions
+
+Reviewed against https://airwallexdev.com/ and official https://www.airwallex.com/docs/api/simulation/deposits/create plus https://www.airwallex.com/docs/developer-tools/webhooks/listen-for-webhook-events . The developer lab is guidance, not the field-level API authority.
+
+- Before simulation, read the Global Account and require a dedicated matching receiving currency; refuse unknown/multi-currency ambiguity. Never send a fictitious currency parameter.
+- Positive integer minor-unit inputs become major-unit JSON numbers; booleans, zero, negatives and fractional minor units are rejected before network dispatch.
+- Preserve payer/reference hints for both flat and nested webhook deposit envelopes.
+- Keep sandbox simulation PENDING until authenticated settled receipt. Preserve durable attempt markers so ambiguous retries cannot create another simulation automatically.
+- Reject malformed/oversized timestamp and non-hex signature headers with controlled 401 responses.
+
+These regression tests use simulated providers. They do not prove a successful live sandbox money action.

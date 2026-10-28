@@ -2,10 +2,21 @@
 import json
 import threading
 import time
+import pytest
 
 from ledgerline import webhooks
 
 from .conftest import OP
+
+
+@pytest.mark.parametrize("timestamp,signature", [
+    ("9" * 5000, "0" * 64), ("１２３", "0" * 64),
+    ("123", "非" * 64), ("123", "g" * 64), ("123", "0" * 63),
+])
+def test_malformed_signature_headers_are_controlled_rejections(timestamp, signature):
+    with pytest.raises(webhooks.WebhookRejected) as exc:
+        webhooks.verify_signature("test-only", timestamp, signature, b"{}", now_ms=123, tolerance_s=300)
+    assert exc.value.status == 401
 
 
 
@@ -37,6 +48,22 @@ def test_duplicate_event_id_is_ignored(client):
     assert _post(client, body).json()["status"] == "processed"
     assert _post(client, body).json()["status"] == "duplicate"
     assert len(client.get("/api/deposits").json()) == 1
+
+
+def test_nested_sandbox_webhook_uses_stored_payer_and_reference_hints(client):
+    from ledgerline import db
+    ctx = client.app.state.orgs.get(client.org_id)
+    with ctx.conn() as conn, db.transaction(conn):
+        conn.execute("INSERT INTO deposit_hints VALUES (?,?,?,?)",
+                     ("awx-nested", "ACME ROBOTICS INC", "INV-2240", "2026-10-28T00:00:00Z"))
+    event = json.loads(_event(ref="awx-nested", amount=2000, payer=None))
+    event['data'].pop('reference')
+    event['data'] = {'object': event['data']}
+    response = _post(client, json.dumps(event).encode())
+    assert response.status_code == 200, response.text
+    deposit = client.get(f"/api/deposits/{response.json()['deposit_id']}").json()
+    assert deposit['category'] == 'clean_match'
+    assert deposit['buckets']['allocated'] == 200_000
 
 
 def test_concurrent_duplicate_deliveries_apply_once(client):
