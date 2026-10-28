@@ -36,7 +36,18 @@ export function hashParam(name: string): string | null {
 
 export function useProviders() {
   const [p, setP] = useState<Providers | null>(null);
-  useEffect(() => { get<Providers>("/auth/providers").then(setP).catch(() => setP(null)); }, []);
+  useEffect(() => {
+    // A sleeping free-tier backend can fail the first request; retry for about a minute.
+    let alive = true;
+    let timer: number | undefined;
+    const load = (attempt: number) => {
+      get<Providers>("/auth/providers")
+        .then((v) => { if (alive) setP(v); })
+        .catch(() => { if (alive && attempt < 6) timer = window.setTimeout(() => load(attempt + 1), 10_000); });
+    };
+    load(0);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, []);
   return p;
 }
 
