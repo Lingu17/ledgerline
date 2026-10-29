@@ -29,3 +29,5 @@ Ordinary work without the walkthrough: create an organization with **An empty wo
 | Claude remittance reading | API key configured on Render; first actual call on 28 Oct 2026 refused for insufficient Anthropic credit. Successful live extraction is **not verified**. Workspaces without a key use labelled offline rules. |
 
 See `docs/INTEGRATION_EVIDENCE.md` for exactly what has and has not been verified.
+
+29Oct live-state correction: the earlier EUR5 approval APR-B40BC448 is invalidated after an operator credit decision (28Oct18:31UTC); it is no longer pending. A completed live refund needs a new valid case and independent real-member approval. Signed webhook delivery, successful credit-backed Claude extraction and scoped payment-link creation are still not verified at this checkpoint.

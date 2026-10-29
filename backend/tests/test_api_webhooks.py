@@ -50,6 +50,36 @@ def test_duplicate_event_id_is_ignored(client):
     assert len(client.get("/api/deposits").json()) == 1
 
 
+def test_actual_sandbox_millisecond_timestamps_ingest_once(client):
+    from ledgerline import db
+    event = json.loads(_event(amount=2000))
+    event['version'] = '2026-08-21'
+    event['data']['created_at'] = 1793209573460
+    event['data']['settled_at'] = 1793209574003
+    body = json.dumps(event).encode()
+    first = _post(client, body)
+    assert first.status_code == 200, first.text
+    assert first.json()['status'] == 'processed'
+    deposit = client.get(f"/api/deposits/{first.json()['deposit_id']}").json()
+    assert deposit['received_at'] == '2026-10-28T17:46:14Z'
+    assert deposit['buckets']['allocated'] == 200_000
+    assert _post(client, body).json()['status'] == 'duplicate'
+    ctx = client.app.state.orgs.get(client.org_id)
+    with ctx.conn() as conn:
+        assert db.row(conn, 'SELECT COUNT(*) AS n FROM webhook_events')['n'] == 1
+    assert client.get('/api/ledger').json()['conservation']['all_balanced']
+
+
+@pytest.mark.parametrize('value', [True, False, -1, 1793209574003.5, 10**100, None, {}, '2026-10-28T17:46:14'])
+def test_invalid_provider_timestamps_do_not_post_money(client, value):
+    event = json.loads(_event())
+    event['data']['settled_at'] = value
+    event['data'].pop('created_at')
+    response = _post(client, json.dumps(event).encode())
+    assert response.status_code == 400
+    assert client.get('/api/deposits').json() == []
+
+
 def test_nested_sandbox_webhook_uses_stored_payer_and_reference_hints(client):
     from ledgerline import db
     ctx = client.app.state.orgs.get(client.org_id)

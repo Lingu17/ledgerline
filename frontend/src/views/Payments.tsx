@@ -111,6 +111,7 @@ interface DepositDetail extends Deposit {
 function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const d = useLoad(() => get<DepositDetail>(`/deposits/${id}`), [id]);
   const { run, busy } = useAction();
+  const { can } = useAuth();
   const x = d.data;
   return (
     <Drawer
@@ -168,7 +169,10 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   {x.writeoffs.map((w) => <tr key={"w" + w.invoice_id}><td>Bank fee written off on {w.invoice_id} <span className="muted small">(invoice adjustment, not deposit cash)</span></td><td className="num"><Money minor={w.amount_minor} ccy={x.currency} /></td></tr>)}
                   {x.credits.map((c, i) => <tr key={"c" + i}><td>Credit for {c.customer_id}{c.earmark_invoice_id ? ` toward ${c.earmark_invoice_id}` : ""}</td><td className="num"><Money minor={c.amount_minor} ccy={x.currency} /></td></tr>)}
                   {x.payment_links.map((l) => (
-                    <tr key={l.id}><td>Balance request for {l.invoice_id} <Pill status={l.status === "sandbox_created" ? "matched" : "pending"} label={l.status === "sandbox_created" ? "Link created" : "Draft, not sent"} /><div className="secondary">{l.note}</div></td><td className="num"><Money minor={l.amount_minor} ccy={x.currency} /></td></tr>
+                    <tr key={l.id}><td>Balance request for {l.invoice_id} <Pill status={l.status === "sandbox_created" ? "matched" : "pending"} label={l.status === "sandbox_created" ? "Link created" : "Draft, not sent"} /><div className="secondary">{l.note}</div>
+                      {l.url?.startsWith("https://") && <a href={l.url} target="_blank" rel="noopener noreferrer">Open Airwallex payment link</a>}
+                      {can("owner") && x.source.startsWith("airwallex_sandbox") && l.status === "local_draft" && <button className="btn small" disabled={!!busy} onClick={() => run(`link-${l.id}`, () => post(`/integrations/sandbox/payment-links/${l.id}/publish`), (r: any) => r.status === "sandbox_created" ? "Sandbox link created; nothing emailed" : r.note)}>Try sandbox payment link</button>}
+                    </td><td className="num"><Money minor={l.amount_minor} ccy={x.currency} /></td></tr>
                   ))}
                 </tbody>
               </table>

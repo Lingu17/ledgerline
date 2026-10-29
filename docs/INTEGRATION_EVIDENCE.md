@@ -49,3 +49,11 @@ Read the historical evidence above with its source boundary. No new sandbox bank
 - Known-receipt fallback uses `GET /deposits/{id}`, checks actual SETTLED status, account/currency/amount binding and ingests idempotently. It is not a generic `GET /deposits` discovery feed or scheduled poller.
 - Fresh Neon review branch `ledgerline-review-20261029` / `br-royal-rice-aocrqdzc` is schema-only (no production rows), direct endpoint/pooling off, free plan; automatically expires30Oct2026 at13:04IST. Fresh suite result is pending secure test-URL setup. Do not reuse the expired28Oct branch. CI PostgreSQL17 is separate primary DB evidence; current Neon project reports PostgreSQL18.
 - Credentials/provider sign-in remain user-entered. Existing app/Airwallex browser sessions expired; sign-in requested. No source-sharing change, purchase or HackerEarth save/submit occurred.
+
+### Live state correction and payload diagnosis — 29 October
+
+The signed-in owner Approvals page shows APR-B40BC448 **invalidated**, reason “deposit changed: plan v2”; the Activity feed dates this to28Oct18:31UTC when DEP-377ABD25B9 was resolved as customer credit. There is no pending approval to approve. No transfer was created. A second real member joined29Oct, but must approve a new valid refund case themselves; the old scope must not be restored.
+
+Airwallex Developer → Events showed the actual first deposit event Queued, HTTP-status field “-”, and a payload with settled_at/created_at as integer Unix milliseconds. This explains the parser's refusal of that payload shape. It does not establish a new delivery. The parser fix has local signed-ingestion/dedupe/invalid-timestamp tests; external receipt still needs fresh delivery evidence after deployment.
+
+The organizer's HackerEarth discussion reply states Claude credits/guidance will be shared with shortlisted teams in the Build Phase; no redemption link was visible. No purchase made. Successful extraction remains unverified.

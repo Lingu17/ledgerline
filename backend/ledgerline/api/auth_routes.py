@@ -308,6 +308,16 @@ def sandbox_deposits_sync(request: Request, p: Principal = Depends(require_role(
         raise HTTPException(409, str(exc)) from exc
 
 
+@router.post('/integrations/sandbox/payment-links/{link_id}/publish')
+def sandbox_payment_link(request: Request, link_id: str, p: Principal = Depends(require_role('owner'))):
+    from ..payment_links import publish
+    ctx = _sandbox_context(request, p)
+    try:
+        return publish(ctx, link_id, p.actor)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 def auth_error_handler(_request: Request, exc: AuthError):
     from fastapi.responses import JSONResponse
 

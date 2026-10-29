@@ -28,7 +28,7 @@ See INTEGRATION_EVIDENCE.md for amounts and redacted provider ids. Settlements a
 - EUR1.23 → INV-2301 and EUR4,000 → INV-2302 settled and exact-matched; ledger balanced.
 - OP-CBAA2582 converted EUR1,811.36 → GBP1,501.00 and settled. EUR2,000 reserve kept; GBP1,500 reserve met; same-quote retry refused409; ledger balanced.
 - EUR12.50 vague-reference deposit DEP-C63DAB2722 escalated. Real Claude request refused for insufficient credit. Operator then allocated manually to INV-2303 with a written note.
-- EUR5 deposit DEP-377ABD25B9 escalated; return-to-sender approval APR-B40BC448 remains pending a second real operator/owner. Do not fabricate accounts or approvers. User must invite a second email they control and approve themselves. Then execute once, drive sandbox SENT then PAID, prove liability retained at SENT/released only at PAID and no duplicate transfer.
+- EUR5 deposit DEP-377ABD25B9 escalated; return-to-sender approval APR-B40BC448 was pending on28Oct at18:04UTC, but the live29Oct review found it invalidated on28Oct18:31UTC after the owner resolved the deposit as credit (planv2). It cannot be approved or executed. Do not fabricate accounts or approvers. A second real member has joined the workspace (29Oct audit). A new valid refund case must be proposed and that member must approve themselves. Then execute once, drive sandbox SENT then PAID, prove liability retained at SENT/released only at PAID and no duplicate transfer.
 - Signed webhook delivery unverified. A historical real deposit callback returned400; do not weaken HMAC validation or trust caller-supplied secret headers. Inspect actual provider delivery and payload, then prove Render receipt, webhook_events row and replay dedupe; a saved subscription is not delivery proof.
 - Payment-link capability unverified; attempt scoped sandbox API once for an actual partial balance. Display only a provider-returned URL or an explicitly labelled draft fallback.
 
@@ -39,7 +39,7 @@ See INTEGRATION_EVIDENCE.md for amounts and redacted provider ids. Settlements a
 - a4c9f2c: local254passed9skipped recorded by Claude. Treat CI at finalSHA as release evidence.
 - Accuracy harness:6287 checks,1064payments,508invoices,25companies/5walkthroughs, zero mismatches. This is synthetic reference-model evidence, not6287 live bank calls.
 - Old isolated Neon12/12 in1574.55s is historical. Later branch-expiry rerun:8passed5failed1error,17.5min; endpoint disappeared. It is not a pass or an established code defect. Earlier wholeNeon suite stopped after3/232; not a completed pass.
-- Fresh schema-only review branch created29Oct: `ledgerline-review-20261029`, `br-royal-rice-aocrqdzc`, direct pooling off, automatic deletion30Oct2026 13:04IST. User must place its direct URL in gitignored backend/.env.test; never reuse expired endpoint. Run tests/test_postgres.py to completion on this isolated branch only, record result/duration. CI PostgreSQL17 remains primary DB evidence; Neon production reports PostgreSQL18.
+- Fresh schema-only review branch created29Oct: `ledgerline-review-20261029`, `br-royal-rice-aocrqdzc`, direct pooling off, automatic deletion30Oct2026 13:04IST. The user authorized private setup; its direct URL was saved only in gitignored backend/.env.test, with no credential output. tests/test_postgres.py is running to completion on this branch; record result/duration before claiming a pass. CI PostgreSQL17 remains primary DB evidence; Neon production reports PostgreSQL18.
 
 ## Explicit proposal limitations
 
@@ -59,3 +59,10 @@ See INTEGRATION_EVIDENCE.md for amounts and redacted provider ids. Settlements a
 6. Repository is private; ask user to arrange judge access or approve public visibility. User records demo video. OAuthTesting-mode audience may restrict judges. No HackerEarth submission authorized.
 
 RESUME.md was folded into this handoff and removed on29Oct because its top checkpoint predated the observed sandbox deposit/FX actions. Prefer dated evidence here and INTEGRATION_EVIDENCE over older chat checkpoints. No active owned test process at this checkpoint. Monitoring is paused; do not claim continuous background work.
+
+## 29 October code review in progress
+
+- Actual Airwallex event inspection found integer Unix-millisecond resource timestamps (API version2026-08-21). Parser now supports validated integer milliseconds and zoned ISO8601, rejecting booleans, fractional/out-of-range epochs and malformed/missing zones. HMAC/raw-body and dedupe remain unchanged.
+- Added owner-only, server-allowlisted per-draft sandbox payment-link publishing. Validates current exact outstanding invoice balance; claims before provider dispatch; no automatic retry after refusal/unknown outcome. UI displays only HTTPS URLs actually returned by the provider, otherwise a labelled draft.
+- Replaced the stale paid Starter/disk render.yaml example with Free/external direct PostgreSQL, required-database guard, main-branch/checksPass target and secret placeholders preserving existing values. Public Render JSON-schema validation passed. No Blueprint was applied and no infrastructure was created by this change.
+- Focused tests41/41 passed in14.15s; frontend TypeScript/Vite build passed. Final code CI/deployment verification still required. Source comparison and existing secrets must remain intact.

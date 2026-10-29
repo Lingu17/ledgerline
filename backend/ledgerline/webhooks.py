@@ -12,6 +12,7 @@ import hmac
 import json
 import re
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import audit, db
@@ -80,12 +81,17 @@ def _parse_deposit(event: dict[str, Any], hints: dict[str, Any] | None = None) -
     if amount_minor <= 0:
         raise WebhookRejected(400, "deposit amount must be positive")
     settled = data.get("settled_at") or data.get("created_at")
-    if not isinstance(settled, str):
-        raise WebhookRejected(400, "data.settled_at must be an ISO 8601 string")
     try:
-        received_at = iso(parse_iso(settled))
-    except ValueError as exc:
-        raise WebhookRejected(400, f"data.settled_at is not ISO 8601: {settled!r}") from exc
+        if isinstance(settled, str):
+            received_at = iso(parse_iso(settled))
+        elif type(settled) is int and 0 <= settled <= 253402300799999:
+            # Actual Airwallex 2026-08-21 deposit events carry Unix milliseconds.
+            # Integer arithmetic avoids float rounding and rejects booleans/fractions.
+            received_at = iso(datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(milliseconds=settled))
+        else:
+            raise ValueError('expected zoned ISO 8601 or integer Unix milliseconds')
+    except (ValueError, OverflowError) as exc:
+        raise WebhookRejected(400, "data.settled_at must be zoned ISO 8601 or valid integer Unix milliseconds") from exc
     payer = data.get("payer")
     if payer is not None and not isinstance(payer, dict):
         raise WebhookRejected(400, "data.payer must be an object when present")

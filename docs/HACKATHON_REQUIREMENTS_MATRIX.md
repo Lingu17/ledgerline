@@ -79,3 +79,5 @@ Checked against [developer lab](https://airwallexdev.com/), [builder guide](http
 - Transfers/conversions use exact major-unit strings and stable request IDs; approval, reserve, pause and finality rules stay in code.
 - New regressions cover nested webhook hints, invalid amounts, wrong/ambiguous account currencies and pending/ambiguous deposit simulations. Provider mocks prove code behavior, not live Airwallex acceptance.
 - Full compliance is not certified: generic deposit discovery/background polling, beneficiary creation, direct PDF ingestion, current-rate display, successful model extraction, completed live refund and signed webhook delivery remain open. Known-receipt polling and sandbox deposits/FX have live evidence. The user records the demo video.
+
+29Oct live-state correction: the earlier EUR5 approval APR-B40BC448 is invalidated after an operator credit decision (28Oct18:31UTC); it is no longer pending. A completed live refund needs a new valid case and independent real-member approval. Signed webhook delivery, successful credit-backed Claude extraction and scoped payment-link creation are still not verified at this checkpoint.
