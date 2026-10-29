@@ -11,7 +11,7 @@ Do not save or submit on HackerEarth from this file automatically; the user subm
 
 **Parent submission:** the shortlisted idea "Ledgerline: when a payment doesn't match, my agent asks the payer's agent" (Registration & Idea Phase).
 
-**Live app:** https://ledgerline-black-iota.vercel.app
+**Live app:** https://35-207-220-110.sslip.io
 **Repository:** https://github.com/Lingu17/ledgerline (private; owner must arrange judge access or explicitly approve public visibility before submission)
 
 **Description (draft):**

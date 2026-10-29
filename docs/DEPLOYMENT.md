@@ -108,3 +108,11 @@ backend\.venv\Scripts\python scripts\smoke_deploy.py https://<vercel origin> --v
 ```
 
 The state file contains a throwaway test password; keep it outside the repository.
+
+## Google Cloud single host (used for the live app)
+
+1. Create a VM (e2-small, Ubuntu 24.04, 20 GB balanced disk, allow HTTP/HTTPS, reserve a static IP, add the deploy public SSH key).
+2. Private repository: `git bundle create ledgerline.bundle HEAD <branch>`; `scp` it and `deploy/vm/setup.sh` to the VM; `sudo install -m 644 ledgerline.bundle /srv/ledgerline.bundle`.
+3. `sudo LEDGERLINE_REPO=/srv/ledgerline.bundle bash setup.sh <A-B-C-D>.sslip.io self <commit>`: builds the site, serves site + API from one origin over HTTPS, stores data on the VM disk.
+4. Updates: copy a new bundle to `/srv/ledgerline.bundle`, then `sudo bash /opt/ledgerline/src/deploy/vm/update.sh <commit>`.
+5. Keys: `sudo nano /etc/ledgerline/ledgerline.env` (AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY, ANTHROPIC_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, LEDGERLINE_SANDBOX_ORGS), then `sudo systemctl restart ledgerline`.

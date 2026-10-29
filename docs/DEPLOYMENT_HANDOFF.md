@@ -1,5 +1,13 @@
 # Ledgerline deployment handoff
 
+## Google Cloud single host (29 Oct 2026, Claude) — current recommended deployment
+
+- **Live URL: https://35-207-220-110.sslip.io** (website, API and database on one always-on server; no cold start).
+- VM `ledgerline`, project `project-0b143378-307b-4214-818`, zone asia-south1-a (Mumbai), e2-small (2 vCPU, 2 GB), Ubuntu 24.04 LTS, 20 GB balanced disk, Standard network tier, static IP `ledgerline-ip` = 35.207.220.110. Console estimate $17.09/month plus the static IP, paid from the Free Trial credits (₹28,797, ends 28 Jan 2027; the VM stops then unless the account is upgraded). No paid upgrade was made.
+- Deployed with `deploy/vm/setup.sh 35-207-220-110.sslip.io self <commit>` (single-host mode: frontend built with Node 22 and served by the API; Caddy automatic HTTPS; Caddy trusts no upstream proxy and `LEDGERLINE_TRUSTED_PROXY_HOPS=1`; SQLite + payer-agent keys in `/var/lib/ledgerline` on the persistent boot disk; nightly backups). The repository is private, so code is delivered as a git bundle over SSH (`git bundle create ledgerline.bundle HEAD deploy/vercel-render`, copied to `/srv/ledgerline.bundle`, `LEDGERLINE_REPO=/srv/ledgerline.bundle`). Deployed commit `23ba6cab406f`.
+- Observed: `/api/health` ok, `storage: persistent mount`; client address resolved to the real browser address and a forged `X-Forwarded-For` was ignored; `scripts/smoke_deploy.py` **32/32**; real VM reboot (boot id `937d4f03…` → `c6b952ab…`, services active on boot) then `--verify` **8/8** (account, invoice balance, payment decision, ledger, refund lifecycle, payer signing keys); redeploy with `update.sh 23ba6cab406f` then `--verify` **8/8**.
+- Not yet configured on the VM: Airwallex, Anthropic and Google OAuth credentials (user enters them in `/etc/ledgerline/ledgerline.env`, then `sudo systemctl restart ledgerline`); Google OAuth redirect URI for the new host; a new operator organization for the Airwallex allowlist and webhook. The old Vercel + Render + Neon deployment is still running and unchanged.
+
 Updated 29 October 2026. Deadline: 13 November 2026, 23:59 IST. No HackerEarth create/save/submit or public posts.
 
 ## Observed application release

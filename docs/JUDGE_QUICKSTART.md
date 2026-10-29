@@ -3,9 +3,9 @@
 Updated 29 October 2026: verified runtime `98d6ad4653aa3701b38a81577650377f2ad30792`, CI 40839628066 all five jobs passed. Actual signed Airwallex deposit delivery and fresh EUR5 refund processing→SENT→PAID completed; liability/conservation verified. Payment-link request refused HTTP 401 (honest draft); provider external replay returned success:false. Successful Claude extraction waits for credit (user expects it in one day). Fresh isolated Neon 13/13 passed in 1,629.50s at baseline 6c43626; final-code CI PostgreSQL 17 is primary evidence. Final main-branch deployed SHAs/smoke/restart will be recorded separately after release.
 
 
-**Live app:** https://ledgerline-black-iota.vercel.app
+**Live app:** https://35-207-220-110.sslip.io (always on). Earlier free-tier deployment: https://ledgerline-black-iota.vercel.app
 
-Free hosting: the backend sleeps when idle, so the **first request can take about a minute**. If you see "server is not reachable", wait a moment and retry.
+The main link runs on an always-on server (no wake-up delay). The older free-tier link can take about a minute on its first request.
 
 ## Five-minute path
 
