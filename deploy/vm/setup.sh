@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # One-time (and re-runnable) setup of the Ledgerline API on a free Ubuntu VM, e.g. Oracle Cloud Always Free.
 #
-#   sudo bash setup.sh <public-hostname> <frontend-origin> [git-ref]
-#   sudo bash setup.sh 203-0-113-7.sslip.io https://ledgerline.vercel.app main
+#   sudo bash setup.sh <public-hostname> <frontend-origin|self> [git-ref]
+#   sudo bash setup.sh 203-0-113-7.sslip.io https://ledgerline.vercel.app main   # API behind a Vercel frontend
+#   sudo bash setup.sh 34-100-1-2.sslip.io self <commit>                         # single host: site + API + data
 #
 # Result: Ledgerline runs as a systemd service on 127.0.0.1:8000 as an unprivileged user, Caddy serves it on
 # https://<public-hostname> with an automatic Let's Encrypt certificate, and all data (control database,
@@ -21,6 +22,9 @@ PY=3.14.8
 
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
+
+MODE=edge
+if [[ $FRONTEND_ORIGIN == self ]]; then MODE=single; FRONTEND_ORIGIN="https://$HOST"; fi
 
 echo "== packages"
 apt-get update -q
@@ -54,6 +58,15 @@ sudo -u ledgerline env UV_PYTHON_INSTALL_DIR="$APP/python" uv python install "$P
 sudo -u ledgerline env UV_PYTHON_INSTALL_DIR="$APP/python" uv venv -q --allow-existing --python "$PY" "$APP/venv"
 sudo -u ledgerline env VIRTUAL_ENV="$APP/venv" uv pip install -q -r "$APP/src/backend/requirements-lock.txt"
 
+if [[ $MODE == single ]]; then
+  echo "== frontend build (Node 22): the API serves frontend/dist on the same origin"
+  if ! command -v node >/dev/null || [[ $(node -v | cut -c2- | cut -d. -f1) -lt 22 ]]; then
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null && apt-get install -y -q nodejs
+  fi
+  (cd "$APP/src/frontend" && sudo -u ledgerline env HOME="$APP" npm ci --no-audit --no-fund --loglevel=error && sudo -u ledgerline env HOME="$APP" npm run build)
+  test -f "$APP/src/frontend/dist/index.html" || { echo "FAILED: frontend build produced no dist/index.html" >&2; exit 1; }
+fi
+
 echo "== configuration ($ENV_FILE)"
 install -d -m 750 -o root -g ledgerline /etc/ledgerline
 if [[ ! -f $ENV_FILE ]]; then
@@ -64,9 +77,9 @@ LEDGERLINE_DATA_DIR=$DATA
 # The boot volume of a VM is persistent block storage; the guard checks the data dir is on it.
 LEDGERLINE_REQUIRE_PERSISTENT_MOUNT=/
 LEDGERLINE_COOKIE_SECURE=1
-# Browser -> Vercel edge -> Caddy -> app
-LEDGERLINE_TRUSTED_PROXY_HOPS=2
-LEDGERLINE_ALLOWED_ORIGINS=$FRONTEND_ORIGIN,https://$HOST
+# edge: Browser -> Vercel edge -> Caddy -> app (2); single: Browser -> Caddy -> app (1)
+LEDGERLINE_TRUSTED_PROXY_HOPS=$([[ $MODE == single ]] && echo 1 || echo 2)
+LEDGERLINE_ALLOWED_ORIGINS=$([[ $MODE == single ]] && echo "https://$HOST" || echo "$FRONTEND_ORIGIN,https://$HOST")
 LEDGERLINE_PUBLIC_URL=$FRONTEND_ORIGIN
 LEDGERLINE_LOG_LEVEL=INFO
 LEDGERLINE_ALLOW_SIGNUP=1
@@ -77,12 +90,14 @@ ANTHROPIC_API_KEY=
 EOF
 fi
 chown root:ledgerline "$ENV_FILE" && chmod 640 "$ENV_FILE"
+echo "$MODE" > /etc/ledgerline/mode
 
 echo "== services"
 install -m 644 "$APP/src/deploy/vm/ledgerline.service" /etc/systemd/system/ledgerline.service
 install -m 644 "$APP/src/deploy/vm/ledgerline-backup.service" /etc/systemd/system/ledgerline-backup.service
 install -m 644 "$APP/src/deploy/vm/ledgerline-backup.timer" /etc/systemd/system/ledgerline-backup.timer
-sed "s/__HOST__/$HOST/" "$APP/src/deploy/vm/Caddyfile" > /etc/caddy/Caddyfile
+CADDY_SRC="$APP/src/deploy/vm/Caddyfile"; [[ $MODE == single ]] && CADDY_SRC="$APP/src/deploy/vm/Caddyfile.single"
+sed "s/__HOST__/$HOST/" "$CADDY_SRC" > /etc/caddy/Caddyfile
 systemctl daemon-reload
 systemctl enable --now ledgerline.service ledgerline-backup.timer
 systemctl restart ledgerline.service

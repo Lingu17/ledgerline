@@ -2,3 +2,4 @@
 *.service text eol=lf
 *.timer text eol=lf
 deploy/vm/Caddyfile text eol=lf
+deploy/vm/Caddyfile.single text eol=lf

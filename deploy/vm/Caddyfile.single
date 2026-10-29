@@ -1,0 +1,15 @@
+# Single-host mode: browsers connect to Caddy directly. No upstream proxy is trusted, so Caddy replaces any
+# client-sent X-Forwarded-For with the real client address and the app trusts exactly one hop.
+__HOST__ {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; form-action 'self' https://accounts.google.com https://appleid.apple.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8000
+}
