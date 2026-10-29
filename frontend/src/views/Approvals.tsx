@@ -4,13 +4,15 @@ import { Card, Checks, Empty, ErrorNote, Loading, Modal, Money, Pill, useAction,
 import { money, when } from "../format";
 import { useAuth } from "../auth";
 
-export function Approvals({ localMode }: { localMode: boolean }) {
+export function Approvals({ localMode, sandboxMode = false }: { localMode: boolean; sandboxMode?: boolean }) {
   const approvals = useLoad(() => get<Approval[]>("/approvals"), []);
   const ops = useLoad(() => get<Operation[]>("/operations"), []);
   const { run, busy } = useAction();
   const [confirm, setConfirm] = useState<{ a: Approval; approve: boolean } | null>(null);
   const { can, me } = useAuth();
   const op = can("operator");
+  const canSimulate = localMode || (sandboxMode && can("owner"));
+  const simulationLabel = localMode ? "Simulate" : "Sandbox API";
 
   const pending = approvals.data?.filter((a) => a.status === "pending") ?? [];
   const ready = approvals.data?.filter((a) => a.status === "approved") ?? [];
@@ -71,16 +73,16 @@ export function Approvals({ localMode }: { localMode: boolean }) {
                         {["processing", "sent", "pending"].includes(o.status) && (
                           <button className="btn small" disabled={!!busy} onClick={() => run("sync" + o.id, () => post(`/operations/${o.id}/sync`), "Checked with provider")}>Check status</button>
                         )}
-                        {localMode && o.kind === "refund" && o.provider_id && o.status === "processing" && (
-                          <button className="btn small" disabled={!!busy} title="Local workspace only: the simulated bank reports the transfer as sent"
-                            onClick={() => run("sim" + o.id, () => post(`/operations/${o.id}/simulate-bank`, { next_status: "SENT" }), "Simulated bank: SENT")}>Simulate: sent</button>
+                        {canSimulate && o.kind === "refund" && o.provider_id && o.status === "processing" && (
+                          <button className="btn small" disabled={!!busy} title={localMode ? "Local simulated bank" : "Calls Airwallex sandbox transfer transition API; no real money"}
+                            onClick={() => run("sim" + o.id, () => post(`/operations/${o.id}/simulate-bank`, { next_status: "SENT" }), `${simulationLabel}: SENT`)}>{simulationLabel}: sent</button>
                         )}
-                        {localMode && o.kind === "refund" && o.provider_id && o.status === "sent" && (
+                        {canSimulate && o.kind === "refund" && o.provider_id && o.status === "sent" && (
                           <>
-                            <button className="btn small" disabled={!!busy} title="Local workspace only"
-                              onClick={() => run("sim" + o.id, () => post(`/operations/${o.id}/simulate-bank`, { next_status: "PAID" }), "Simulated bank: PAID")}>Simulate: paid</button>
-                            <button className="btn small danger" disabled={!!busy} title="Local workspace only"
-                              onClick={() => run("sim" + o.id, () => post(`/operations/${o.id}/simulate-bank`, { next_status: "FAILED" }), "Simulated bank: FAILED")}>Simulate: failed</button>
+                            <button className="btn small" disabled={!!busy} title={localMode ? "Local simulated bank" : "Calls Airwallex sandbox transfer transition API; no real money"}
+                              onClick={() => run("sim" + o.id, () => post(`/operations/${o.id}/simulate-bank`, { next_status: "PAID" }), `${simulationLabel}: PAID`)}>{simulationLabel}: paid</button>
+                            {localMode && <button className="btn small danger" disabled={!!busy} title="Local workspace only"
+                              onClick={() => run("sim" + o.id, () => post(`/operations/${o.id}/simulate-bank`, { next_status: "FAILED" }), "Simulated bank: FAILED")}>Simulate: failed</button>}
                           </>
                         )}
                       </div>}

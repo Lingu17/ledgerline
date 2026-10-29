@@ -443,7 +443,11 @@ def sync(request: Request, op_id: str, operator: str = Depends(require_operator)
 
 @router.post("/operations/{op_id}/simulate-bank")
 def simulate_bank(request: Request, op_id: str, body: SimStatus, operator: str = Depends(require_operator)) -> dict[str, Any]:
-    return payouts.simulate_bank_status(ctx_of(request), op_id, body.next_status)
+    ctx = ctx_of(request)
+    if ctx.provider.name == 'airwallex_sandbox':
+        if request.state.principal.role != 'owner' or not request.app.state.settings.sandbox_allowed(ctx.org['id']):
+            raise HTTPException(403, 'sandbox transfer simulation is restricted to the allowlisted owner')
+    return payouts.simulate_bank_status(ctx, op_id, body.next_status)
 
 
 @router.post("/operations/{op_id}/cancel")

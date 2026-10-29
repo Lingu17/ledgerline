@@ -159,6 +159,33 @@ def test_sent_is_not_final_and_liability_stays_until_paid(ready):
     assert gbp["refunds_pending"] == 0 and gbp["refunds_paid"] == 480_000 and gbp["balanced"]
 
 
+def test_simulation_cannot_skip_sent_or_repeat_final_state(ready, monkeypatch):
+    aid = _approve(ready)
+    op = payouts.execute_refund(ready, aid, 'op')['operation']
+    calls = []
+    real_transition = ready.provider.simulate_transfer_status
+    def transition(*args):
+        calls.append(args)
+        return real_transition(*args)
+    monkeypatch.setattr(ready.provider, 'simulate_transfer_status', transition)
+    with pytest.raises(payouts.PayoutError, match='SENT'):
+        payouts.simulate_bank_status(ready, op['id'], 'PAID')
+    assert calls == []
+    payouts.simulate_bank_status(ready, op['id'], 'SENT')
+    payouts.simulate_bank_status(ready, op['id'], 'PAID')
+    with pytest.raises(payouts.PayoutError, match='SENT'):
+        payouts.simulate_bank_status(ready, op['id'], 'PAID')
+    assert len(calls) == 2 and ready.local_bank.count_transfers() == 1
+
+
+def test_unallowlisted_sandbox_simulation_is_refused(client, app):
+    from types import SimpleNamespace
+    ctx = app.state.orgs.get(client.org_id)
+    ctx.provider = SimpleNamespace(name='airwallex_sandbox')
+    response = client.post('/api/operations/OP-not-a-transfer/simulate-bank', json={'next_status': 'SENT'})
+    assert response.status_code == 403
+
+
 def test_failed_after_send_returns_funds_to_unapplied(ready):
     aid = _approve(ready)
     op = payouts.execute_refund(ready, aid, "op")["operation"]

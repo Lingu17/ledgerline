@@ -212,7 +212,7 @@ function Shell({ me }: { me: Me }) {
         <main className="content" id="main">
           {page === "inbox" && <Inbox />}
           {page === "payments" && <Payments route={route} />}
-          {page === "approvals" && <Approvals localMode={localMode} />}
+          {page === "approvals" && <Approvals localMode={localMode} sandboxMode={s?.bank.mode === "airwallex_sandbox"} />}
           {page === "evidence" && <EvidenceView route={route} />}
           {page === "treasury" && <Treasury localMode={localMode} />}
           {page === "ledger" && <Ledger />}

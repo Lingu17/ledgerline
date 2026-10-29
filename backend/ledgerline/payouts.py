@@ -363,6 +363,9 @@ def simulate_bank_status(ctx: AppContext, op_id: str, next_status: str) -> dict[
         op = db.row(conn, "SELECT * FROM operations WHERE id = ?", (op_id,))
     if op is None or not op["provider_id"]:
         raise PayoutError("operation has no provider transfer yet")
+    allowed = {'processing': {'SENT', 'FAILED'}, 'sent': {'PAID', 'FAILED'}}
+    if op['kind'] != 'refund' or next_status not in allowed.get(op['status'], set()):
+        raise PayoutError('simulation must move a processing refund to SENT, then a sent refund to PAID or FAILED')
     ctx.provider.simulate_transfer_status(op["provider_id"], next_status)
     return sync_operation(ctx, op_id)
 
