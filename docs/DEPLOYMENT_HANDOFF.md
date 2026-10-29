@@ -1,68 +1,51 @@
 # Ledgerline deployment handoff
 
-Updated 29 October 2026. Continue on `deploy/vercel-render` until the final reviewed release is merged into `main`. Deadline: 13 November 2026, 23:59 IST. Never save or submit on HackerEarth.
+Updated 29 October 2026. Deadline: 13 November 2026, 23:59 IST. No HackerEarth create/save/submit or public posts.
 
-## Infrastructure and immutable constraints
+## Observed application release
 
-- Live frontend: https://ledgerline-black-iota.vercel.app (Vercel Hobby, root `frontend`).
-- Existing backend: Render FREE Singapore `ledgerline-api`, `srv-dbgad6ijnfac73fo2e1g`, https://ledgerline-api-4dt3.onrender.com.
-- Database: Neon FREE project `ledgerline` (`red-grass-80303368`), direct TLS endpoint; no `-pooler` or transaction pooling.
-- Never change `LEDGERLINE_SECRET_KEY`: it encrypts durable payer signing identities. No credentials in chat, logs or Git; user enters credentials and provider logins.
-- No paid resources, duplicate services, Supabase changes, PC tunnels or public posts. Four-eyes, scoped approval, reserves, pause, idempotency and SENT-versus-PAID remain enforced.
-- Free services can sleep; cold-start failures have been observed. Always-on/permanent-free hosting is not guaranteed.
+- Live: https://ledgerline-black-iota.vercel.app (Vercel Hobby) → existing Render FREE Singapore ledgerline-api (`srv-dbgad6ijnfac73fo2e1g`) → Neon FREE direct TLS PostgreSQL. No transaction pooler, paid disk, duplicate infrastructure or PC tunnel.
+- Backend and frontend were independently confirmed live/READY at `98d6ad4653aa3701b38a81577650377f2ad30792` before this documentation update. [CI 40839628066](https://github.com/Lingu17/ledgerline/actions/runs/40839628066) passed all five jobs: Linux/Windows backend, PostgreSQL 17, browser E2E and frontend.
+- Public health returned HTTP 200, storage postgresql, edge_proof valid. Prior public smoke/restart evidence is historical; repeat after final main-branch deployment.
+- This documentation commit follows that verified runtime. Final release procedure below records its own final deployed SHAs and CI, without treating older evidence as final-release proof.
 
-## Current observed state (29 October)
+## Completed live sandbox work — 29 October
 
-- Source HEAD at continuation: `6a7a2f96b42e02918a66e10944b404ed43135205`; latest application change `a4c9f2c` fixes locally enforced single-use FX quotes (Airwallex returns MULTI_USE quotes).
-- Connector observations: Vercel production READY at `6a7a2f96b42e02918a66e10944b404ed43135205`; Render live deploy `dep-dbh3kt0n74is73bhff60` at `540dd93dfca1e13b1874e272b8e234513f268d30`. These differ; do not call them the final aligned release.
-- GitHub run40746046892 for `6a7a2f9` reports completed/success. The final release still needs independently inspected five-job results at its final SHA.
-- Ledgerline and Airwallex browser sessions require the user to sign in again. Do not sign in to providers for the user.
-- Google is configured and a real user login/onboarding was observed on28Oct. OAuth Testing mode may restrict judge accounts; email/password signup remains available. Apple is hidden by user choice.
-- Airwallex credentials, one-organization sandbox allowlist and dedicated EUR account are saved; webhook secret was saved under an earlier specifically approved private transfer. No further secret transfer is authorized or needed.
-- Anthropic key is configured. The first actual read-remittance request was refused for insufficient credit; no successful extraction, stored proposal or resulting AI allocation is claimed.
+- Actual provider event inspection found integer Unix-millisecond resource timestamps in API version 2026-08-21. Fixed ISO-only parsing; raw-byte HMAC and dedupe unchanged. Booleans/fractions/out-of-range epochs and unzoned timestamps are refused. Focused webhook/receipt/link tests 41/41 passed; frontend build passed.
+- Fresh EUR1.23 receipt for INV-2304 arrived through actual signed webhook (not polling): Render HTTP 200 at07:52:52UTC, instancegqfv9. Provider event f59fe557-…_deposit.settled showed Succeeded/HTTP 200. Neon read-only query returned one webhook_events row, result processed. Local DEP-E2CC08C928 allocated EUR1.23 against EUR2.00; EUR0.77 remains due.
+- Provider external replay was requested, but Airwallex's retriggerWebhookWebapp returned success:false, no listed errors. No second callback or duplicate_ignored row was observed. External replay proof remains incomplete. Local signed replay tests and CI/Neon concurrent dedupe are separate evidence; never claim they are a second Airwallex delivery.
+- Real POST /pa/payment_links/create for INV-2304's exact EUR0.77 balance returned HTTP401 unauthorized. Labelled draft retained; no invented URL, no email, no automatic retry. New owner-only/allowlisted publisher claims each draft before dispatch and refuses changed balances.
+- APR-B40BC448 was already invalidated28 Oct18:31UTC when DEP-377ABD25B9 became customer credit. Its old pending handoff was stale. Kept that EUR5 credit intact.
+- User approved a fresh EUR5 sandbox case, DEP-A5772C9AEC (REFUND-VERIFY-20261029), received by signed webhook. New APR-8B78F0CB approved by the user's second real member29 Oct08:00UTC; proposer and approver differ. No account was created by the agent.
+- Executed once: OP-37093F21, request23d22f6c-…, provider transfera9f8a91f-…. Processing08:01UTC → SENT08:07UTC → PAID08:08UTC through real sandbox transition API and provider reads. SENT retained EUR5 refund payable/refund_pending and EUR0 refunded. PAID released payable to0 and recorded EUR5 refunded. Airwallex list showed exactly one paid EUR5 transfer with this reference; detail request id matched.
+- All currencies balanced. EUR conservation after PAID: deposits4,024.96 = applied4,014.96 + credits5.00 + refunds paid5.00 + refunds pending0 + unapplied0. Earlier EUR5 customer credit retained. Owner-only sandbox transition controls enforce processing→SENT→PAID before dispatch; terminal repeats refused. Refund/security regressions 70/70 passed in 29.42s; frontend build passed. Tests overlap with other focused sets; do not add counts as unique tests.
 
-## Actual sandbox banking evidence (28 October)
+## Earlier observed banking actions — 28 October
 
-See INTEGRATION_EVIDENCE.md for amounts and redacted provider ids. Settlements arrived by authenticated polling, not verified signed delivery.
+- EUR1.23/INV-2301 and EUR4,000/INV-2302 settled via authenticated polling and exact-matched.
+- OP-CBAA2582 settled EUR1,811.36→GBP1,501.00. EUR2,000 reserve kept; GBP1,500 reserve met; quote reuse refused 409. Airwallex returns MULTI_USE quotes; local single-use enforcement was fixed in a4c9f2c.
+- EUR12.50 vague-reference DEP-C63DAB2722 escalated. First actual Claude call reached Anthropic but was refused for insufficient credit; no evidence stored/applied. Owner subsequently allocated it manually to INV-2303 with a written note.
 
-- EUR1.23 → INV-2301 and EUR4,000 → INV-2302 settled and exact-matched; ledger balanced.
-- OP-CBAA2582 converted EUR1,811.36 → GBP1,501.00 and settled. EUR2,000 reserve kept; GBP1,500 reserve met; same-quote retry refused409; ledger balanced.
-- EUR12.50 vague-reference deposit DEP-C63DAB2722 escalated. Real Claude request refused for insufficient credit. Operator then allocated manually to INV-2303 with a written note.
-- EUR5 deposit DEP-377ABD25B9 escalated; return-to-sender approval APR-B40BC448 was pending on28Oct at18:04UTC, but the live29Oct review found it invalidated on28Oct18:31UTC after the owner resolved the deposit as credit (planv2). It cannot be approved or executed. Do not fabricate accounts or approvers. A second real member has joined the workspace (29Oct audit). A new valid refund case must be proposed and that member must approve themselves. Then execute once, drive sandbox SENT then PAID, prove liability retained at SENT/released only at PAID and no duplicate transfer.
-- Signed webhook delivery unverified. A historical real deposit callback returned400; do not weaken HMAC validation or trust caller-supplied secret headers. Inspect actual provider delivery and payload, then prove Render receipt, webhook_events row and replay dedupe; a saved subscription is not delivery proof.
-- Payment-link capability unverified; attempt scoped sandbox API once for an actual partial balance. Display only a provider-returned URL or an explicitly labelled draft fallback.
+## Database verification
 
-## Evidence boundaries and database rerun
+- Fresh disposable schema-only Neon branch ledgerline-review-20261029 / br-royal-rice-aocrqdzc, direct TLS/pooling off, free plan, automatic deletion30 Oct2026 at13:04IST. User authorized private connection setup; URL only gitignored backend/.env.test, never printed/committed. No production schemas used for tests.
+- tests/test_postgres.py completed **13/13 in 1,629.50s**, exit0, on29 Oct. Process started at baseline 6c43626; PostgreSQL test/adapter files were unchanged by later webhook/UI edits. Includes real concurrent hardening, walkthrough/restart, privileges/tenants, concurrent refund/FX, random-company reference checks, webhook dedupe, rollback/pool recovery and MCP signing continuity. Current Neon reports PostgreSQL 18; CI PostgreSQL 17 remains primary final-code DB evidence.
+- Old branch-expiry run8passed5failed1error is historical, not a pass or established code defect. Older whole-Neon suite stopped after 3/232, not complete. No owned test remains running after this13/13 completion.
+- Historical9f07166 public smoke32/32 and actual Render instance replacement followed by8/8 persistence are distinct from the final main release still to verify.
 
-- Historical runtime9f07166: CI40734890246 allfivejobs passed; PostgreSQL-specific13/13 and wholePostgreSQL253/253; publicsmoke32/32; confirmed Render replacement7j2f6→fcpnp then saved-account/data/ledger/refund/signing-key8/8. Concurrent first-tenant reads5/5. Later source changes need their own evidence.
-- a0fe23a owner sandbox receipt create/sync: local253passed9skipped, focused36/36, frontendbuildpass; CI40737882028 allfivejobs passed.
-- a4c9f2c: local254passed9skipped recorded by Claude. Treat CI at finalSHA as release evidence.
-- Accuracy harness:6287 checks,1064payments,508invoices,25companies/5walkthroughs, zero mismatches. This is synthetic reference-model evidence, not6287 live bank calls.
-- Old isolated Neon12/12 in1574.55s is historical. Later branch-expiry rerun:8passed5failed1error,17.5min; endpoint disappeared. It is not a pass or an established code defect. Earlier wholeNeon suite stopped after3/232; not a completed pass.
-- Fresh schema-only review branch created29Oct: `ledgerline-review-20261029`, `br-royal-rice-aocrqdzc`, direct pooling off, automatic deletion30Oct2026 13:04IST. The user authorized private setup; its direct URL was saved only in gitignored backend/.env.test, with no credential output. tests/test_postgres.py is running to completion on this branch; record result/duration before claiming a pass. CI PostgreSQL17 remains primary DB evidence; Neon production reports PostgreSQL18.
+## Credentials, access and remaining blockers
 
-## Explicit proposal limitations
+- Never change LEDGERLINE_SECRET_KEY (encrypted signing identities). Preserve existing edge secret. No credentials in chat, logs or Git. No purchases.
+- Google configured; real login/onboarding observed. OAuth Testing mode may restrict judges; email/password signup available. Apple hidden by user choice; no paid membership.
+- Anthropic key is saved, but successful extraction is unverified. User expects hackathon credits in one day (29 Oct statement). Organizer discussion says guidance/credits go to shortlisted teams in Build Phase; no redemption link visible. Wait for credit, then one real escalated-deposit read, validate model/tool output and record the human decision. No purchase authorized.
+- Repository remains private; user will decide public visibility/judge access later. Do not expose it. User records the video.
+- Missing proposal features are disclosed in matrix/submission draft: generic GET /deposits discovery/background polling (known-receipt GET /deposits/{id} sync exists), beneficiary schema/create, GET /fx/rates/current display and direct PDF input.
+- Scoped payment-link capability refused HTTP 401; no hosted link claimed. Signed external delivery is verified; external replay remains refused/unverified.
 
-- Receipt sync is a bounded GET /deposits/{id} fallback for known Ledgerline-created receipts, not generic GET /deposits discovery/background polling.
-- Beneficiary schema/create endpoints are not implemented; use existing sandbox beneficiary ids.
-- GET /fx/rates/current display is absent; executable quotes are implemented.
-- Remittance input is pasted text; direct PDF ingestion is absent.
-- Judge workspaces use a local simulated bank and simulated payers over actual MCP/Ed25519. Shared sandbox banking is restricted to the allowlisted operator organization.
+## Main release procedure
 
-## Remaining release sequence
+After this final documentation commit passes all five CI jobs: fast-forward/review-merge deploy/vercel-render into main, point existing Vercel production branch and Render branch at main, redeploy and independently record backend/frontend SHAs. Run scripts/smoke_deploy.py through the public frontend --save to a private temporary file (expect32/32); actually restart Render, verify a new instance, then --verify (expect8/8). Save the exact final release report in the chat outputs folder. Do not equate a redeploy or pre-restart check with restart proof.
 
-1. Finish user-approved refund, signed webhook, credit-backed Claude extraction and payment-link attempt; record exact observations/refusals, never inference as success.
-2. Complete fresh isolated Neon specific suite, avoid production schemas.
-3. Keep JUDGE_QUICKSTART, DEMO_SCRIPT, SUBMISSION_DRAFT, matrix and integration evidence consistent with results.
-4. After final commit passes allfiveCIjobs, fast-forward or reviewed-merge deploy/vercel-render into main. Point existing Vercel production branch and Render branch at main; deploy exact reviewed revisions.
-5. Record backend/frontendSHAs separately. Run scripts/smoke_deploy.py through publicfrontend --save(private temporary state), expect32/32. Actually restart Render and confirm a new instance, THEN --verify saved state, expect8/8. Prior proof is not final-release proof.
-6. Repository is private; ask user to arrange judge access or approve public visibility. User records demo video. OAuthTesting-mode audience may restrict judges. No HackerEarth submission authorized.
+render.yaml now describes Free/direct-Neon/main/checksPass, with secret placeholders; public JSON-schema validation passed. No Blueprint was applied, no service created and no signing/edge secret changed. Free services sleep and cold starts have failed previously; no always-on/permanent-free guarantee.
 
-RESUME.md was folded into this handoff and removed on29Oct because its top checkpoint predated the observed sandbox deposit/FX actions. Prefer dated evidence here and INTEGRATION_EVIDENCE over older chat checkpoints. No active owned test process at this checkpoint. Monitoring is paused; do not claim continuous background work.
-
-## 29 October code review in progress
-
-- Actual Airwallex event inspection found integer Unix-millisecond resource timestamps (API version2026-08-21). Parser now supports validated integer milliseconds and zoned ISO8601, rejecting booleans, fractional/out-of-range epochs and malformed/missing zones. HMAC/raw-body and dedupe remain unchanged.
-- Added owner-only, server-allowlisted per-draft sandbox payment-link publishing. Validates current exact outstanding invoice balance; claims before provider dispatch; no automatic retry after refusal/unknown outcome. UI displays only HTTPS URLs actually returned by the provider, otherwise a labelled draft.
-- Replaced the stale paid Starter/disk render.yaml example with Free/external direct PostgreSQL, required-database guard, main-branch/checksPass target and secret placeholders preserving existing values. Public Render JSON-schema validation passed. No Blueprint was applied and no infrastructure was created by this change.
-- Focused tests41/41 passed in14.15s; frontend TypeScript/Vite build passed. Final code CI/deployment verification still required. Source comparison and existing secrets must remain intact.
+RESUME.md was folded into this handoff and removed29 Oct because it predated completed bank actions. Monitoring is paused; do not claim an active background monitor. Continue from this handoff and the final dated report.

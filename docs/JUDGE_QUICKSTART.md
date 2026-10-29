@@ -1,5 +1,8 @@
 # Ledgerline: judge quickstart
 
+Updated 29 October 2026: verified runtime `98d6ad4653aa3701b38a81577650377f2ad30792`, CI 40839628066 all five jobs passed. Actual signed Airwallex deposit delivery and fresh EUR5 refund processing→SENT→PAID completed; liability/conservation verified. Payment-link request refused HTTP 401 (honest draft); provider external replay returned success:false. Successful Claude extraction waits for credit (user expects it in one day). Fresh isolated Neon 13/13 passed in 1,629.50s at baseline 6c43626; final-code CI PostgreSQL 17 is primary evidence. Final main-branch deployed SHAs/smoke/restart will be recorded separately after release.
+
+
 **Live app:** https://ledgerline-black-iota.vercel.app
 
 Free hosting: the backend sleeps when idle, so the **first request can take about a minute**. If you see "server is not reachable", wait a moment and retry.
@@ -25,9 +28,7 @@ Ordinary work without the walkthrough: create an organization with **An empty wo
 | Sign in with Google / Apple | Google configured and real user login observed; Testing mode may restrict accounts. Apple hidden from login by user choice. Email/password remains available. |
 | Payer agents | Simulated customer agents, real MCP protocol and real Ed25519 signatures |
 | Bank | Built-in **simulated bank** (labelled in the top bar). No real money |
-| Airwallex sandbox | Operator-only sandbox deposits settled and reconciled, and EUR→GBP FX settled on 28 Oct 2026 (`a4c9f2c`). Refund APR-B40BC448 awaits a second real approver. Settlements were polled; signed webhook delivery is unverified. Judge workspaces use local simulations. |
+| Airwallex sandbox | Operator-only sandbox deposits settled and reconciled, and EUR→GBP FX settled on 28 Oct 2026 (`a4c9f2c`). Earlier receipts were polled. On29 Oct, signed deposit delivery and a separately approved EUR5 refund through SENT→PAID were verified; external replay was refused by Airwallex. Judge workspaces use local simulations. |
 | Claude remittance reading | API key configured on Render; first actual call on 28 Oct 2026 refused for insufficient Anthropic credit. Successful live extraction is **not verified**. Workspaces without a key use labelled offline rules. |
 
 See `docs/INTEGRATION_EVIDENCE.md` for exactly what has and has not been verified.
-
-29Oct live-state correction: the earlier EUR5 approval APR-B40BC448 is invalidated after an operator credit decision (28Oct18:31UTC); it is no longer pending. A completed live refund needs a new valid case and independent real-member approval. Signed webhook delivery, successful credit-backed Claude extraction and scoped payment-link creation are still not verified at this checkpoint.
