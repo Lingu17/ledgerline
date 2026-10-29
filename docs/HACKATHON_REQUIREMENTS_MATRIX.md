@@ -51,8 +51,8 @@ Historical reviewed runtime `9f07166`: [CI40734890246](https://github.com/Lingu1
 
 | # | Requirement | Status | Evidence / gap |
 |---|---|---|---|
-| C1 | Frontend on Vercel, same-origin `/api` proxy | Done (live) | https://ledgerline-black-iota.vercel.app (Vercel Hobby); `frontend/vercel.json` route, CSP, HSTS |
-| C2 | Backend with persistent storage | Done (live, free) | Render Free + Neon Free PostgreSQL; `/api/health` `"storage":"postgresql"`; `LEDGERLINE_REQUIRE_DATABASE=1` refuses local fallback. No paid resources. Free-tier spin-down and Neon limits disclosed in `DEPLOYMENT.md` |
+| C1 | Hosted frontend, same-origin `/api` | Done (live) | https://35-207-220-110.sslip.io: one Google Cloud VM serves the built frontend and `/api` from one origin behind Caddy (automatic HTTPS, CSP, HSTS; `deploy/vm/Caddyfile.single`). The earlier Vercel/Render/Neon copy is legacy and not used by this host |
+| C2 | Backend with persistent storage | Done (live) | Google Cloud VM: SQLite and payer-agent keys on the persistent disk (`storage: persistent mount`), nightly backups; survived a real reboot and a redeploy (8/8 each). Legacy: Render Free + Neon Free PostgreSQL; `/api/health` `"storage":"postgresql"`; `LEDGERLINE_REQUIRE_DATABASE=1` refuses local fallback. No paid resources. Free-tier spin-down and Neon limits disclosed in `DEPLOYMENT.md` |
 | C3 | Secure cookies, CSRF, origins through the public URL | Done+tested live | Codex public workflow 32/32 on `a528ca9` (28 Oct); valid edge proof, stable client identity under spoofed forwarding headers and direct-origin forged-proof refusal verified. |
 | C4 | Judges cannot touch shared sandbox funds or other orgs | Done+tested | `LEDGERLINE_SANDBOX_ORGS` allow-list; readiness check hides shared account details; tenant isolation tests |
 | C5 | Health check, migrations, persistence guard, restart persistence | Done+tested live | Redeploy continuity verified earlier; Codex independently confirmed an actual Render instance change on 28 Oct, then passed 8/8 account/data/ledger/refund/MCP signing-key checks. |
