@@ -14,7 +14,7 @@ Verification as of 28 Oct 2026: **224 backend tests** pass locally (8 PostgreSQL
 
 ## What is real and what is simulated
 
-Latest independent review: runtime `9f07166` is deployed. [CI40734890246](https://github.com/Lingu17/ledgerline/actions/runs/40734890246) passed all five jobs, including253 whole-backend PostgreSQL tests. Public smoke32/32, confirmed redeploy continuity8/8, and concurrent first-tenant reads5/5 passed. Sandbox input/finality and PostgreSQL initialization races were fixed. This does not certify the unverified live banking/model actions or close the remaining proposal gaps; see [requirements matrix](docs/HACKATHON_REQUIREMENTS_MATRIX.md).
+Review updated 29 October 2026: historical runtime `9f07166` passed [CI40734890246](https://github.com/Lingu17/ledgerline/actions/runs/40734890246) all five jobs, public smoke32/32 and confirmed redeploy continuity8/8. Later operator sandbox deposits and FX settled on `a4c9f2c`; a EUR5 refund awaits a second real approver, signed webhook delivery is unverified, and successful Claude extraction is blocked by account credit. At continuation, frontend `6a7a2f9` and backend `540dd93` differed; final main-branch release alignment remains pending. See [handoff](docs/DEPLOYMENT_HANDOFF.md), [integration evidence](docs/INTEGRATION_EVIDENCE.md) and [requirements matrix](docs/HACKATHON_REQUIREMENTS_MATRIX.md).
 
 | Part | In this build | Notes |
 |---|---|---|

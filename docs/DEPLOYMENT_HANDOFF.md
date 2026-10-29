@@ -1,57 +1,61 @@
 # Ledgerline deployment handoff
 
-Updated 28 October 2026. Branch `deploy/vercel-render`. No HackerEarth save/submission is authorized.
+Updated 29 October 2026. Continue on `deploy/vercel-render` until the final reviewed release is merged into `main`. Deadline: 13 November 2026, 23:59 IST. Never save or submit on HackerEarth.
 
-## Live sandbox money actions — 28 Oct 2026 (Claude)
+## Infrastructure and immutable constraints
 
-- Code `a4c9f2c` fixed a live-only bug: Airwallex sandbox returns `usage: MULTI_USE` quotes and the request cannot ask for single use; Ledgerline now enforces single use itself. Backend 254 passed / 9 skipped.
-- Executed on the live deployment, owner account, allowlisted organization: EUR 1.23 → INV-2301 and EUR 4,000.00 → INV-2302 (settled, exact match); EUR→GBP conversion `OP-CBAA2582` (EUR 1,811.36 → GBP 1,501.00, settled; quote reuse refused; reserves kept); EUR 12.50 with a vague reference escalated, then allocated to INV-2303 by the operator; EUR 5.00 unknown reference escalated, return-to-sender approval `APR-B40BC448` pending a second real approver. Ledger balanced in every currency after each step. Airwallex sandbox emails confirmed the deposits and the conversion.
-- `ANTHROPIC_API_KEY` added to Render; health reports Claude configured. The first live read was refused by Anthropic (account credit too low); nothing was stored or applied.
-- Details: [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md).
-- Neon isolated rerun of `tests/test_postgres.py` (started 23:44 IST, 13 minutes before the review branch expired): 8 passed, 5 failed, 1 error in 17.5 minutes; the failures are pool/connection timeouts, and the branch endpoint was gone when checked afterwards ("endpoint could not be found"). This is not a pass and not a code finding; the same tests passed on PostgreSQL 17 in CI. A fresh Neon test branch is needed to repeat it.
+- Live frontend: https://ledgerline-black-iota.vercel.app (Vercel Hobby, root `frontend`).
+- Existing backend: Render FREE Singapore `ledgerline-api`, `srv-dbgad6ijnfac73fo2e1g`, https://ledgerline-api-4dt3.onrender.com.
+- Database: Neon FREE project `ledgerline` (`red-grass-80303368`), direct TLS endpoint; no `-pooler` or transaction pooling.
+- Never change `LEDGERLINE_SECRET_KEY`: it encrypts durable payer signing identities. No credentials in chat, logs or Git; user enters credentials and provider logins.
+- No paid resources, duplicate services, Supabase changes, PC tunnels or public posts. Four-eyes, scoped approval, reserves, pause, idempotency and SENT-versus-PAID remain enforced.
+- Free services can sleep; cold-start failures have been observed. Always-on/permanent-free hosting is not guaranteed.
 
-## Latest review continuation
+## Current observed state (29 October)
 
-Sandbox input/finality commit739936e was confirmed live on Render and Vercel. CI40733133154 passed all five jobs (including the whole backend on PostgreSQL), and public smoke passed32/32. The owner readiness check on that release returned real Airwallex authentication/accounts/balances and retained the saved webhook secret across deployment.
+- Source HEAD at continuation: `6a7a2f96b42e02918a66e10944b404ed43135205`; latest application change `a4c9f2c` fixes locally enforced single-use FX quotes (Airwallex returns MULTI_USE quotes).
+- Connector observations: Vercel production READY at `6a7a2f96b42e02918a66e10944b404ed43135205`; Render live deploy `dep-dbh3kt0n74is73bhff60` at `540dd93dfca1e13b1874e272b8e234513f268d30`. These differ; do not call them the final aligned release.
+- GitHub run40746046892 for `6a7a2f9` reports completed/success. The final release still needs independently inspected five-job results at its final SHA.
+- Ledgerline and Airwallex browser sessions require the user to sign in again. Do not sign in to providers for the user.
+- Google is configured and a real user login/onboarding was observed on28Oct. OAuth Testing mode may restrict judge accounts; email/password signup remains available. Apple is hidden by user choice.
+- Airwallex credentials, one-organization sandbox allowlist and dedicated EUR account are saved; webhook secret was saved under an earlier specifically approved private transfer. No further secret transfer is authorized or needed.
+- Anthropic key is configured. The first actual read-remittance request was refused for insufficient credit; no successful extraction, stored proposal or resulting AI allocation is claimed.
 
-A historical production audit failure exposed a separate startup race: concurrent requests ran schema ACL hardening at once, producing PostgreSQL `tuple concurrently updated`. Follow-up commit `9f07166dfe342a33a8506c344f392c191f0f40f4` uses a context initialization lock, closes failed initialization connections, and holds the existing transaction-scoped schema advisory lock throughout hardening. Focused local tests46/46 passed. Real Neon privilege isolation passed; the new concurrent-hardening test passed in22.27 seconds after correcting its signup fixture from invalid `workspace` to valid `empty`.
+## Actual sandbox banking evidence (28 October)
 
-Final runtime `9f07166` is confirmed live on Render and Vercel. [CI40734890246](https://github.com/Lingu17/ledgerline/actions/runs/40734890246) passed all five jobs: PostgreSQL-specific13/13, whole PostgreSQL253/253, Linux244 passed9 skipped, Windows/backend, browser and frontend successful. Public synthetic workflow32/32. After logs confirmed actual Render replacement7j2f6 to fcpnp, saved-account/data/ledger/refund/signing-key continuity passed8/8. Five simultaneous first reads (including audit) returned200 JSON. This is new redeploy proof; earlier restart-only evidence is distinct. Later documentation-only commits do not imply a different tested runtime.
+See INTEGRATION_EVIDENCE.md for amounts and redacted provider ids. Settlements arrived by authenticated polling, not verified signed delivery.
 
-HackerEarth read-only inspection confirmed a published shortlisted idea and Build Phase0 submissions. No submission was created/saved. Public detailed criteria sections still contain dots; no complete organizer rubric is assumed. The repository is private; judge source access must be arranged by the owner if required. Actual sandbox deposit delivery/actions and actual model use remain unverified, and proposal gaps remain as listed below.
+- EUR1.23 → INV-2301 and EUR4,000 → INV-2302 settled and exact-matched; ledger balanced.
+- OP-CBAA2582 converted EUR1,811.36 → GBP1,501.00 and settled. EUR2,000 reserve kept; GBP1,500 reserve met; same-quote retry refused409; ledger balanced.
+- EUR12.50 vague-reference deposit DEP-C63DAB2722 escalated. Real Claude request refused for insufficient credit. Operator then allocated manually to INV-2303 with a written note.
+- EUR5 deposit DEP-377ABD25B9 escalated; return-to-sender approval APR-B40BC448 remains pending a second real operator/owner. Do not fabricate accounts or approvers. User must invite a second email they control and approve themselves. Then execute once, drive sandbox SENT then PAID, prove liability retained at SENT/released only at PAID and no duplicate transfer.
+- Signed webhook delivery unverified. A historical real deposit callback returned400; do not weaken HMAC validation or trust caller-supplied secret headers. Inspect actual provider delivery and payload, then prove Render receipt, webhook_events row and replay dedupe; a saved subscription is not delivery proof.
+- Payment-link capability unverified; attempt scoped sandbox API once for an actual partial balance. Display only a provider-returned URL or an explicitly labelled draft fallback.
 
-## Current infrastructure
+## Evidence boundaries and database rerun
 
-- Frontend: https://ledgerline-black-iota.vercel.app — existing Vercel Hobby project, root frontend, same-origin /api proxy.
-- Backend: existing Render FREE Singapore service ledgerline-api, srv-dbgad6ijnfac73fo2e1g, https://ledgerline-api-4dt3.onrender.com.
-- Database: existing Neon FREE project ledgerline, direct TLS endpoint. No transaction-mode pooler, local hosted-storage fallback, paid disk, new service or PC tunnel.
-- Never change LEDGERLINE_SECRET_KEY: it encrypts durable payer signing identities. No credential values belong in logs, chat or Git.
-- Render auto-deploys backend changes; frontend-only commits can leave backend and frontend Git SHAs different. Record each deployed revision independently.
+- Historical runtime9f07166: CI40734890246 allfivejobs passed; PostgreSQL-specific13/13 and wholePostgreSQL253/253; publicsmoke32/32; confirmed Render replacement7j2f6→fcpnp then saved-account/data/ledger/refund/signing-key8/8. Concurrent first-tenant reads5/5. Later source changes need their own evidence.
+- a0fe23a owner sandbox receipt create/sync: local253passed9skipped, focused36/36, frontendbuildpass; CI40737882028 allfivejobs passed.
+- a4c9f2c: local254passed9skipped recorded by Claude. Treat CI at finalSHA as release evidence.
+- Accuracy harness:6287 checks,1064payments,508invoices,25companies/5walkthroughs, zero mismatches. This is synthetic reference-model evidence, not6287 live bank calls.
+- Old isolated Neon12/12 in1574.55s is historical. Later branch-expiry rerun:8passed5failed1error,17.5min; endpoint disappeared. It is not a pass or an established code defect. Earlier wholeNeon suite stopped after3/232; not a completed pass.
+- Fresh schema-only review branch created29Oct: `ledgerline-review-20261029`, `br-royal-rice-aocrqdzc`, direct pooling off, automatic deletion30Oct2026 13:04IST. User must place its direct URL in gitignored backend/.env.test; never reuse expired endpoint. Run tests/test_postgres.py to completion on this isolated branch only, record result/duration. CI PostgreSQL17 remains primary DB evidence; Neon production reports PostgreSQL18.
 
-## Observed configuration and verification
+## Explicit proposal limitations
 
-- Public health recovered after an observed idle wake-up: HTTP 200, storage postgresql, edge_proof valid. Direct backend health reports edge proof missing as expected for a direct request.
-- Google is configured; exact public callback/client redirect verified. The user completed real sign-in and organization onboarding. Google remains subject to its owner's OAuth Testing-mode audience. Email/password judge signup is available. Apple is hidden from login by user choice.
-- Airwallex credentials and a single-organization sandbox allowlist are saved. Owner readiness exercised real authentication, accounts and balances. Dedicated EUR receiving account is configured.
-- Approved deposit.settled-only webhook is registered. Secret was privately transferred under a specific user exception; Ledgerline confirmed organization Airwallex secret and the write-only Set hint. No secret is included here.
-- Actual sandbox simulation, signed receipt, FX, refund and payment-link execution remain unverified. The test-event dialog did not produce an observed receipt. Never report a saved webhook as delivered.
-- Anthropic key is absent: no actual Claude extraction has been verified. The labelled rules reader is advisory.
+- Receipt sync is a bounded GET /deposits/{id} fallback for known Ledgerline-created receipts, not generic GET /deposits discovery/background polling.
+- Beneficiary schema/create endpoints are not implemented; use existing sandbox beneficiary ids.
+- GET /fx/rates/current display is absent; executable quotes are implemented.
+- Remittance input is pasted text; direct PDF ingestion is absent.
+- Judge workspaces use a local simulated bank and simulated payers over actual MCP/Ed25519. Shared sandbox banking is restricted to the allowlisted operator organization.
 
-## Review evidence by source boundary
+## Remaining release sequence
 
-- Historical a528ca9: all five CI jobs passed (https://github.com/Lingu17/ledgerline/actions/runs/40569405112), public smoke32/32, edge spoof refusal, actual Render instance replacement b9fnc to djx6n followed by persistence/MCP checks8/8.
-- Historical isolated Neon suite: 12/12 in 1574.55 seconds. Whole-backend Neon attempt was intentionally stopped after3/232 collected; not a completed pass. The review branch expires 28 October23:57 IST; never use an expired test endpoint or production schemas for tests.
-- Source0da71a5 before this review: backend225 passed/8 skipped; browser12/12; frontend build passed.
-- Sandbox-fix review: backend237 passed/8 skipped, focused regressions for further header validation separately recorded. Accuracy run6287 checks,1064 payments,508 invoices,25 companies and5 walkthroughs: zero mismatches. Frontend rebuilt successfully.
-- New source changes require their own CI/deployment evidence. Previous restart proof does not automatically establish the new release.
+1. Finish user-approved refund, signed webhook, credit-backed Claude extraction and payment-link attempt; record exact observations/refusals, never inference as success.
+2. Complete fresh isolated Neon specific suite, avoid production schemas.
+3. Keep JUDGE_QUICKSTART, DEMO_SCRIPT, SUBMISSION_DRAFT, matrix and integration evidence consistent with results.
+4. After final commit passes allfiveCIjobs, fast-forward or reviewed-merge deploy/vercel-render into main. Point existing Vercel production branch and Render branch at main; deploy exact reviewed revisions.
+5. Record backend/frontendSHAs separately. Run scripts/smoke_deploy.py through publicfrontend --save(private temporary state), expect32/32. Actually restart Render and confirm a new instance, THEN --verify saved state, expect8/8. Prior proof is not final-release proof.
+6. Repository is private; ask user to arrange judge access or approve public visibility. User records demo video. OAuthTesting-mode audience may restrict judges. No HackerEarth submission authorized.
 
-## Next verification
-
-1. Publish the reviewed sandbox input/finality fixes and inspect final CI, especially the real PostgreSQL whole-backend job.
-2. Confirm final Render/Vercel revisions and public health, then run scripts/smoke_deploy.py against the public frontend. Save its synthetic account state outside the repository.
-3. Finish real sandbox deposit simulation and authenticated receipt evidence, then intended FX/refund lifecycle and actual model invocation with authorized credentials. Keep provider and local-simulation results separate.
-4. Proposal gaps: deposit polling fallback, beneficiary creation, direct PDF input, current-rate flow and final demo recording. Close or clearly disclose them before final user submission.
-
-## Free-host limitations
-
-Render can sleep and an idle request can fail while the instance starts; wake-up is not guaranteed to finish before proxy deadlines. Neon can suspend and free quotas/eligibility can change. This deployment is not guaranteed always-on or permanently free. No existing Supabase project was modified.
+RESUME.md was folded into this handoff and removed on29Oct because its top checkpoint predated the observed sandbox deposit/FX actions. Prefer dated evidence here and INTEGRATION_EVIDENCE over older chat checkpoints. No active owned test process at this checkpoint. Monitoring is paused; do not claim continuous background work.

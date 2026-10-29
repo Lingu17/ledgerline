@@ -25,7 +25,7 @@ Ordinary work without the walkthrough: create an organization with **An empty wo
 | Sign in with Google / Apple | Google configured and real user login observed; Testing mode may restrict accounts. Apple hidden from login by user choice. Email/password remains available. |
 | Payer agents | Simulated customer agents, real MCP protocol and real Ed25519 signatures |
 | Bank | Built-in **simulated bank** (labelled in the top bar). No real money |
-| Airwallex sandbox | Operator-only API readiness connected; webhook configuration saved. Judge workspaces use local simulations. Live signed delivery/money actions remain unverified. |
-| Claude remittance reading | Implemented; **not connected** (no API key); a labelled deterministic reader is used |
+| Airwallex sandbox | Operator-only sandbox deposits settled and reconciled, and EUR→GBP FX settled on 28 Oct 2026 (`a4c9f2c`). Refund APR-B40BC448 awaits a second real approver. Settlements were polled; signed webhook delivery is unverified. Judge workspaces use local simulations. |
+| Claude remittance reading | API key configured on Render; first actual call on 28 Oct 2026 refused for insufficient Anthropic credit. Successful live extraction is **not verified**. Workspaces without a key use labelled offline rules. |
 
 See `docs/INTEGRATION_EVIDENCE.md` for exactly what has and has not been verified.

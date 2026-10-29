@@ -1,6 +1,6 @@
 # Hackathon requirements matrix
 
-Audit date: 27 Oct 2026 (build phase day 1; deadline 13 Nov 2026, 11:59 PM IST). Sources: HackerEarth event page (read in the browser), airwallexdev.com and /guide, docs/original-proposal.txt, BUILD_BRIEF, SAAS_REQUIREMENTS, PRODUCT_POLISH, CODEX_REVIEW_FINDINGS, INDEPENDENT_REVIEW, and the code at branch `deploy/vercel-render`.
+Audit updated: 29 Oct 2026; historical evidence dated below. Initial audit: 27 Oct 2026 (build phase day 1; deadline 13 Nov 2026, 11:59 PM IST). Sources: HackerEarth event page (read in the browser), airwallexdev.com and /guide, docs/original-proposal.txt, BUILD_BRIEF, SAAS_REQUIREMENTS, PRODUCT_POLISH, CODEX_REVIEW_FINDINGS, INDEPENDENT_REVIEW, and the code at branch `deploy/vercel-render`.
 
 Status key: **Done+tested** = implemented with automated tests passing locally · **Live** = verified against the real external service · **Partial** · **Missing** · **Blocked** = needs something only the user/organizer can provide.
 
@@ -22,7 +22,7 @@ Final reviewed runtime `9f07166`: [CI40734890246](https://github.com/Lingu17/led
 | A8 | Webhooks: verify signature on raw bytes, dedupe by event id, tolerate out-of-order (guide/docs) | Done+tested | HMAC-SHA256(x-timestamp + raw body) per official docs; `webhook_events` dedupe; deposits idempotent on provider id; envelope `data.object` now accepted (fixed 27 Oct after doc check) |
 | A9 | Stable `request_id` reused on retries (guide) | Done+tested | UUIDv5 per operation; ambiguous results looked up by request_id |
 | A10 | Amounts in major units (guide) | Done+tested | Exact decimal strings for transfers/conversions per API reference (fixed 27 Oct); integer minor units internally |
-| A11 | Verify connection: list global accounts, simulate deposit, list balances (guide) | Partial | Real owner readiness returned authentication, accounts and balances. Dedicated EUR receiving account exists. Actual deposit simulation/settled delivery is still unverified. |
+| A11 | Verify connection: list global accounts, simulate deposit, list balances (guide) | Partial | Real authentication/accounts/balances plus EUR deposits settled and reconciled on 28 Oct (`a4c9f2c`). Dedicated EUR receiving account configured. Receipt settlement verified by provider polling; signed delivery is separate and unverified. |
 | A12 | Treasury & Ops track positioning (proposal) | Done | README/landing describe Treasury & Ops (Adaptive Treasury Controller); not a connected-account platform |
 
 ## B. Shortlisted proposal promises
@@ -30,18 +30,18 @@ Final reviewed runtime `9f07166`: [CI40734890246](https://github.com/Lingu17/led
 | # | Promise | Status | Evidence / gap |
 |---|---|---|---|
 | B1 | Listen for `deposit.settled` webhooks | Tested locally; configured externally | Per-org webhook and secret saved. No verified external delivery yet. Nested envelopes now retain simulation payer/reference hints. |
-| B2 | Fallback: poll `GET /deposits` if webhooks unreliable | **Missing** | Documented in proposal; not implemented. Planned: owner-triggered "Sync deposits" using `from_created_at` |
+| B2 | Fallback: poll deposits if webhooks unreliable | **Partial; live receipt sync** | Owner-triggered sync reads `GET /deposits/{id}` for receipts previously created by Ledgerline and checks actual settlement, amount, currency and account binding before idempotent ingestion. Used live on 28 Oct. General `GET /deposits` discovery and a scheduled poller are not implemented. |
 | B3 | Clean match / bank-fee write-off / partial / duplicate / no reference / wrong currency | Done+tested | `test_matching.py`, accuracy harness (250 seeds, 64,215 checks, 0 mismatches) |
 | B4 | Payment link for the exact balance; draft if links unavailable | Done+tested (local) · **Blocked** live | Sandbox `POST /pa/payment_links/create` payload matches the docs; local mode stores a labelled "Draft, not sent" note and never shows a URL |
 | B5 | Payer agent over MCP, signed `explain_payment`, three checks | Done+tested | Real stdio MCP subprocess, Ed25519, replay/expiry/binding/records checks; malicious claim rejected (DEP-1004) |
 | B6 | Claude reads emails/PDFs when no agent | Partial / blocked live | Pasted text extraction and strict tools/budgets are implemented. Direct PDF ingestion is missing; the key is now set, but a successful model call needs Anthropic account credit (first live call refused, nothing applied). A deterministic fixture is not Claude execution. |
 | B7 | Apparent duplicate becomes advance credit after signed evidence | Done+tested | DEP-1005 → verified_advance_credit; plan v1, evidence, v2 and journal preserved |
-| B8 | FX: quote and convert only the shortfall above reserve | Done+tested (local) · **Blocked** live | Reserves, settled-only spendability, pending FX never spendable; sandbox quote/conversion payloads checked against docs |
+| B8 | FX: quote and convert only the shortfall above reserve | **Live** (28 Oct, `a4c9f2c`) | OP-CBAA2582 settled: EUR1,811.36 → GBP1,501.00. EUR2,000 reserve kept, GBP1,500 reserve met, quote reuse refused with409, ledger balanced. See INTEGRATION_EVIDENCE. |
 | B9 | Refund over limit approved by a person, duplicate lock, SENT not final | Done+tested | Partial unique index, UUIDv5 ids, scope hash, SENT keeps liability; status map updated for approval_rejected/recalled |
 | B10 | Pause switch for all money-out | Done+tested | Operator pauses, owner resumes |
 | B11 | Conservation to the cent; scorecard | Done+tested | Per-currency conservation; scorecard computed from state |
 | B12 | Beneficiary creation (`/beneficiaries/schema`, `/beneficiaries/create`) | **Missing** | Refund destinations must be existing sandbox beneficiary ids |
-| B13 | `GET /fx/rates/current` | Partial | Quotes are used for decisions; local mode uses fixed synthetic rates |
+| B13 | `GET /fx/rates/current` | **Missing display** | No current-rate endpoint/display. Executable sandbox quotes are used for conversion decisions; local mode uses explicitly synthetic rates. |
 | B14 | Demo video (~4 min) | **Blocked** (user) | `docs/DEMO_SCRIPT.md` written and its figures checked against a fresh sample organization (28 Oct); recording is the user's |
 
 ## C. Deployment and SaaS (user briefs)
@@ -53,7 +53,7 @@ Final reviewed runtime `9f07166`: [CI40734890246](https://github.com/Lingu17/led
 | C3 | Secure cookies, CSRF, origins through the public URL | Done+tested live | Codex public workflow 32/32 on `a528ca9` (28 Oct); valid edge proof, stable client identity under spoofed forwarding headers and direct-origin forged-proof refusal verified. |
 | C4 | Judges cannot touch shared sandbox funds or other orgs | Done+tested | `LEDGERLINE_SANDBOX_ORGS` allow-list; readiness check hides shared account details; tenant isolation tests |
 | C5 | Health check, migrations, persistence guard, restart persistence | Done+tested live | Redeploy continuity verified earlier; Codex independently confirmed an actual Render instance change on 28 Oct, then passed 8/8 account/data/ledger/refund/MCP signing-key checks. |
-| C6 | Judge docs: JUDGE_QUICKSTART, DEMO_SCRIPT, INTEGRATION_EVIDENCE, SUBMISSION_DRAFT, DEPLOYMENT_HANDOFF | Partial | DEPLOYMENT and DEPLOYMENT_HANDOFF current; integration evidence for Airwallex/Claude needs real credentials |
+| C6 | Judge docs: JUDGE_QUICKSTART, DEMO_SCRIPT, INTEGRATION_EVIDENCE, SUBMISSION_DRAFT, DEPLOYMENT_HANDOFF | Partial | Docs distinguish observed sandbox deposits/FX from pending refund, signed webhook and credit-blocked Claude extraction; final release SHAs and judge source access remain to finish |
 
 ## D. Our own product improvements (not event requirements)
 
@@ -78,4 +78,4 @@ Checked against [developer lab](https://airwallexdev.com/), [builder guide](http
 - Sandbox simulation responses never manufacture settled receipts. The walkthrough waits for authenticated settled webhooks; retries retain a durable attempt marker and ambiguous submissions require reconciliation.
 - Transfers/conversions use exact major-unit strings and stable request IDs; approval, reserve, pause and finality rules stay in code.
 - New regressions cover nested webhook hints, invalid amounts, wrong/ambiguous account currencies and pending/ambiguous deposit simulations. Provider mocks prove code behavior, not live Airwallex acceptance.
-- Full compliance is not certified: B2 polling, B12 beneficiary creation, direct PDF ingestion, real model execution, live sandbox money-action proof and the recorded demo remain open.
+- Full compliance is not certified: generic deposit discovery/background polling, beneficiary creation, direct PDF ingestion, current-rate display, successful model extraction, completed live refund and signed webhook delivery remain open. Known-receipt polling and sandbox deposits/FX have live evidence. The user records the demo video.

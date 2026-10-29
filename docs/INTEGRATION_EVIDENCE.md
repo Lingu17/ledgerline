@@ -38,3 +38,14 @@ Reviewed against https://airwallexdev.com/ and official https://www.airwallex.co
 - Reject malformed/oversized timestamp and non-hex signature headers with controlled 401 responses.
 
 These regression tests use simulated providers. They do not prove a successful live sandbox money action.
+
+## Continuation checkpoint — 29 October 2026
+
+Read the historical evidence above with its source boundary. No new sandbox banking action or successful model extraction has been verified on29Oct at this checkpoint.
+
+- Independent connector observations: Render live `540dd93dfca1e13b1874e272b8e234513f268d30` (deploy `dep-dbh3kt0n74is73bhff60`); Vercel production READY `6a7a2f96b42e02918a66e10944b404ed43135205`. GitHub run40746046892 reports success at6a7a2f9. Final release alignment is pending.
+- APR-B40BC448 / DEP-377ABD25B9 (EUR5.00) needs approval by a second real member. No additional identity or account was created.
+- A historical real signed-event request on28Oct at17:46:14.523UTC returned HTTP400 at the webhook route. No webhook_events row/deduplication or successful delivery is established by that response; later receipt sync settled the deposit through provider polling. The parser cause is not established from the status alone.
+- Known-receipt fallback uses `GET /deposits/{id}`, checks actual SETTLED status, account/currency/amount binding and ingests idempotently. It is not a generic `GET /deposits` discovery feed or scheduled poller.
+- Fresh Neon review branch `ledgerline-review-20261029` / `br-royal-rice-aocrqdzc` is schema-only (no production rows), direct endpoint/pooling off, free plan; automatically expires30Oct2026 at13:04IST. Fresh suite result is pending secure test-URL setup. Do not reuse the expired28Oct branch. CI PostgreSQL17 is separate primary DB evidence; current Neon project reports PostgreSQL18.
+- Credentials/provider sign-in remain user-entered. Existing app/Airwallex browser sessions expired; sign-in requested. No source-sharing change, purchase or HackerEarth save/submit occurred.
