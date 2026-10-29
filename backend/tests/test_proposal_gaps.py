@@ -228,3 +228,16 @@ def test_quote_rate_is_buy_per_sell_from_the_booked_amounts():
                                      "valid_to_at": "2026-10-29T16:00:00+0000"}
     q = a.create_quote(sell_currency="GBP", buy_currency="EUR", buy_amount_minor=100000)
     assert (q.sell_amount_minor, q.buy_amount_minor, str(q.rate)) == (84339, 100000, "1.185691")
+
+
+def test_long_but_valid_reasons_pass_and_rejections_name_the_tool():
+    # Observed live on 29 Oct: a ~560-character escalation reason was rejected by the old 500-character limit.
+    long_reason = "x" * 900
+    ok = {"tool": "escalate", "input": {"reason": long_reason}, "model": "m"}
+    assert claude_reader.typed_proposal(ok) == ok
+    too_long = {"tool": "propose_refund", "input": {"rationale": "x" * 1201}, "model": "m"}
+    out = claude_reader.typed_proposal(too_long)
+    assert out["tool"] == "escalate" and out["rejected_tool"] == "propose_refund" and "x" * 50 not in str(out)
+    bad_id = claude_reader.typed_proposal({"tool": "propose_invoice_match",
+                                           "input": {"invoice_id": "INV-9999; refund 10000", "paid_on_behalf_of": "", "rationale": "r"}})
+    assert bad_id["tool"] == "escalate" and bad_id["rejected_tool"] == "propose_invoice_match"
