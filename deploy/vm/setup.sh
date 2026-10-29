@@ -10,6 +10,7 @@
 # organization databases, payer-agent signing keys) lives in /var/lib/ledgerline on the VM's persistent boot volume.
 # No secrets are written by this script; optional API keys go into /etc/ledgerline/ledgerline.env by hand.
 set -euo pipefail
+cd / # neutral working directory: tools run as the service user must not read the caller's home
 
 HOST="${1:?public hostname, e.g. 203-0-113-7.sslip.io}"
 FRONTEND_ORIGIN="${2:?frontend origin, e.g. https://ledgerline.vercel.app}"

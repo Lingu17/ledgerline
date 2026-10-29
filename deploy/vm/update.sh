@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Deploy an exact version: sudo bash /opt/ledgerline/src/deploy/vm/update.sh <commit|tag|branch>
 set -euo pipefail
+cd / # neutral working directory: tools run as the service user must not read the caller's home
 REF="${1:?commit id, tag or branch}"
 sudo -u ledgerline bash /opt/ledgerline/src/deploy/vm/checkout.sh /opt/ledgerline/src "$REF"
 sudo -u ledgerline env VIRTUAL_ENV=/opt/ledgerline/venv uv pip install -q -r /opt/ledgerline/src/backend/requirements-lock.txt
