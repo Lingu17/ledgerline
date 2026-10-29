@@ -14,7 +14,7 @@ set -euo pipefail
 HOST="${1:?public hostname, e.g. 203-0-113-7.sslip.io}"
 FRONTEND_ORIGIN="${2:?frontend origin, e.g. https://ledgerline.vercel.app}"
 REF="${3:-main}"
-REPO="https://github.com/Lingu17/ledgerline.git"
+REPO="${LEDGERLINE_REPO:-https://github.com/Lingu17/ledgerline.git}"  # a git bundle path works for a private repo
 APP=/opt/ledgerline
 DATA=/var/lib/ledgerline
 ENV_FILE=/etc/ledgerline/ledgerline.env
