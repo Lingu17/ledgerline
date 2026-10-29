@@ -43,7 +43,7 @@ fi
 
 echo "== firewall: allow HTTP/HTTPS (Oracle images reject them by default)"
 for port in 80 443; do
-  iptables -C INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null || iptables -I INPUT 5 -p tcp --dport $port -j ACCEPT
+  iptables -C INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport $port -j ACCEPT
 done
 netfilter-persistent save >/dev/null
 
