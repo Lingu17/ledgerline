@@ -1,40 +1,132 @@
 # Ledgerline
 
-**When a payment doesn't match, my agent asks the payer's agent — and verifies the answer before any money moves.**
+**When a payment doesn't match, my agent asks the payer's agent, and verifies the answer before any money moves.**
 
-Ledgerline is a multi-tenant reconciliation application for small international companies that bill in USD, EUR and GBP. Deposits are matched by deterministic rules. When a deposit is ambiguous, Ledgerline asks the payer's own accounts-payable agent (over MCP) what the money was for, verifies the signed answer with three checks, revises its plan, and then applies a credit, a refund, a payment request or an FX conversion — under role-based approvals, a duplicate lock and a pause switch, with the ledger balanced per currency to the cent.
+### Live app: **https://35-207-220-110.sslip.io**
+Always on (one Google Cloud VM, Mumbai). Click **Get started**, choose **Sample data**, and the guided walkthrough runs the whole story in about four minutes. Interactive 3D architecture: [https://35-207-220-110.sslip.io/#/architecture](https://35-207-220-110.sslip.io/#/architecture). Judges: [JUDGE_QUICKSTART](docs/JUDGE_QUICKSTART.md).
 
-Built for the Agentic Banking Hackathon (Treasury & Ops). **Hackathon build, not production-ready, no real money.** Sample organizations use synthetic data; the reference company "Northbeam Software Pte. Ltd." and its customers are fictional.
+Agentic Banking Hackathon, **Treasury & Ops** track. Hackathon build: sandbox and synthetic data only, no real money.
 
-![Ledgerline finance operations workspace](docs/screenshots/workspace.png)
-
-Verification as of 28 Oct 2026: **224 backend tests** pass locally (8 PostgreSQL-only tests are skipped without a database URL), **12 browser E2E tests**, strict frontend build, and **0 npm audit findings**. All five CI jobs, including the whole backend suite on PostgreSQL 17, passed at `a528ca9` ([run 40569405112](https://github.com/Lingu17/ledgerline/actions/runs/40569405112)). Codex independently verified **32/32 public workflow checks**, valid Vercel edge proof with spoof refusal, and **8/8 persistence checks after a confirmed Render instance replacement**. The isolated Neon walkthrough also passed on that commit; a consolidated Neon rerun is tracked in the deployment handoff. These checks use synthetic workspaces, not live Airwallex or Anthropic execution. Earlier independent review: [report](docs/INDEPENDENT_REVIEW.md). Live deployment details: [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md).
+![Payment escalated after the payer agent's claim failed the records check](docs/screenshots/04-payment-escalated.png)
 
 ---
 
+## The problem
+
+A 12-person software company in Singapore bills customers in the US, the EU and the UK into Airwallex Global Accounts. One finance person matches incoming payments by hand every week:
+
+- references say `INV 2231 + 2240`, or nothing at all;
+- a bank fee turns a 5,000 invoice into 4,970;
+- a customer pays twice, or pays a EUR invoice in USD;
+- each unclear payment means an email and a two-day wait, while cash sits in the wrong currency and next week's bills fall due.
+
+Getting it wrong costs money and goodwill: refund a "duplicate" that was really an advance and you annoy a good customer; chase a short payment that was only a bank fee and you look careless.
+
+## What Ledgerline does
+
+For every settled deposit, rules in code pick one action: clean match, fee write-off within tolerance, partial payment with a payment request for the exact balance, duplicate (refund or credit, the evidence decides), wrong currency, or unknown. When the rules cannot decide, Ledgerline:
+
+1. **asks the payer's own AP agent** over MCP (`explain_payment`) and gets an Ed25519-signed claim;
+2. **verifies it like evidence, not truth**: signed by the key that customer registered, bound to this exact deposit and still fresh, and our records agree (invoice exists, belongs to that customer, amount fits);
+3. **revises its plan** (for example, a refund is dropped before any money moves because the "duplicate" was an advance), or **escalates to a person with the reason**;
+4. **acts under control**: refunds above the auto-limit need a second person, every money-out has a stable request id and a duplicate lock, a pause switch stops all money-out, and **SENT is not final**: the liability is released only at PAID.
+
+If there is no agent, **Claude** reads the remittance email or PDF and must answer through one of four typed tools. Its output is stored as advisory evidence and can never authorise money. Treasury keeps a reserve per currency and converts only the shortfall for bills due soon, using single-use quotes.
+
+### Measurable outcome (reference scenario, reproducible on the live app)
+
+| | Result |
+|---|---|
+| Deposits | 6 (USD, EUR, GBP) |
+| Settled with no human | **4**, each with its evidence and plan history |
+| Approvals by a person | 1 (the over-limit refund, four-eyes) |
+| Escalations | 1, with the reason ("INV-2253 belongs to another customer") |
+| Double payments | **0** |
+| Ledger | balanced per currency to the cent |
+
+Accuracy harness: 250 randomized synthetic companies driven through the real API, **64,215 checks, 0 mismatches** against an independent reference model ([report](docs/ACCURACY_REPORT.md)).
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Landing](docs/screenshots/01-landing.png) | ![Architecture](docs/screenshots/02-architecture.png) |
+| ![Inbox](docs/screenshots/03-inbox.png) | ![Evidence](docs/screenshots/05-evidence.png) |
+| ![Treasury](docs/screenshots/06-treasury.png) | ![Approval](docs/screenshots/07-approval.png) |
+| ![Walkthrough complete](docs/screenshots/08-walkthrough-done.png) | ![Ledger](docs/screenshots/09-ledger.png) |
+
+All screenshots come from a real run of the app on a synthetic sample company (`frontend/e2e/screenshots.spec.ts`).
+
 ## What is real and what is simulated
 
-Review updated 29 October 2026: historical runtime `9f07166` passed [CI40734890246](https://github.com/Lingu17/ledgerline/actions/runs/40734890246) all five jobs, public smoke32/32 and confirmed redeploy continuity8/8. Later operator sandbox deposits and FX settled on `a4c9f2c`; a fresh EUR5 refund and signed deposit delivery were verified 29 Oct on 98d6ad4, while successful Claude extraction waits for account credit. External replay was refused; the payment-link attempt returned HTTP 401 with an honest draft fallback. At continuation, frontend `6a7a2f9` and backend `540dd93` differed; final main-branch release alignment remains pending. See [handoff](docs/DEPLOYMENT_HANDOFF.md), [integration evidence](docs/INTEGRATION_EVIDENCE.md) and [requirements matrix](docs/HACKATHON_REQUIREMENTS_MATRIX.md).
-
-| Part | In this build | Notes |
+| Part | In this build | Evidence |
 |---|---|---|
-| Accounts, organizations, roles, sessions | **Real, tested** | scrypt password hashes, HttpOnly SameSite=Strict session cookie, CSRF token, login throttling, idle/absolute expiry, server-side logout. |
-| Tenant isolation | **Real, tested** | One database, simulated bank and payer-agent key set per organization; every request is bound to the member's organization only. |
-| Matching rules, ledger, approvals, locks, pause, FX reserve logic | **Real, tested** | Integer minor units, serialized writer transactions (SQLite `BEGIN IMMEDIATE`; on PostgreSQL a transaction-scoped advisory lock per schema). |
-| Payer agents (`explain_payment`) | **Real MCP protocol, simulated agents** | An MCP server subprocess (stdio) using the official `mcp` SDK. The six customer agents are local simulations with their own Ed25519 keys; one is deliberately dishonest. |
-| Bank (transfers, FX, deposits) — default | **Simulated bank ("Local workspace")** | A per-organization "bank" (SQLite file locally, PostgreSQL schema when hosted) with fault injection. No network, no money. Shown as a *Local workspace* badge; simulated actions are labelled. |
-| Airwallex sandbox adapter | **Deposits and FX verified live (sandbox)** | 28 Oct: three simulated EUR deposits settled at Airwallex and were reconciled (exact match, escalation for an unknown reference, operator allocation); one EUR→GBP conversion was quoted and settled, the quote could not be reused, and reserves held. 29 Oct: fresh EUR5 refund independently approved and completed SENT→PAID, one provider transfer, liability correctly released; actual signed deposit delivery returned HTTP 200 with a persisted event row. Provider external replay refused; payment-link attempt401 retained a labelled draft; judge organizations use local simulations. See the integration evidence. |
-| Webhooks | **Real verification** | Per-organization URL and secret; HMAC-SHA256 over `x-timestamp` + raw body; skew limit; event-id dedupe in the same transaction; documented flat `deposit.settled` shape. |
-| Claude evidence reader | **Optional** | With `ANTHROPIC_API_KEY`, Claude must answer through strict typed proposal tools. Without it, offline rules produce the same shape, labelled "Claude not invoked". Advisory only; never moves money. Live: key set on Render; the first real call was refused by Anthropic for missing account credit and Ledgerline applied nothing. |
-| Email (invitations, balance requests) | **Not sent** | Owners copy one-time invitation links; balance requests are recorded as drafts. |
+| Accounts, organizations, roles, sessions, tenant isolation | **Real, tested** | scrypt hashes, HttpOnly SameSite=Strict cookie, CSRF token, throttling, expiry, server-side logout; one database per organization |
+| Matching, ledger, approvals, locks, pause, FX reserves | **Real, tested** | integer minor units, journaled, per-currency conservation |
+| Payer agents (`explain_payment`) | **Real MCP protocol, simulated agents** | MCP stdio subprocess (official `mcp` SDK); six local customer agents with their own Ed25519 keys; one is deliberately dishonest |
+| Bank, default ("Local workspace") | **Simulated** | per-organization simulated bank with fault injection; labelled everywhere |
+| Airwallex sandbox | **Verified live (sandbox)** for the operator organization only | signed `deposit.settled` webhook on the Google Cloud host (HTTP 200, one processed event); deposits, FX conversion and an independently approved refund SENT→PAID verified earlier; current rates, beneficiary schema/validation and deposit listing verified 29 Oct. Judge organizations always use the simulated bank. See [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
+| Claude evidence reader | **Verified live** | 29 Oct: `claude-opus-5-5` returned a schema-valid `escalate` proposal for an unexplained sandbox deposit, stored as advisory evidence; nothing applied |
+| Email | **Not sent** | invitation links are copied; balance requests are drafts |
 
-## Prerequisites (Windows)
+## Architecture
 
-- Windows 10/11 with PowerShell
-- Python **3.12+** on PATH (developed with 3.14.7)
-- Node.js **22.12+** (or 24 LTS) and npm (developed with Node 24.20 / npm 11.19)
+```mermaid
+flowchart LR
+  B[Browser<br/>React + TypeScript] -->|HTTPS, one origin| C[Caddy<br/>TLS, HSTS, CSP]
+  C -->|127.0.0.1:8000| A[FastAPI<br/>rules · approvals · ledger]
+  AW[Airwallex sandbox] -->|signed deposit.settled| C
+  A -->|quotes, conversions,<br/>transfers, beneficiaries| AW
+  A -->|typed tools only| CL[Claude API]
+  A -->|explain_payment over MCP| PA[Payer agents<br/>Ed25519 signed claims]
+  A --> D[(SQLite per organization<br/>/var/lib/ledgerline)]
+  A --> K[(Payer-agent keys<br/>per organization)]
+  D -. nightly consistent copy .-> BK[(Backups, 7 kept)]
+```
 
-## Run it locally
+One Google Cloud VM (e2-small, Ubuntu 24.04, asia-south1) runs everything: Caddy terminates HTTPS (sslip.io name for the static IP) and proxies to the FastAPI process, which also serves the built React app. There is no other runtime dependency. Interactive version: [`#/architecture`](https://35-207-220-110.sslip.io/#/architecture).
+
+```
+backend/ledgerline/
+  api/            security (session → membership → role → organization), routes, auth, OAuth
+  control.py      users, organizations, memberships, sessions, invitations, throttling
+  tenancy.py      one isolated context per organization; sandbox allow-list checked at every use
+  webhooks.py     HMAC over x-timestamp + raw body, skew limit, event-id dedupe
+  matching.py     deterministic first plan          reconcile.py  plans, buckets, revisions
+  evidence.py     the three checks on signed claims claude_reader.py  typed proposals, budgets, PDF
+  payouts.py      scoped approvals, four-eyes, locks treasury.py  reserves, single-use quotes
+  ledger.py       double entry, conservation        providers/{local,airwallex}.py
+  payer_agents/   MCP server + Ed25519 keys         beneficiaries.py, sandbox_receipts.py
+```
+
+**Why database-per-organization:** isolation is structural. A query in one organization's context cannot reach another organization's rows because they are in a different file; the only path between them is the session → membership check, re-read on every request.
+
+### Money rules the code enforces
+
+- **Rules live in code**, never in a prompt: tolerances, limits, reserves and conservation are Python and per-organization policy.
+- **Integer minor units.** Amounts are converted with `Decimal`; extra precision, negative, non-finite or boolean values are refused.
+- **No amount-only matching.** Reference + identified payer + currency, or nothing.
+- **A signed answer is a claim.** Registered key of the *asked* customer; bound to this deposit, amount and a bounded validity window; our records agree; replays refused.
+- **Approvals bind scope** (deposit + version, amount, currency, destination, evidence version and hash). Any change invalidates the approval. The proposer cannot approve.
+- **No double payout.** One live refund per deposit, stable request ids, lookup by request id before any retry after an ambiguous response.
+- **SENT is not final.** Liability released only on PAID; failures never debit cash.
+- **FX only on SETTLED**, sell amount reserved at booking, pending proceeds never spendable, each quote used once.
+- **Pause** blocks refunds, retries and conversions; matching keeps running.
+
+### Roles
+
+| | Viewer | Operator | Owner |
+|---|---|---|---|
+| Read everything, export evidence JSON | ✓ | ✓ | ✓ |
+| Record/import payments, customers, invoices, adjustments, resolve exceptions, ask agents, read remittances, propose returns | | ✓ | ✓ |
+| Approve/reject refunds (not your own proposals), execute, quotes, conversions, obligations, pause | | ✓ | ✓ |
+| Resume, policy, team, organization and integration settings, sandbox tools, opening balances | | | ✓ |
+
+Every rule is enforced by the API; the UI only hides what you cannot do.
+
+## Run it locally (Windows)
+
+Needs Python 3.12+ (developed on 3.14) and Node.js 22.12+.
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
@@ -44,25 +136,7 @@ powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
 powershell -ExecutionPolicy Bypass -File scripts/start.ps1
 ```
 
-Open http://127.0.0.1:8000 and choose **Create an organization**. Pick *Sample data* to get the synthetic reference company with six received payments (and the optional walkthrough), or *An empty workspace* to start from scratch. There are **no default accounts or passwords**.
-
-To create an owner from the command line instead (for example with sign-up disabled):
-
-```bash
-cd backend && .venv\Scripts\python -m ledgerline.manage create-owner --email you@company.test --org "Company" --sample
-```
-
-The password is prompted interactively (or read from `LEDGERLINE_BOOTSTRAP_PASSWORD` for scripted local setups); only its hash is stored.
-
-Development mode (hot-reload UI on :5173 proxied to the API on :8000):
-
-```bash
-cd backend && .venv\Scripts\python -m ledgerline
-```
-
-```bash
-cd frontend && npm run dev
-```
+Open http://127.0.0.1:8000 and choose **Create an organization**. There are no default accounts. Data lives in `backend/var/` (delete it to start fresh). Development mode with hot reload: `python -m ledgerline` in `backend/` and `npm run dev` in `frontend/` (port 5173, proxied to 8000).
 
 Tests and build:
 
@@ -70,143 +144,66 @@ Tests and build:
 powershell -ExecutionPolicy Bypass -File scripts/test.ps1
 ```
 
-Live smoke test against a running server (creates throwaway accounts with random passwords):
+## Configuration
+
+All optional; without them the app runs fully on the simulated bank and the offline rules reader. Secrets are server environment variables only (see `backend/.env.example`), never in the browser bundle or Git.
+
+| Variable | Purpose |
+|---|---|
+| `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex sandbox (server-wide) |
+| `LEDGERLINE_SANDBOX_ORGS` | the only organization ids allowed to use those credentials; everyone else stays on the simulated bank |
+| `ANTHROPIC_API_KEY` | Claude reader (`LEDGERLINE_CLAUDE_MODEL`, default `claude-opus-5-5`; per-organization and server daily budgets) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Sign in with Google (OIDC + PKCE). Apple is intentionally not offered |
+| `LEDGERLINE_PUBLIC_URL`, `LEDGERLINE_ALLOWED_ORIGINS`, `LEDGERLINE_COOKIE_SECURE`, `LEDGERLINE_TRUSTED_PROXY_HOPS` | public origin, CSRF origin allow-list, secure cookie, proxy hops for client IPs |
+| `LEDGERLINE_DATA_DIR`, `LEDGERLINE_REQUIRE_PERSISTENT_MOUNT` | data location and a guard that refuses to start on ephemeral storage |
+
+In Settings an owner of an allow-listed organization switches the bank to *Airwallex sandbox*, saves the receiving global account ids and the webhook secret, registers the organization's webhook URL in Airwallex, creates refund beneficiaries (validated by Airwallex first), and can run **Find missed deposits** as the webhook fallback.
+
+## Deploy (Google Cloud VM, single host)
+
+The `deploy/vm` kit installs everything on one Ubuntu 24.04 VM: Python 3.14 with a locked dependency set, Node 22 for the frontend build, a systemd service running as an unprivileged user, Caddy with automatic HTTPS, firewall rules for 80/443, and a nightly backup timer.
 
 ```bash
-backend\.venv\Scripts\python scripts/smoke_live.py
+sudo bash deploy/vm/setup.sh 35-207-220-110.sslip.io self <commit>
 ```
 
-All state lives in `backend/var/` (`control.sqlite3` plus `orgs/<org_id>/`). Stop the server and delete that folder to start fresh. `python -m ledgerline.manage migrate` applies pending migrations to the control plane and every organization.
+Then put keys in `/etc/ledgerline/ledgerline.env` (root-owned, mode 640) and `sudo systemctl restart ledgerline`. Updates deploy an exact commit and rebuild the frontend:
 
-## Using it
-
-- **Sign in / organizations** — one person can belong to several organizations and switch from the menu at the top of the sidebar, or create a new one there.
-- **Team** — owners invite people by email with a role and copy the one-time link (valid 3 days); change roles; remove members (access ends immediately). The last owner cannot be removed or demoted.
-- **Inbox** — per-currency cash, what needs a decision, upcoming obligations, recent activity.
-- **Payments** — search, filter and page through received funds. *Record payment* or *Import CSV* for statement lines (labelled *manually recorded, not bank-verified*; idempotent per statement reference). Open a payment for its decision history (initial vs revised plan), evidence and checks, postings and audit; ask the payer's agent, read a remittance (paste any text), resolve an escalated payment (apply to the payer's own invoice or hold as credit, partial allowed), or propose a return to sender.
-- **Approvals** — exact scope (amount, currency, destination, deposit version, evidence version, scope hash) and checks; approve/reject behind a confirmation; execute; track `processing → sent → paid` (SENT is not final). The proposer of a refund cannot approve it.
-- **Evidence** — payer answers with the three checks and the before/after plan.
-- **Treasury** — settled cash, reserves, held funds, bills in window, FX reservations and pending FX in (forecast, never spendable); obligations (add your own); opening balances (once per currency); single-use expiring quotes.
-- **Ledger** — per-currency conservation, five checks, per-deposit buckets, double-entry journal.
-- **Customers & invoices** — create and edit customers (remitter names must be unambiguous across customers); create invoices; edit description and due date; amounts change only through audited **adjustments** (credit note, additional charge) or **void** (unpaid invoices only).
-- **Activity** — searchable, paginated audit trail; *Download evidence JSON*.
-- **Settings** — pause money-out, organization name, bank mode, Airwallex global accounts and webhook secret (write-only), this organization's webhook URL, readiness check, policy, password change.
-- **Walkthrough** (sample organizations only) — the reference scenario step by step.
-
-### Roles
-
-| | Viewer | Operator | Owner |
-|---|---|---|---|
-| Read everything, export evidence JSON | ✓ | ✓ | ✓ |
-| Record/import payments, customers, invoices, adjustments, resolve exceptions, ask agents, propose returns | | ✓ | ✓ |
-| Approve/reject refunds (not your own proposals), execute, quotes, conversions, obligations | | ✓ | ✓ |
-| Pause money-out | | ✓ | ✓ |
-| Resume money-out, policy, team, organization and integration settings, opening balances, reset sample data | | | ✓ |
-
-Every rule above is enforced by the API; the UI only hides what you cannot do.
-
-## Architecture
-
-```
-                 ┌──────────────────────────── browser (React + TS, Vite) ───────────────────────────┐
-                 │ Sign in · Inbox · Payments · Approvals · Evidence · Treasury · Ledger · Team · …   │
-                 └───────────────┬────────────────────────────────────────────────────────────────────┘
-                                 │ /api  HttpOnly session cookie + X-CSRF-Token, Origin / Sec-Fetch-Site checks
- Airwallex ── deposit.settled ──►│  /api/webhooks/airwallex/{org_id}  (HMAC per organization)
- (sandbox) ◄─ transfers / FX ────┤ FastAPI
-                                 │  api/security.py   session → membership → role → organization context
-                                 │  control.py        users, organizations, memberships, sessions, invitations, throttling
-                                 │  tenancy.py        one isolated context per organization
-                                 │  migrations.py     versioned control-plane and tenant migrations
-                                 │  ─────────────── per-organization domain (unchanged safeguards) ───────────────
-                                 │  webhooks · matching · reconcile · evidence · payouts · treasury · ledger · workspace
-                                 │  payer_agents/ (MCP stdio) · claude_reader · providers/{local, airwallex}
-                                 └──► backend/var/control.sqlite3
-                                      backend/var/orgs/<org_id>/{ledgerline.sqlite3, local_bank.sqlite3, payer_agents/}
-                                      (hosted: PostgreSQL schemas <prefix>_control, <prefix>_t_<org_id>, <prefix>_b_<org_id>;
-                                       payer-agent keys encrypted in the organization's schema)
+```bash
+sudo bash /opt/ledgerline/src/deploy/vm/update.sh <commit>
 ```
 
-**Why database-per-organization:** isolation is structural. A query in one organization's context cannot reach another organization's rows because they are in a different file (hosted: a different schema, pinned by the connection's `search_path`); the only path between them is the session → membership check, which is re-read from the control plane on every request. Tests prove cross-organization reads, approvals, switching and webhook signing are refused.
+`scripts/smoke_deploy.py <url>` runs 32 public checks (health and storage, CSP, cookie flags, CSRF and foreign-origin refusal, unauthenticated refusal, a partial payment and idempotent re-entry, signed MCP evidence and the cross-customer rejection, the treasury conversion, four-eyes, cross-organization isolation, logout replay, conservation) and `--save`/`--verify` proves accounts, data, the refund lifecycle and signing keys survive a restart, reboot or redeploy. Details and the current deployment record: [DEPLOYMENT](docs/DEPLOYMENT.md), [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md).
 
-Financial rules the code enforces (unchanged from the single-tenant build, all regressions still passing):
+### Backups and restore
 
-- **Money rules live in code.** Tolerances (absolute and relative), limits, reserves and conservation checks are in Python and per-organization policy — never in a prompt.
-- **Integer minor units.** API amounts are converted with `Decimal`; extra precision, negative, non-finite or boolean values are rejected.
-- **No amount-only matching.** Reference + identified payer + currency, or nothing.
-- **A signed answer is a claim.** Registered key of the *asked* customer; bound to this exact deposit, amount and a positive, bounded validity window; our records agree. Replays refused. Action still limited by code and approvals.
-- **Approvals bind scope** (deposit + version, amount, currency, destination, evidence version and hash). Execution rechecks inside the transaction; any change — including editing the customer's refund account — invalidates the approval. Four-eyes: proposer ≠ approver.
-- **No double payout.** One live refund per deposit (unique index), UUIDv5 request IDs, submission lease, lookup by request ID before any retry after an ambiguous response.
-- **SENT is not final.** Liability released only on PAID; immediate failures never debit cash.
-- **FX only on verified SETTLED**, sell amount reserved at booking, pending proceeds never spendable, missing lookups keep the reservation.
-- **No edited money history.** Invoice amounts change only through journaled adjustments; opening balances once per currency.
-- **Pause** blocks refunds, retries and conversions, persists, and leaves matching running.
+`ledgerline-backup.timer` runs nightly at 03:15 UTC: SQLite's online backup API makes consistent copies of every database plus the payer-agent key files into `/var/lib/ledgerline/backups/<timestamp>/`, keeping 7. To restore, stop the service, copy a snapshot's files back into `/var/lib/ledgerline/` (owner `ledgerline`), start the service. An isolated restore test (integrity check, row counts equal to live, a second instance serving the copy) passed on 29 Oct. **Limitation:** backups are on the same disk as the data, so they protect against bad writes, not disk loss; a disk snapshot schedule or off-VM copy would be the next step.
 
-## Security posture
+### Troubleshooting
 
-- Passwords: scrypt (n=2^14, r=8, p=1, 16-byte salt); minimum 12 characters with upper, lower and a digit. Login errors do not reveal whether an account exists.
-- Throttling: 5 failures per email or per IP in 15 minutes → HTTP 429 with `Retry-After`.
-- Sessions: random 256-bit token in `ll_session` (HttpOnly, SameSite=Strict, Path=/api, Secure when `LEDGERLINE_COOKIE_SECURE=1`); only its SHA-256 is stored. 2-hour idle and 12-hour absolute expiry; logout and password change revoke server-side.
-- CSRF: per-session token in `X-CSRF-Token` on every mutation, plus Origin allow-list and `Sec-Fetch-Site: cross-site` refusal.
-- Headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Cache-Control: no-store` on the API.
-- Secrets: Airwallex and Anthropic keys are server environment variables only; organization webhook secrets are stored server-side and never returned. Simulated payer agents' private keys are under `backend/var/` (gitignored).
-- Logs: one line per API request with method, path, status, duration, organization and user — no bodies or secrets.
-
-### Deployment notes
-
-`python -m ledgerline` refuses to bind a non-loopback address unless `LEDGERLINE_COOKIE_SECURE=1`, i.e. you terminate TLS in front of it. Hosted mode stores everything in PostgreSQL (`LEDGERLINE_DATABASE_URL`, one schema per organization; see [DEPLOYMENT](docs/DEPLOYMENT.md)); it has only been run as a single server instance. For anything beyond a demo you would also want: email delivery for invitations, SSO/MFA, a secrets manager for per-organization Airwallex credentials, backups, and rate limiting at the proxy. None of that is included.
-
-## Integration setup
-
-**Airwallex sandbox** (optional): set `AIRWALLEX_CLIENT_ID` and `AIRWALLEX_API_KEY` on the server. In Settings an owner switches the organization to *Airwallex sandbox*, enters global account ids per currency and the webhook secret from the Airwallex dashboard, and registers this organization's webhook URL (via a tunnel for local runs). Refund destinations must then be sandbox **beneficiary IDs** (beneficiary creation is not automated). Endpoints used: `authentication/login` (token cached until 2 minutes before `expires_at`), `simulation/deposit/create` (currency comes from the global account), `fx/quotes/create`, `fx/conversions/create` + `GET fx/conversions[/{id}]`, `transfers/create` + `GET transfers?request_id=`, `simulation/transfers/{id}/transition`, `pa/payment_links/create`. No `x-api-version` header is sent. The settled-deposit webhook carries no payer, so Ledgerline records payer and reference when it creates each sandbox simulation.
-
-**Sign in with Google / Apple** (optional): OpenID Connect authorization-code flow, implemented in `backend/ledgerline/oidc.py` and `api/oauth_routes.py`. The buttons appear on sign-in, sign-up and invitation screens, and stay disabled until the server has credentials (see `backend/.env.example`).
-- Google: create an OAuth client (Web application) and register `http://localhost:8000/api/auth/oauth/google/callback` (or your `LEDGERLINE_PUBLIC_URL`). Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. PKCE is used.
-- Apple: create a Services ID with Sign in with Apple, a key (.p8), and register `https://<your host>/api/auth/oauth/apple/callback`. Apple only accepts HTTPS redirects and returns by cross-site form POST, so run behind TLS with `LEDGERLINE_COOKIE_SECURE=1`. Set `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY_PATH`. The client secret is a 5-minute ES256 JWT signed per request.
-- Server-side checks: single-use state bound to the starting browser by an HttpOnly cookie (10-minute expiry), nonce, ID-token RS256 signature against the provider's published keys, issuer, audience, expiry, and a verified email for new accounts. A provider login is **never merged into an existing password account by email**, because password sign-ups do not verify email ownership. Instead, sign in with the password and use Settings → Sign-in methods → Connect. Accounts created through a provider have no password; the last sign-in method cannot be disconnected. Invited users can sign in with a provider and then join in one click if the address matches.
-
-**Claude** (optional): set `ANTHROPIC_API_KEY` (model defaults to `claude-opus-5-5`, override with `LEDGERLINE_CLAUDE_MODEL`). Used only by *Read remittance*. Calls are budgeted per organization (`LEDGERLINE_CLAUDE_DAILY_LIMIT`, default 25) and server-wide (`LEDGERLINE_CLAUDE_SERVER_DAILY_LIMIT`, default 200) per UTC day; each attempt is reserved before dispatch and counts even if it fails.
-
-## Four-minute demo script
-
-1. **Sign up (0:00).** Create an organization with *Sample data*. The Inbox shows three wallets, EUR short for the hosting bill due in 3 days, and six received payments: two matched (split reference; a 15 EUR bank fee written off), one short payment with a drafted balance request, three asking the payer.
-2. **Team (0:30).** Invite an operator; open the link in a private window to join. Note the role table.
-3. **Payments → Dunmore (0:50).** "Possible duplicate, refund proposed". *Ask payer's agent*: signed answer over MCP, three checks pass, refund dropped before any money moved, credit toward the March invoice.
-4. **Fjord (1:30).** No reference; Fjord's agent claims Brightwave's invoice. **Check 3 fails**, escalated with the reason. *Resolve* never offers another customer's invoice and the API refuses it anyway.
-5. **Treasury (2:10).** Quote USD→EUR for exactly the shortfall; convert; USD stays above reserve.
-6. **Approvals (2:40).** Eastgate's agent confirms a true duplicate over the auto-limit. Approve the exact scope, execute, simulate *sent* (still pending on the ledger) then *paid*.
-7. **Ledger (3:30).** Each currency balanced to the cent. Switch to a second, empty organization: none of this data is visible.
-
-## Requirements matrix
-
-| Requirement | Where | Evidence |
-|---|---|---|
-| Sign-in, onboarding, roles, logout, sessions | `control.py`, `api/security.py`, `api/auth_routes.py`, `views/Auth.tsx` | `test_saas.py` (signup/login/logout replay, cookie flags, password policy, throttling, idle + absolute expiry, password change) |
-| Tenant isolation on reads, mutations, exports, webhooks | `tenancy.py`, per-org webhook URL | `test_organizations_cannot_see_or_touch_each_other`, `test_webhook_secret_is_per_organization`, `scripts/smoke_live.py` |
-| Role enforcement in the API, four-eyes | `require_role`, `payouts.decide` | `test_viewer_is_read_only`, `test_operator_works_but_cannot_govern`, `test_proposer_cannot_approve_own_refund`, `test_role_changes_and_removal_take_effect_immediately` |
-| Invitations | `control.invite/accept_invitation` | `test_invitation_single_use_and_expiry` |
-| Migrations | `migrations.py`, `manage migrate` | `test_migrations_recorded_and_legacy_tenant_upgraded` |
-| CRUD without the walkthrough; adjustments not edits; CSV import | `workspace.py` | `test_empty_workspace_full_workflow`, `test_voided_invoice_can_never_be_paid`, `test_csv_import_is_idempotent_per_row`, `test_customer_edit_invalidates_bound_approval`, `test_workspace.py` |
-| Six-deposit scenario | `scenario.py`, `demo.py` | `test_full_demo_scorecard`, `test_guided_demo_over_api…` |
-| Matching rules incl. 970/1000 stays partial | `matching.py` | `test_matching.py` |
-| MCP + Ed25519 + three checks (tamper, expiry, wrong deposit/amount, cross-customer, replay, zero/negative window) | `payer_agents/`, `evidence.py` | `test_evidence.py`, `test_integrations.py::test_explain_payment_over_stdio_mcp`, regressions #5 |
-| Approval binding, duplicate lock, ambiguous retries, SENT not final, failed refunds keep cash | `payouts.py` | `test_payouts.py`, regressions #3 |
-| FX finality, reservations, pending not spendable, missing lookup holds | `treasury.py` | `test_treasury_ledger.py`, regressions #1, #2, #9, #10 |
-| Webhook HMAC, skew, dedupe, malformed, documented shape | `webhooks.py` | `test_api_webhooks.py`, regressions #6, #7 |
-| Sandbox adapter behaviour (mocked) | `providers/airwallex.py` | `test_integrations.py` |
+| Symptom | Check |
+|---|---|
+| Site not reachable | `systemctl status caddy ledgerline`; `journalctl -u ledgerline -n 50`; ports 80/443 open in the VPC firewall |
+| 502 from Caddy | the app is not listening on 127.0.0.1:8000; `curl http://127.0.0.1:8000/api/health` on the VM |
+| Service refuses to start | `LEDGERLINE_REQUIRE_PERSISTENT_MOUNT` guard or a missing env value; the journal names it |
+| Sign-in loops | `LEDGERLINE_PUBLIC_URL`/`ALLOWED_ORIGINS` must equal the browser origin exactly; cookies need HTTPS |
+| Airwallex option disabled | credentials missing, or the organization id is not in `LEDGERLINE_SANDBOX_ORGS` |
+| Webhook rejected | the Airwallex webhook secret in Settings must match the dashboard; timestamps outside the skew window are refused |
+| Claude reads refused | daily budget reached (resets 00:00 UTC) or no `ANTHROPIC_API_KEY`; PDFs need Claude |
 
 ## Tests
 
-`backend/tests` — **174 tests**: unit, API integration, a real stdio MCP subprocess, threaded concurrency, and SaaS boundaries.
-
-**Randomized accuracy harness** (`backend/tests/accuracy_harness.py`, full run `backend\.venv\Scripts\python scripts\accuracy_run.py --seeds 250 --walkthroughs 25`, report in `docs/ACCURACY_REPORT.md`). Each seed builds a synthetic company and drives it through the real API: opening balances, customers (some with payer agents), invoices, credit notes, extra charges and voids. It then sends statement lines typed singly or imported as CSV, with invalid rows and re-imports mixed in, and has an operator resolve escalated payments. A reference model written from the product rules predicts every outcome, and the harness compares it against what the API reports: each invoice balance and status, each payment's category, status, payer and buckets, import counts, wallet cash, credits and unapplied money, ledger checks, the audit trail, and organization isolation. The harness is itself tested: three bugs planted in memory (fee tolerance doubled, matching on amount alone, unapplied off by one cent) were each caught. 12 seeds and the walkthrough also run inside `pytest`. `test_review_regressions.py` has one section per independent review finding. Frontend: `npm run build` (strict `tsc` + Vite) and `npm run e2e` (Playwright browser suite, 9 tests, uses the installed Microsoft Edge; set `E2E_CHANNEL=chromium` after `npx playwright install chromium` elsewhere). Recorded results: `docs/CLAUDE_HANDOFF.md` and `docs/INDEPENDENT_REVIEW.md`.
+- **Backend** (`backend/tests`): unit, API, real stdio MCP subprocess, threaded concurrency, SaaS boundaries, webhooks, judge safety, proposal capabilities; the PostgreSQL adapter suite runs in CI on PostgreSQL 17.
+- **Accuracy harness**: 250 seeds, 64,215 checks, 0 mismatches; 12 seeds also run in pytest.
+- **Browser** (`frontend/e2e`, Playwright on Microsoft Edge): sign-up/sign-out, home page, Apple absent, roles, cross-organization isolation, 375px layout, dialogs and focus.
+- **CI**: five GitHub Actions jobs (Linux and Windows backend, PostgreSQL 17, frontend build, browser E2E).
+- Current results and dates: [FULL_APPLICATION_ACCEPTANCE_REPORT](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md).
 
 ## Known limitations
 
-- Airwallex sandbox: deposits and FX executed live; transfers/refunds not yet executed (need a second approver); beneficiary creation not automated; Airwallex API credentials are server-wide rather than per organization.
-- Sign in with Google / Apple is tested only against fake providers that sign real RS256 tokens (`tests/test_oauth.py`); Google sign-in has been completed with a real account on the deployment; Apple has not been run. Apple needs HTTPS. Provider-only accounts cannot add a password yet.
-- No email delivery (invitation links are copied manually), no enterprise SSO (SAML) or MFA, no password reset flow (an owner can re-invite; `manage create-owner` bootstraps).
-- Payer agents are local simulations; real deployments would discover each customer's MCP endpoint and key at onboarding.
-- The hosted PostgreSQL mode has been run as one Render instance only; several instances have not been tested.
-- FX uses fixed synthetic rates in local workspaces. Paying obligations is out of scope.
-- No subscription billing (explicitly out of scope).
+- Airwallex credentials are server-wide and reserved for one operator organization; judge organizations use the simulated bank by design.
+- Hosted payment links: the sandbox refused `POST /pa/payment_links/create` (HTTP 401); Ledgerline keeps an honest draft and never invents a URL.
+- Airwallex's dashboard "resend" did not produce a second delivery, so provider-side replay is proven only by signed local tests and dedupe, not by a real duplicate delivery.
+- Payer agents are local simulations; a real deployment would discover each customer's MCP endpoint and key at onboarding.
+- No email delivery, password reset, SSO/MFA or subscription billing.
+- Backups are on the VM's own disk. The Free Trial credit ends 28 Jan 2027; after that the VM stops unless billing is upgraded.

@@ -151,10 +151,19 @@ class AirwallexSandbox:
     def current_rate(self, sell_currency: str, buy_currency: str) -> dict[str, Any]:
         """Indicative client rate (GET /fx/rates/current). Display only: conversions always use a booked quote."""
         r = self._request("GET", "/fx/rates/current", params={"sell_currency": sell_currency, "buy_currency": buy_currency})
-        rate = r.get("rate")
-        if isinstance(rate, bool) or not isinstance(rate, (int, float, str)):
-            raise ProviderError("rate response had no numeric rate")
-        return {"sell": sell_currency, "buy": buy_currency, "rate": str(Decimal(str(rate))), "as_of": r.get("created_at")}
+        rate, pair = r.get("rate"), r.get("currency_pair")
+        if isinstance(rate, bool) or not isinstance(rate, (int, float, str)) or Decimal(str(rate)) <= 0:
+            raise ProviderError("rate response had no positive numeric rate")
+        # `rate` is quoted in market convention for `currency_pair` (BASEQUOTE: quote units per one base unit), so
+        # GBP->EUR comes back as EURGBP 0.84. Normalise to buy units per sell unit, as quotes and the UI use.
+        if pair == sell_currency + buy_currency:
+            per_sell = Decimal(str(rate))
+        elif pair == buy_currency + sell_currency:
+            per_sell = Decimal(1) / Decimal(str(rate))
+        else:
+            raise ProviderError(f"rate response was for another currency pair {str(pair)[:12]!r}")
+        return {"sell": sell_currency, "buy": buy_currency, "rate": str(per_sell.quantize(Decimal("0.000001"))),
+                "pair": pair, "market_rate": str(Decimal(str(rate))), "as_of": r.get("created_at")}
 
     def list_deposits(self, *, page_num: int, page_size: int = 100) -> dict[str, Any]:
         """GET /deposits, one page. The sandbox requires page_num and page_size together."""
@@ -271,7 +280,9 @@ class AirwallexSandbox:
             buy_currency=buy_currency,
             sell_amount_minor=to_minor(q["sell_amount"], sell_currency),
             buy_amount_minor=to_minor(q["buy_amount"], buy_currency),
-            rate=Decimal(str(q["client_rate"])),
+            # client_rate is quoted for the market pair (EURGBP even when selling GBP); the booked amounts give
+            # buy units per sell unit in either direction. Display/record only: money uses the amounts themselves.
+            rate=(Decimal(str(q["buy_amount"])) / Decimal(str(q["sell_amount"]))).quantize(Decimal("0.000001")),
             valid_to=parse_iso(q["valid_to_at"]),
             source="airwallex_sandbox",
         )

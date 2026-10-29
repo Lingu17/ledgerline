@@ -163,12 +163,19 @@ def test_airwallex_rate_parsing():
     from ledgerline.providers.airwallex import AirwallexSandbox
 
     a = AirwallexSandbox.__new__(AirwallexSandbox)
-    a._request = lambda *_a, **_k: {"rate": 0.826797, "created_at": "2026-10-29T15:21:59+0000"}
-    assert a.current_rate("EUR", "GBP") == {"sell": "EUR", "buy": "GBP", "rate": "0.826797", "as_of": "2026-10-29T15:21:59+0000"}
-    a._request = lambda *_a, **_k: {"rate": True}
     from ledgerline.providers.base import ProviderError
-    with pytest.raises(ProviderError):
-        a.current_rate("EUR", "GBP")
+
+    # Shapes observed from the sandbox on 29 Oct: the rate is quoted for currency_pair in market convention.
+    a._request = lambda *_a, **_k: {"rate": 0.826797, "currency_pair": "EURGBP", "created_at": "2026-10-29T15:21:59+0000"}
+    r = a.current_rate("EUR", "GBP")
+    assert (r["rate"], r["pair"], r["market_rate"]) == ("0.826797", "EURGBP", "0.826797")
+    a._request = lambda *_a, **_k: {"rate": 0.843391, "currency_pair": "EURGBP"}
+    assert a.current_rate("GBP", "EUR")["rate"] == "1.185690"  # GBP->EUR is 1/0.843391 EUR per GBP, not 0.84
+    for bad in ({"rate": True, "currency_pair": "EURGBP"}, {"rate": 0, "currency_pair": "EURGBP"},
+                {"rate": 1.1, "currency_pair": "USDJPY"}):
+        a._request = lambda *_a, _b=bad, **_k: _b
+        with pytest.raises(ProviderError):
+            a.current_rate("EUR", "GBP")
 
 
 # --------------------------------------------------------------------------- PDF remittance
@@ -210,3 +217,14 @@ def test_bad_pdf_uploads_are_refused(tmp_path, monkeypatch, body, status):
     c = TestClient(_app(tmp_path, ANTHROPIC_API_KEY="sk-test-not-real"))
     signup(c, email="pdf3@deploy.test", start_with="sample")
     assert c.post("/api/deposits/DEP-1004/read-remittance", json=body).status_code == status
+
+
+def test_quote_rate_is_buy_per_sell_from_the_booked_amounts():
+    from ledgerline.providers.airwallex import AirwallexSandbox
+
+    a = AirwallexSandbox.__new__(AirwallexSandbox)
+    # Selling GBP for EUR: the sandbox reports client_rate for EURGBP (0.84); the amounts say 1.19 EUR per GBP.
+    a._request = lambda *_a, **_k: {"quote_id": "q1", "sell_amount": 843.39, "buy_amount": 1000.0, "client_rate": 0.843391,
+                                     "valid_to_at": "2026-10-29T16:00:00+0000"}
+    q = a.create_quote(sell_currency="GBP", buy_currency="EUR", buy_amount_minor=100000)
+    assert (q.sell_amount_minor, q.buy_amount_minor, str(q.rate)) == (84339, 100000, "1.185691")
