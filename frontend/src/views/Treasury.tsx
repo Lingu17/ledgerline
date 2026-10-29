@@ -13,10 +13,12 @@ interface QuotePreview {
   before: Record<string, number>; after: Record<string, number>;
   source_reserve: number; source_free_after: number; target_projected_after: number;
 }
+interface Rates { source: string; label: string; as_of: string | null; rates: { sell: string; buy: string; rate: string }[] }
 interface TreasuryData { wallets: Wallet[]; obligations: Obligation[]; plans: Record<string, ObPlan>; quotes: QuotePreview[]; conversions: Operation[]; rates: { sell: string; buy: string; rate: string }[]; rate_source: string }
 
 export function Treasury({ localMode }: { localMode: boolean }) {
   const t = useLoad(() => get<TreasuryData>("/treasury"), []);
+  const rates = useLoad(() => get<Rates>("/treasury/rates"), []);
   const { run, busy } = useAction();
   const { can } = useAuth();
   const op = can("operator");
@@ -110,9 +112,19 @@ export function Treasury({ localMode }: { localMode: boolean }) {
             <QuoteBox q={liveQuote} now={now} busy={busy} canConvert={op}
               onConvert={() => run("convert", () => post<Operation>(`/treasury/quotes/${liveQuote.quote.id}/execute`), (op) => `Conversion ${op.id}: ${op.status}`)} />
           )}
-          <div className="small muted" style={{ marginTop: 12 }}>
-            Rates: {localMode ? "fixed synthetic local-workspace rates" : "Airwallex sandbox quotes"} ·{" "}
-            {d.rates.map((r) => `${r.sell}→${r.buy} ${r.rate}`).join(" · ")}
+          <div className="small muted" style={{ marginTop: 12 }} aria-live="polite">
+            {rates.error ? (
+              <span>Current rates unavailable: {rates.error}. <button className="btn small" onClick={rates.reload}>Retry</button></span>
+            ) : !rates.data ? "Loading current rates…" : (
+              <>
+                <b>{rates.data.source === "synthetic" ? "Synthetic rates" : "Current rates"}</b> · {rates.data.label}
+                {rates.data.as_of && <> · as of {when(rates.data.as_of)}</>}
+                <div className="rate-grid">
+                  {rates.data.rates.map((r) => <span key={r.sell + r.buy} className="mono">{r.sell}→{r.buy} {r.rate}</span>)}
+                </div>
+                Indicative only. A conversion always books its own single-use quote.
+              </>
+            )}
           </div>
         </Card>
       </div>

@@ -148,6 +148,47 @@ class AirwallexSandbox:
         }
 
     # Deposits ------------------------------------------------------------
+    def current_rate(self, sell_currency: str, buy_currency: str) -> dict[str, Any]:
+        """Indicative client rate (GET /fx/rates/current). Display only: conversions always use a booked quote."""
+        r = self._request("GET", "/fx/rates/current", params={"sell_currency": sell_currency, "buy_currency": buy_currency})
+        rate = r.get("rate")
+        if isinstance(rate, bool) or not isinstance(rate, (int, float, str)):
+            raise ProviderError("rate response had no numeric rate")
+        return {"sell": sell_currency, "buy": buy_currency, "rate": str(Decimal(str(rate))), "as_of": r.get("created_at")}
+
+    def list_deposits(self, *, page_num: int, page_size: int = 100) -> dict[str, Any]:
+        """GET /deposits, one page. The sandbox requires page_num and page_size together."""
+        r = self._request("GET", "/deposits", params={"page_num": page_num, "page_size": page_size})
+        if not isinstance(r, dict) or not isinstance(r.get("items"), list):
+            raise ProviderError("deposit list response had no items")
+        return r
+
+    # Beneficiaries -------------------------------------------------------------
+    def beneficiary_schema(self, body: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/beneficiaries/schema", body=body)
+
+    def validate_beneficiary(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        """POST /beneficiaries/validate. Returns field errors ([] when valid); creates nothing."""
+        headers = {"Authorization": f"Bearer {self._bearer()}", "Content-Type": "application/json"}
+        resp = self._http.post("/beneficiaries/validate", headers=headers, content=json.dumps(body))
+        if resp.status_code < 400:
+            return []
+        try:
+            out = resp.json()
+        except ValueError:
+            out = {}
+        errors = (out.get("details") or {}).get("errors") if isinstance(out, dict) else None
+        if resp.status_code == 400 and isinstance(errors, list):
+            return [{"field": str(e.get("source", "")), "code": str(e.get("code", ""))} for e in errors if isinstance(e, dict)]
+        raise ProviderError(f"POST /beneficiaries/validate: HTTP {resp.status_code} {out.get('code', '') if isinstance(out, dict) else ''}".strip())
+
+    def create_beneficiary(self, body: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/beneficiaries/create", body=body)
+
+    def list_beneficiaries(self) -> list[dict[str, Any]]:
+        r = self._request("GET", "/beneficiaries", params={"page_num": 0, "page_size": 100})
+        return r.get("items", []) if isinstance(r, dict) else []
+
     def simulate_deposit(self, *, global_account_id: str, currency: str, amount_minor: int, payer_name: str,
                          reference: str) -> dict[str, Any]:
         validate_minor(amount_minor)

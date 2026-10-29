@@ -76,10 +76,23 @@ def _fixture_read(text: str) -> dict[str, Any]:
     return {"tool": "escalate", "input": {"reason": "no invoice number or intent found"}}
 
 
-def _claude_read(ctx: AppContext, text: str) -> dict[str, Any]:
+PDF_MAX_BYTES = 3 * 1024 * 1024
+
+
+def _claude_read(ctx: AppContext, text: str, pdf: bytes | None = None) -> dict[str, Any]:
+    import base64
+
     import anthropic
 
     client = anthropic.Anthropic(api_key=ctx.settings.anthropic_api_key, timeout=60.0, max_retries=2)
+    if pdf is not None:
+        content: Any = [
+            {"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
+                                            "data": base64.standard_b64encode(pdf).decode()}},
+            {"type": "text", "text": "The attached PDF is the remittance advice. Call exactly one tool."},
+        ]
+    else:
+        content = f"<remittance>\n{text}\n</remittance>\nCall exactly one tool."
     resp = client.messages.create(
         model=ctx.settings.claude_model,
         max_tokens=4000,
@@ -87,7 +100,7 @@ def _claude_read(ctx: AppContext, text: str) -> dict[str, Any]:
         tools=TOOLS,
         tool_choice={"type": "auto"},
         output_config={"effort": "low"},
-        messages=[{"role": "user", "content": f"<remittance>\n{text}\n</remittance>\nCall exactly one tool."}],
+        messages=[{"role": "user", "content": content}],
     )
     if resp.stop_reason == "refusal":
         return {"tool": "escalate", "input": {"reason": "model declined to classify"}, "model": resp.model}
@@ -138,15 +151,22 @@ def _validate(conn: sqlite3.Connection, deposit: dict[str, Any], proposal: dict[
     return checks
 
 
-def read_remittance(ctx: AppContext, deposit_id: str, actor: str, text: str | None = None, control: Any = None) -> dict[str, Any]:
-    """Read operator-supplied remittance text, or the document on file for the deposit.
+def read_remittance(ctx: AppContext, deposit_id: str, actor: str, text: str | None = None, control: Any = None,
+                    pdf: bytes | None = None) -> dict[str, Any]:
+    """Read operator-supplied remittance text or PDF, or the document on file for the deposit.
 
     `control` (the control plane) holds the persisted Claude budget; without it a configured key is never used."""
     with ctx.conn() as conn:
         d = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (deposit_id,))
     if d is None:
         raise ValueError("unknown deposit")
-    if text is not None:
+    if pdf is not None:
+        if not pdf.startswith(b"%PDF-") or len(pdf) > PDF_MAX_BYTES:
+            raise ValueError("upload a PDF file of at most 3 MB")
+        if not ctx.settings.claude_configured:
+            raise ValueError("reading a PDF needs the Claude API on this server; paste the remittance text instead")
+        text = f"[PDF remittance, {len(pdf)} bytes, sha256 {crypto.sha256_hex(pdf)}]"
+    elif text is not None:
         text = text.strip()
         if not 10 <= len(text) <= 5000:
             raise ValueError("remittance text must be 10-5000 characters")
@@ -160,7 +180,7 @@ def read_remittance(ctx: AppContext, deposit_id: str, actor: str, text: str | No
         # Reserve before dispatch (its own committed transaction), call with no transaction open, then settle.
         call_id = control.reserve_claude_call(ctx.org["id"], ctx.settings.claude_daily_limit, ctx.settings.claude_server_daily_limit)
         try:
-            proposal = typed_proposal(_claude_read(ctx, text))
+            proposal = typed_proposal(_claude_read(ctx, text) if pdf is None else _claude_read(ctx, text, pdf))
         except Exception as exc:  # noqa: BLE001 - network/auth/rate-limit errors surface as a provider failure
             from .providers.base import ProviderError
 

@@ -339,3 +339,8 @@ table.integrations select { width: 100%; max-width: 230px; }
 .signin-methods small { color: var(--ink-3); overflow-wrap: anywhere; }
 .sm-icon { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; color: var(--ink-2); font-weight: 600; flex: none; }
 .sm-icon.apple { background: #000; color: #fff; border-color: #000; }
+
+.rate-grid { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; color: var(--text, inherit); }
+.skip-link { position: absolute; left: 8px; top: -48px; z-index: 100; padding: 8px 12px; border-radius: 6px; background: #16263d; color: #fff; border: 0; }
+.skip-link:focus { top: 8px; }
+main.content:focus { outline: none; }

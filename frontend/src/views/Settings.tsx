@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { del, get, post, type Ccy, type Policy, type Status } from "../api";
+import { del, get, post, type Ccy, type Customer, type Policy, type Status } from "../api";
 import { useAuth } from "../auth";
 import { Card, ErrorNote, Field, Loading, Pill, useAction, useLoad, useToast } from "../components/ui";
 import { majorString, parseMajor, when } from "../format";
@@ -25,7 +25,7 @@ export function Settings() {
       <PauseCard st={s.data} />
       <OrgCard org={org.data} />
       <IntegrationsCard st={s.data} org={org.data} />
-      {org.data.server.sandbox_allowed && org.data.bank_mode === 'airwallex_sandbox' && <SandboxReceipts />}
+      {org.data.server.sandbox_allowed && org.data.bank_mode === 'airwallex_sandbox' && <><SandboxReceipts /><SandboxBeneficiaries /></>}
       <PolicyEditor policy={s.data.policy} />
       <div className="grid-2">
         <AccountCard />
@@ -200,6 +200,15 @@ function SandboxReceipts() {
   const [reference, setReference] = useState('Ledgerline verification');
   const [busy, setBusy] = useState(false);
   if (!owner) return null;
+  const discover = async () => {
+    setBusy(true);
+    try {
+      const r = await post<{ seen: number; ingested: string[]; already_known: number; other_account: number; before_cutoff: number; not_settled: number; rejected: number }>('/integrations/sandbox/deposits/discover');
+      toast(`Checked ${r.seen} provider deposits: ${r.ingested.length} new${r.ingested.length ? ` (${r.ingested.join(', ')})` : ''}, ${r.already_known} already booked, ${r.not_settled} not settled, ${r.other_account + r.before_cutoff} outside this organization.`);
+      list.reload();
+    } catch (e) { toast((e as Error).message, 'error'); }
+    finally { setBusy(false); }
+  };
   const submit = async (sync: boolean) => {
     setBusy(true);
     try {
@@ -222,10 +231,65 @@ function SandboxReceipts() {
       <Field id="sandbox-payer" label="Synthetic payer name"><input id="sandbox-payer" value={payer} onChange={e => setPayer(e.target.value)} maxLength={100} required /></Field>
       <Field id="sandbox-reference" label="Sandbox reference"><input id="sandbox-reference" value={reference} onChange={e => setReference(e.target.value)} maxLength={100} required /></Field>
       <div className="wide small muted">Request ID: {requestId}</div>
-      <div className="wide form-actions"><button className="btn primary" disabled={busy}>Simulate sandbox deposit</button><button type="button" className="btn" disabled={busy} onClick={() => void submit(true)}>Sync sandbox receipts</button><button type="button" className="btn" disabled={busy} onClick={() => setRequestId(crypto.randomUUID())}>New deposit request</button></div>
+      <div className="wide form-actions"><button className="btn primary" disabled={busy}>Simulate sandbox deposit</button><button type="button" className="btn" disabled={busy} onClick={() => void submit(true)}>Sync sandbox receipts</button><button type="button" className="btn" disabled={busy} onClick={() => void discover()} title="Webhook fallback: lists provider deposits and books settled ones on this organization's accounts">Find missed deposits</button><button type="button" className="btn" disabled={busy} onClick={() => setRequestId(crypto.randomUUID())}>New deposit request</button></div>
     </form>
     {list.error && <ErrorNote error={list.error} onRetry={list.reload} />}
     {list.data && <div className="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Status</th><th>Provider</th></tr></thead><tbody>{list.data.map(r => <tr key={r.request_id}><td>{r.reference}{r.deposit_id && <div className="small">{r.deposit_id}</div>}</td><td>{r.currency} {(r.amount_minor / 100).toFixed(2)}</td><td>{r.status.replaceAll('_', ' ')}</td><td>{r.provider_status || r.error_type || 'Waiting'}</td></tr>)}</tbody></table></div>}
+  </Card>;
+}
+
+interface BeneficiaryRow { id: string; name: string; currency: string; country: string; methods: string[]; account: string }
+const BENE_FIELDS: Record<string, [string, string][]> = {
+  EUR_DE_LOCAL: [['iban', 'IBAN']],
+  GBP_GB_LOCAL: [['account_number', 'Account number (8 digits)'], ['sort_code', 'Sort code (6 digits)']],
+  USD_US_LOCAL: [['account_number', 'Account number'], ['aba', 'ABA routing number (9 digits)']],
+};
+
+function SandboxBeneficiaries() {
+  const list = useLoad(() => get<{ corridors: Record<string, string>; items: BeneficiaryRow[] }>('/integrations/sandbox/beneficiaries'), []);
+  const customers = useLoad(() => get<Customer[]>('/customers'), []);
+  const { run, busy } = useAction();
+  const [corridor, setCorridor] = useState('EUR_DE_LOCAL');
+  const [schema, setSchema] = useState<{ provider_required: string[] } | null>(null);
+  const [f, setF] = useState<Record<string, string>>({ company_name: '', bank_name: '', street_address: '', city: '', postcode: '' });
+  const [customer, setCustomer] = useState('');
+  useEffect(() => {
+    setSchema(null);
+    get<{ provider_required: string[] }>(`/integrations/sandbox/beneficiaries/schema?corridor=${corridor}`).then(setSchema).catch(() => setSchema(null));
+  }, [corridor]);
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const text = (k: string, label: string) => <Field key={k} id={`bn-${k}`} label={label}><input id={`bn-${k}`} value={f[k] ?? ''} onChange={set(k)} required /></Field>;
+  return <Card title="Refund beneficiaries (Airwallex sandbox)">
+    <p className="small muted">Refunds are paid to a sandbox beneficiary. New ones are checked by Airwallex (validate) before they are created. Synthetic details only; account numbers are shown masked.</p>
+    {list.error && <ErrorNote error={list.error} onRetry={list.reload} />}
+    {list.data && (list.data.items.length === 0 ? <p className="small">No beneficiaries yet.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Currency</th><th>Method</th><th>Account</th><th>Id</th></tr></thead><tbody>
+      {list.data.items.map((b) => <tr key={b.id}><td>{b.name}</td><td>{b.currency} · {b.country}</td><td>{b.methods.join(', ')}</td><td className="mono">{b.account}</td><td className="mono small">{b.id}</td></tr>)}
+    </tbody></table></div>)}
+    <form className="form-grid" style={{ marginTop: 14 }} onSubmit={(e) => {
+      e.preventDefault();
+      run('bene', () => post<BeneficiaryRow>('/integrations/sandbox/beneficiaries', { corridor, ...f, customer_id: customer || null }),
+        (b) => `Beneficiary ${b.name} created${customer ? ` and set as ${customer}'s refund destination` : ''}`)
+        .then((r) => { if (r) { list.reload(); customers.reload(); } });
+    }}>
+      <Field id="bn-corridor" label="Corridor" hint={schema ? `Airwallex schema requires: ${schema.provider_required.map((s) => s.split('.').pop()).join(', ')}` : 'Reading the Airwallex schema…'}>
+        <select id="bn-corridor" value={corridor} onChange={(e) => setCorridor(e.target.value)}>
+          {Object.entries(list.data?.corridors ?? { EUR_DE_LOCAL: 'EUR · Germany · SEPA (IBAN)' }).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </Field>
+      {text('company_name', 'Company name')}
+      {text('bank_name', 'Bank name')}
+      {text('street_address', 'Street address')}
+      {text('city', 'City')}
+      {text('postcode', 'Postcode')}
+      {BENE_FIELDS[corridor].map(([k, label]) => text(k, label))}
+      <Field id="bn-customer" label="Use for customer (optional)" hint="Sets that customer's refund destination">
+        <select id="bn-customer" value={customer} onChange={(e) => setCustomer(e.target.value)}>
+          <option value="">Do not link</option>
+          {(customers.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} ({c.id})</option>)}
+        </select>
+      </Field>
+      <div className="wide form-actions" style={{ marginTop: 0 }}><button className="btn primary" disabled={!!busy}>{busy ? 'Validating…' : 'Validate and create'}</button></div>
+    </form>
   </Card>;
 }
 

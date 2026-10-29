@@ -308,6 +308,60 @@ def sandbox_deposits_sync(request: Request, p: Principal = Depends(require_role(
         raise HTTPException(409, str(exc)) from exc
 
 
+@router.post('/integrations/sandbox/deposits/discover')
+def sandbox_deposits_discover(request: Request, p: Principal = Depends(require_role('owner'))):
+    """Polling fallback for missed webhooks: only this organization's receiving accounts, only since it was created."""
+    from ..sandbox_receipts import SandboxReceiptError, discover
+    ctx = _sandbox_context(request, p)
+    try:
+        return discover(ctx, p.actor, since=_control(request).org(p.session.org_id)['created_at'])
+    except SandboxReceiptError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+class BeneficiaryBody(BaseModel):
+    corridor: Literal['EUR_DE_LOCAL', 'GBP_GB_LOCAL', 'USD_US_LOCAL']
+    company_name: str = Field(max_length=80)
+    bank_name: str = Field(max_length=80)
+    street_address: str = Field(max_length=80)
+    city: str = Field(max_length=80)
+    postcode: str = Field(max_length=10)
+    iban: str | None = Field(None, max_length=40)
+    account_number: str | None = Field(None, max_length=20)
+    sort_code: str | None = Field(None, max_length=10)
+    aba: str | None = Field(None, max_length=12)
+    customer_id: str | None = Field(None, max_length=80)
+
+
+@router.get('/integrations/sandbox/beneficiaries')
+def sandbox_beneficiaries(request: Request, p: Principal = Depends(require_role('owner'))):
+    from ..beneficiaries import CORRIDORS, summary
+    ctx = _sandbox_context(request, p)
+    return {'corridors': {k: v['label'] for k, v in CORRIDORS.items()},
+            'items': [summary(i) for i in ctx.sandbox.list_beneficiaries()]}
+
+
+@router.get('/integrations/sandbox/beneficiaries/schema')
+def sandbox_beneficiary_schema(request: Request, corridor: str, p: Principal = Depends(require_role('owner'))):
+    from ..beneficiaries import BeneficiaryError, schema
+    ctx = _sandbox_context(request, p)
+    try:
+        return schema(ctx.sandbox, corridor)
+    except BeneficiaryError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post('/integrations/sandbox/beneficiaries')
+def sandbox_beneficiary_create(request: Request, body: BeneficiaryBody, p: Principal = Depends(require_role('owner'))):
+    from ..beneficiaries import BeneficiaryError, create
+    ctx = _sandbox_context(request, p)
+    form = body.model_dump(exclude={'corridor', 'customer_id'})
+    try:
+        return create(ctx, body.corridor, form, p.actor, customer_id=body.customer_id)
+    except BeneficiaryError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.post('/integrations/sandbox/payment-links/{link_id}/publish')
 def sandbox_payment_link(request: Request, link_id: str, p: Principal = Depends(require_role('owner'))):
     from ..payment_links import publish

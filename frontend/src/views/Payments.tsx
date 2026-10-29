@@ -389,18 +389,35 @@ function ResolveForm({ x, onDone }: { x: DepositDetail; onDone: () => void }) {
 function ReadRemittance({ x, onDone }: { x: DepositDetail; onDone: () => void }) {
   const { run, busy } = useAction();
   const [text, setText] = useState("");
-  const submit = async (useDoc: boolean) => {
-    const r = await run("read", () => post(`/deposits/${x.id}/read-remittance`, useDoc ? {} : { text }), (res: any) => `Proposal: ${res.proposal.tool.replace(/_/g, " ")}`);
+  const [pdf, setPdf] = useState<{ name: string; data: string } | null>(null);
+  const [pdfErr, setPdfErr] = useState<string | null>(null);
+  const submit = async (body: Record<string, string>) => {
+    const r = await run("read", () => post(`/deposits/${x.id}/read-remittance`, body), (res: any) => `Proposal: ${res.proposal.tool.replace(/_/g, " ")}`);
     if (r) onDone();
+  };
+  const pick = (f: File | undefined) => {
+    setPdf(null);
+    setPdfErr(null);
+    if (!f) return;
+    if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) return setPdfErr("Choose a PDF file.");
+    if (f.size > 3 * 1024 * 1024) return setPdfErr("The PDF must be 3 MB or smaller.");
+    const reader = new FileReader();
+    reader.onload = () => setPdf({ name: f.name, data: String(reader.result).split(",")[1] ?? "" });
+    reader.onerror = () => setPdfErr("Could not read that file.");
+    reader.readAsDataURL(f);
   };
   return (
     <div className="card card-body">
       <Field id="rm-text" label="Remittance email or advice text" hint="Read as data. The result is advisory and is checked against our records.">
         <textarea id="rm-text" rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the customer's remittance email…" />
       </Field>
+      <Field id="rm-pdf" label="Or a remittance PDF" hint={pdfErr ?? "Up to 3 MB. Sent to Claude as a document; only its hash is stored."}>
+        <input id="rm-pdf" type="file" accept="application/pdf,.pdf" onChange={(e) => pick(e.target.files?.[0])} />
+      </Field>
       <div className="form-actions">
-        {x.has_remittance_doc && <button className="btn" disabled={!!busy} onClick={() => submit(true)}>Use document on file</button>}
-        <button className="btn primary" disabled={!!busy || text.trim().length < 10} onClick={() => submit(false)}>{busy ? "Reading…" : "Read text"}</button>
+        {x.has_remittance_doc && <button className="btn" disabled={!!busy} onClick={() => submit({})}>Use document on file</button>}
+        <button className="btn" disabled={!!busy || !pdf} onClick={() => pdf && submit({ pdf_base64: pdf.data })}>{busy === "read" && pdf ? "Reading…" : "Read PDF"}</button>
+        <button className="btn primary" disabled={!!busy || text.trim().length < 10} onClick={() => submit({ text })}>{busy === "read" && !pdf ? "Reading…" : "Read text"}</button>
       </div>
     </div>
   );

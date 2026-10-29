@@ -183,14 +183,27 @@ def ask_agent(request: Request, deposit_id: str, operator: str = Depends(require
 
 class RemittanceBody(BaseModel):
     text: str | None = Field(None, max_length=5000)
+    # Base64 PDF remittance advice (at most 3 MB decoded), sent to Claude as a document.
+    pdf_base64: str | None = Field(None, max_length=4_300_000)
 
 
 @router.post("/deposits/{deposit_id}/read-remittance")
 def read_remittance(request: Request, deposit_id: str, body: RemittanceBody | None = None,
                     operator: str = Depends(require_operator)) -> dict[str, Any]:
+    import base64
+    import binascii
+
+    pdf = None
+    if body and body.pdf_base64:
+        if body.text:
+            raise HTTPException(422, "send either text or a PDF, not both")
+        try:
+            pdf = base64.b64decode(body.pdf_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(422, "pdf_base64 is not valid base64") from exc
     try:
         return claude_reader.read_remittance(ctx_of(request), deposit_id, operator, body.text if body else None,
-                                             control=request.app.state.control)
+                                             control=request.app.state.control, pdf=pdf)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -468,6 +481,30 @@ def treasury_view(request: Request) -> dict[str, Any]:
     return {"wallets": list(pos.values()), "obligations": obligations, "plans": plans, "quotes": quotes,
             "conversions": conversions, "rates": [{"sell": a, "buy": b, "rate": str(r)} for (a, b), r in DEMO_RATES.items()],
             "rate_source": ctx.provider.label}
+
+
+_RATE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+@router.get("/treasury/rates", dependencies=read)
+def treasury_rates(request: Request) -> dict[str, Any]:
+    """Indicative rates for display. Sandbox organizations get Airwallex GET /fx/rates/current (cached 60 s);
+    local workspaces get the fixed synthetic rates, labelled as such. Conversions always book a quote."""
+    import time
+
+    ctx = ctx_of(request)
+    if ctx.provider.name != "airwallex_sandbox":
+        return {"source": "synthetic", "label": "Fixed synthetic rates (local simulated bank)", "as_of": None,
+                "rates": [{"sell": a, "buy": b, "rate": str(r)} for (a, b), r in DEMO_RATES.items()]}
+    key = ctx.org["id"] if ctx.org else "default"
+    hit = _RATE_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < 60:
+        return hit[1]
+    rates = [ctx.provider.current_rate(a, b) for (a, b) in DEMO_RATES]
+    out = {"source": "airwallex_sandbox", "label": "Airwallex sandbox GET /fx/rates/current (indicative client rate)",
+           "as_of": iso(ctx.clock.now()), "rates": rates}
+    _RATE_CACHE[key] = (time.monotonic(), out)
+    return out
 
 
 @router.post("/treasury/obligations/{obligation_id}/quote")

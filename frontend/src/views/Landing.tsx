@@ -116,6 +116,7 @@ export function Landing() {
             <a href="#features">Features</a>
             <a href="#safety">Safety</a>
             <a href="#faq">FAQ</a>
+            <a href="#/architecture">Architecture</a>
           </nav>
           <div className="lp-nav-cta">
             {!signedIn && <a className="lp-btn ghost" href="#/signin">Sign in</a>}
@@ -299,6 +300,7 @@ export function Landing() {
           <nav aria-label="Footer">
             <a href="#how">How it works</a>
             <a href="#faq">FAQ</a>
+            <a href="#/architecture">Architecture</a>
             <a href={signedIn ? "#/inbox" : "#/signin"}>{signedIn ? "Workspace" : "Sign in"}</a>
           </nav>
         </div>

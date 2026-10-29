@@ -15,6 +15,7 @@ import { Team } from "./views/Team";
 import { Walkthrough } from "./views/Walkthrough";
 import { AcceptInvite, NoOrganization, SignIn } from "./views/Auth";
 import { Landing } from "./views/Landing";
+import { Architecture } from "./views/Architecture";
 
 export type Route = { page: string; params: URLSearchParams };
 
@@ -158,6 +159,8 @@ function Shell({ me }: { me: Me }) {
 
   return (
     <div className="shell">
+      {/* Hash routing: a #main link would change the route, so the skip control moves focus instead. */}
+      <button type="button" className="skip-link" onClick={() => document.getElementById("main")?.focus()}>Skip to content</button>
       <aside className={`sidebar ${menuOpen ? "open" : ""}`} aria-label="Main navigation">
         <a className="brand" href="#/home" aria-label="Ledgerline home">
           <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
@@ -209,7 +212,7 @@ function Shell({ me }: { me: Me }) {
             )}
           </div>
         </header>
-        <main className="content" id="main">
+        <main className="content" id="main" tabIndex={-1}>
           {page === "inbox" && <Inbox />}
           {page === "payments" && <Payments route={route} />}
           {page === "approvals" && <Approvals localMode={localMode} sandboxMode={s?.bank.mode === "airwallex_sandbox"} />}
@@ -233,6 +236,7 @@ function Gate() {
   if (route.page === "invite" && route.params.get("token")) return <AcceptInvite token={route.params.get("token")!} />;
   if (loading) return <div className="auth-page"><div className="skeleton" style={{ width: 240 }} aria-label="Loading" /></div>;
   if (route.page === "home") return <Landing />;
+  if (route.page === "architecture") return <Architecture />;
   if (!me) {
     if (route.page === "signup") return <SignIn key="signup" initialMode="signup" />;
     if (route.page === "signin") return <SignIn key="signin" />;

@@ -70,6 +70,62 @@ def create(ctx, request_id, currency, amount, payer_name, reference, actor):
         return record
 
 
+def discover(ctx, actor, since: str, max_pages: int = 10):
+    """Webhook fallback: list deposits (GET /deposits) and ingest SETTLED ones that landed on this organization's
+    own configured receiving accounts on or after `since`. Idempotent on the provider id, so a deposit already
+    delivered by webhook is reported as known, never booked twice. Other accounts in the shared sandbox are skipped."""
+    from .clock import parse_iso
+    from .webhooks import WebhookRejected
+
+    accounts = {gid: ccy for ccy, gid in ctx.settings.airwallex_global_account_ids.items() if gid}
+    if not accounts:
+        raise SandboxReceiptError('configure a dedicated receiving account first')
+    cutoff = parse_iso(since)
+    out = {'seen': 0, 'ingested': [], 'already_known': 0, 'other_account': 0, 'before_cutoff': 0, 'not_settled': 0, 'rejected': 0}
+    for page in range(max_pages):
+        resp = ctx.sandbox.list_deposits(page_num=page)
+        for item in resp['items']:
+            if not isinstance(item, dict):
+                continue
+            out['seen'] += 1
+            gid = item.get('global_account_id')
+            if gid not in accounts:
+                out['other_account'] += 1
+                continue
+            try:
+                if parse_iso(str(item.get('created_at') or item.get('settled_at'))) < cutoff:
+                    out['before_cutoff'] += 1
+                    continue
+            except ValueError:
+                out['rejected'] += 1
+                continue
+            if str(item.get('status', '')).upper() != 'SETTLED':
+                out['not_settled'] += 1
+                continue
+            try:
+                with ctx.conn() as conn:
+                    hint = db.row(conn, 'SELECT payer_name, reference FROM deposit_hints WHERE provider_ref = ?', (item.get('id'),))
+                fields = _parse_deposit({'data': item}, hint)
+            except WebhookRejected:
+                out['rejected'] += 1
+                continue
+            if fields['currency'] != accounts[gid]:
+                out['rejected'] += 1
+                continue
+            with ctx.conn() as conn, db.transaction(conn):
+                deposit_id, created = ingest_deposit(conn, ctx, fields, source='airwallex_sandbox_poll', global_account_id=gid)
+                if created:
+                    audit.record(conn, iso(ctx.clock.now()), actor, 'sandbox.deposit_discovered', 'deposit', deposit_id,
+                                 {'provider_ref': fields['provider_ref']})
+            if created:
+                out['ingested'].append(deposit_id)
+            else:
+                out['already_known'] += 1
+        if not resp.get('has_more'):
+            break
+    return out
+
+
 def sync(ctx, actor):
     results = []
     for record in records(ctx):
