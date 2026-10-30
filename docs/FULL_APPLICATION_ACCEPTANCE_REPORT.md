@@ -195,4 +195,14 @@ A controlled pilot would need: a pilot customer's real statement export to measu
 
 ## Release record
 
-Filled in at release: final commit, CI run (five jobs), deployed SHA, smoke result, restart / reboot / redeploy verification and key-file mode.
+| Item | Result (30 Oct 2026, UTC) |
+|---|---|
+| Release commit | `3ce6c329f039354f8254078766210ce4c8b7bacc` (later commits only update this record) |
+| CI | [run 40999390871](https://github.com/Lingu17/ledgerline/actions/runs/40999390871): **Success**, all five jobs (backend Linux, backend Windows, frontend, e2e, PostgreSQL 17) |
+| Local suites at release | backend 296 passed + 1 POSIX-only skipped on Windows (runs in CI); browser E2E 13 passed; frontend build ok; evaluation 50 seeds, 0 disagreements |
+| Deployed SHA | `3ce6c32` via `update.sh` (git bundle) |
+| Public smoke | **32/32** (`scripts/smoke_deploy.py --save`) |
+| Service restart | PID 43190 → 43284, then `--verify` **8/8** |
+| VM reboot | boot id `c6b952ab…` → `6eacbf54…` (back in ~126 s, services and backup timer active), then `--verify` **8/8** |
+| Redeploy | `update.sh 3ce6c32` again, then `--verify` **8/8** (accounts, invoice balance, payment decision, ledger, sample account, refund lifecycle, payer signing keys) |
+| Key files | all `private_keys.json` on the VM mode 600 (new files by code; one pre-fix file and its backups tightened once by hand) |
