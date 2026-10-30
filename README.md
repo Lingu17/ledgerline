@@ -66,7 +66,7 @@ All screenshots come from a real run of the app on a synthetic sample company (`
 | Payer agents (`explain_payment`) | **Real MCP protocol, simulated agents** | MCP stdio subprocess (official `mcp` SDK); six local customer agents with their own Ed25519 keys; one is deliberately dishonest |
 | Bank, default ("Local workspace") | **Simulated** | per-organization simulated bank with fault injection; labelled everywhere |
 | Airwallex sandbox | **Verified live (sandbox)** for the operator organization only | signed `deposit.settled` webhook on the Google Cloud host (HTTP 200, one processed event); deposits, FX conversion and an independently approved refund SENT→PAID verified earlier; current rates, beneficiary schema/validation and deposit listing verified 29 Oct. Judge organizations always use the simulated bank. See [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
-| Claude evidence reader | **Verified live** | 29 Oct: `claude-opus-5-5` returned a schema-valid `escalate` proposal for an unexplained sandbox deposit, stored as advisory evidence; nothing applied |
+| Claude evidence reader | **Verified live** | 29 Oct, through the browser: text and PDF remittances read by `claude-opus-5-5`, schema-validated, stored as advisory evidence; an embedded prompt injection was ignored and flagged; nothing applied. Token usage is recorded per call |
 | Email | **Not sent** | invitation links are copied; balance requests are drafts |
 
 ## Architecture
@@ -195,7 +195,8 @@ sudo bash /opt/ledgerline/src/deploy/vm/update.sh <commit>
 
 - **Backend** (`backend/tests`): unit, API, real stdio MCP subprocess, threaded concurrency, SaaS boundaries, webhooks, judge safety, proposal capabilities; the PostgreSQL adapter suite runs in CI on PostgreSQL 17.
 - **Accuracy harness**: 250 seeds, 64,215 checks, 0 mismatches; 12 seeds also run in pytest.
-- **Browser** (`frontend/e2e`, Playwright on Microsoft Edge): sign-up/sign-out, home page, Apple absent, roles, cross-organization isolation, 375px layout, dialogs and focus.
+- **Evaluation** (`scripts/evaluate.py`, [report](docs/EVALUATION.md)): the six documented cases reach their documented outcomes; 50 randomized companies, 2,127 payments, 0 allocations disagreeing with the reference model; share resolved automatically, by a person, or waiting with a reason.
+- **Browser** (`frontend/e2e`, Playwright on Microsoft Edge): sign-up/sign-out, home page, Apple absent, roles, cross-organization isolation, 375px layout, dialogs and focus, the payment decision path.
 - **CI**: five GitHub Actions jobs (Linux and Windows backend, PostgreSQL 17, frontend build, browser E2E).
 - Current results and dates: [FULL_APPLICATION_ACCEPTANCE_REPORT](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md).
 
