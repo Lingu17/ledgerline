@@ -24,7 +24,7 @@ Day-to-day work without the walkthrough: create an organization with **An empty 
 | Sign-in | Email/password, or Google. Apple is not offered |
 | Payer agents | Simulated customer agents, real MCP protocol and real Ed25519 signatures |
 | Bank in your organization | Built-in **simulated bank**, labelled in the top bar. No real money |
-| Airwallex sandbox | Reserved for the operator's own organization (allow-list), so judges never touch the shared sandbox account. On this host: a signed `deposit.settled` webhook (HTTP 200, booked once), current rates, beneficiary schema and validation. Earlier, on the previous host with the same code and sandbox account: deposits, an FX conversion, and an independently approved refund SENT→PAID. See [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md) |
+| Airwallex sandbox | Reserved for the operator's own organization (allow-list), so judges never touch the shared sandbox account. On this host: signed `deposit.settled` webhooks (HTTP 200, each booked once), current rates, beneficiary validation and creation, and a refund approved by a second member and completed SENT→PAID as exactly one Airwallex transfer (30 Oct). Earlier, on the previous host with the same sandbox account: deposits and an FX conversion. See [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md) |
 | Claude remittance reading | Real Claude API (`claude-opus-5-5`) through strict typed tools; advisory only; per-organization daily budget |
 
 Exact evidence, dates and remaining limitations: [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md) and [FULL_APPLICATION_ACCEPTANCE_REPORT](FULL_APPLICATION_ACCEPTANCE_REPORT.md).

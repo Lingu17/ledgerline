@@ -1,6 +1,6 @@
 # Resume point (updated 30 Oct 2026, ~04:00 UTC)
 
-Branch `deploy/vercel-render` (not merged; merge only after the owner approves). Live https://35-207-220-110.sslip.io runs release `3ce6c32` (CI run 40999390871 all five jobs green; smoke 32/32; restart, reboot and redeploy each 8/8). Full status: docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md.
+Branch `deploy/vercel-render` (not merged; merge only after the owner approves). Live https://35-207-220-110.sslip.io runs release `6ef43c5` (CI run 41002935918 all five jobs green; smoke 32/32; restart, reboot and redeploy each 8/8). The VM refund is done (30 Oct). Full status: docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md.
 
 ## Only remaining work
 
