@@ -98,8 +98,9 @@ What is **not** measured yet: real customers' payment mix, hours saved, adoption
 ## 🏗️ Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph VM["☁️ Google Cloud VM · e2-small · asia-south1"]
+    direction LR
     C["Caddy<br/>HTTPS · HSTS · CSP"] --> A["FastAPI<br/>rules · approvals · ledger"]
     A --> D[("SQLite per organization<br/>/var/lib/ledgerline")]
     A --> K[("Payer-agent keys<br/>0600, per organization")]
