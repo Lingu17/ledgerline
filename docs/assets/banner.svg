@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="t d">
+  <title id="t">Ledgerline</title>
+  <desc id="d">Every incoming payment, matched and settled with proof: deposit, first plan, payer evidence, three checks, decision, ledger.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0d2038"/>
+      <stop offset="1" stop-color="#0a1a2e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.78" cy="0.35" r="0.55">
+      <stop offset="0" stop-color="#5ec4b6" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#5ec4b6" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#5ec4b6" stroke-opacity="0.07" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="line" x1="0" x2="1">
+      <stop offset="0" stop-color="#5ec4b6" stop-opacity="0.15"/>
+      <stop offset="0.5" stop-color="#5ec4b6" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ffd68c" stop-opacity="0.6"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 64px 'Segoe UI', 'IBM Plex Sans', Helvetica, Arial, sans-serif; fill: #ffffff; letter-spacing: 6px; }
+      .tag { font: 500 22px 'Segoe UI', 'IBM Plex Sans', Helvetica, Arial, sans-serif; fill: #c3d3e6; }
+      .eyebrow { font: 600 13px 'Consolas', 'IBM Plex Mono', monospace; fill: #5ec4b6; letter-spacing: 3px; }
+      .node { font: 600 13px 'Consolas', 'IBM Plex Mono', monospace; fill: #e6eef7; }
+      .sub { font: 400 11px 'Consolas', 'IBM Plex Mono', monospace; fill: #8fa6c0; }
+      .pulse { animation: travel 6s linear infinite; }
+      .p2 { animation-delay: -2s; } .p3 { animation-delay: -4s; }
+      .blink { animation: blink 2.4s ease-in-out infinite; }
+      @keyframes travel { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+      @keyframes blink { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .pulse, .blink { animation: none; } }
+    </style>
+  </defs>
+  <rect width="1280" height="400" fill="url(#bg)"/>
+  <rect width="1280" height="400" fill="url(#grid)"/>
+  <rect width="1280" height="400" fill="url(#glow)"/>
+
+  <text x="64" y="92" class="eyebrow">AGENTIC BANKING HACKATHON · TREASURY &amp; OPS</text>
+  <text x="62" y="162" class="title">LEDGERLINE</text>
+  <text x="64" y="204" class="tag">When a payment doesn't match, my agent asks the payer's agent</text>
+  <text x="64" y="234" class="tag">and verifies the answer before any money moves.</text>
+
+  <!-- decision pipeline -->
+  <path id="flow" d="M80 318 H1200" stroke="url(#line)" stroke-width="2" fill="none"/>
+  <g>
+    <circle cx="110" cy="318" r="9" fill="#8fb4d9"/>
+    <circle cx="300" cy="318" r="9" fill="#5ec4b6"/>
+    <circle cx="500" cy="318" r="9" fill="#f08a7e"/>
+    <circle cx="700" cy="318" r="9" fill="#c39bd3"/>
+    <circle cx="900" cy="318" r="9" fill="#5ec4b6"/>
+    <circle cx="1120" cy="318" r="9" fill="#ffd68c"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="110" y="298" class="node">DEPOSIT</text><text x="110" y="350" class="sub">signed webhook</text>
+    <text x="300" y="298" class="node">FIRST PLAN</text><text x="300" y="350" class="sub">rules in code</text>
+    <text x="500" y="298" class="node">PAYER AGENT</text><text x="500" y="350" class="sub">Ed25519 claim · MCP</text>
+    <text x="700" y="298" class="node">3 CHECKS</text><text x="700" y="350" class="sub">signer · binding · records</text>
+    <text x="900" y="298" class="node">DECISION</text><text x="900" y="350" class="sub">credit · refund · escalate</text>
+    <text x="1120" y="298" class="node">LEDGER</text><text x="1120" y="350" class="sub">balanced to the cent</text>
+  </g>
+  <circle r="5" fill="#ffffff" class="pulse" style="offset-path: path('M80 318 H1200');"/>
+  <circle r="4" fill="#5ec4b6" class="pulse p2" style="offset-path: path('M80 318 H1200');"/>
+  <circle r="4" fill="#ffd68c" class="pulse p3" style="offset-path: path('M80 318 H1200');"/>
+
+  <g transform="translate(1004 70)">
+    <rect width="212" height="120" rx="12" fill="#0b1a2c" stroke="#5ec4b6" stroke-opacity="0.35"/>
+    <circle cx="22" cy="24" r="5" fill="#5ec4b6" class="blink"/>
+    <text x="36" y="28" class="eyebrow" style="font-size:11px">LIVE ON GOOGLE CLOUD</text>
+    <text x="20" y="58" class="node">0 double payments</text>
+    <text x="20" y="80" class="node">4-eyes on money-out</text>
+    <text x="20" y="102" class="node">SENT ≠ PAID</text>
+  </g>
+</svg>

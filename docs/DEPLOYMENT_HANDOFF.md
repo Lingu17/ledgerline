@@ -14,10 +14,10 @@ Updated 30 Oct 2026. Deadline 13 Nov 2026, 23:59 IST. No HackerEarth save/submit
 ## Pending with the owner
 
 1. **VM refund completed 30 Oct.** DEP-A5F71B22E4 / APR-FC97829A / OP-46BAA6D1: second real member approved and executed; SENT 04:20:43 → PAID 04:20:56 UTC. Independent provider lookup returns one PAID EUR 1.23 transfer; timestamped journal proves liability retained until PAID; all five EUR checks pass. No further refund action needed.
-2. Retire the old Vercel/Render/Neon stack (still running, untouched, holds its own key copies) when approved.
+2. Old Vercel/Render/Neon stack: **retired 30 Oct** with the owner's approval (Vercel project, Render service and Neon project deleted; Vercel URLs removed from Google OAuth). The live app was verified healthy before and after.
 3. Ask Airwallex to enable hosted payment links on the sandbox account if that capability matters for judging.
 4. Record the demo video; grant judges repository access; submit on HackerEarth.
 
-## Historical (superseded)
+## Historical (retired 30 Oct)
 
 27–29 Oct: Vercel Hobby → Render Free → Neon Free. Verified there: smoke 32/32 and 8/8 persistence after a Render instance replacement; sandbox deposits, FX conversion, signed delivery, and an independently approved EUR 5 refund through SENT → PAID. Details in [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md). `LEDGERLINE_SECRET_KEY` there encrypts payer keys in Neon and must never change; it is not used on the VM.

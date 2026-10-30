@@ -1,4 +1,4 @@
-"""Regressions for docs/CODEX_REVIEW_FINDINGS.md (first pass), one section per finding."""
+"""Regressions for docs/archive/CODEX_REVIEW_FINDINGS.md (first pass), one section per finding."""
 import gc
 import json
 import tempfile

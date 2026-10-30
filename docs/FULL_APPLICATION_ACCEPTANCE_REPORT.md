@@ -143,7 +143,7 @@ Environments: **Unit/API** = pytest, in-process, temp data (`backend/tests`, 297
 | Restart / reboot / redeploy persistence | Release record | see below |
 | Response time | Live 160–220 ms per request from India (network-bound); payment detail 21.6 ms median server-side (evaluation) | PASS |
 | Errors | No 5xx or ERROR lines in the service log over the previous 24 h (30 Oct) | PASS |
-| Old stack | Still running, untouched; holds its own copies of keys; retirement steps in DEPLOYMENT.md | BLOCKED (owner approval to retire) |
+| Old stack retired | 30 Oct, owner approved: Vercel project, Render service and Neon project deleted; old URLs 404; Vercel entries removed from Google OAuth; only Airwallex webhook points at the VM; live health checked before and after | PASS |
 
 ## 9. Experience
 
@@ -177,7 +177,7 @@ No FAIL items remain open.
 1. **VM refund lifecycle completed** (30 Oct): independent second-member approval, provider SENT → PAID, one transfer, liability released only at PAID, balanced journal. Evidence below and in INTEGRATION_EVIDENCE. The SENT state was also sampled live through the API at 04:20:43–04:20:56 UTC: deposit `refund_in_flight`, `refund_pending` 123, `refund_paid` 0, one attempt; after PAID: `refund_pending` 0, `refund_paid` 123, deposit `refunded`, EUR refund-liability check payable 0.00. The approver is a separate member account (`lingrajmalipatil17@…`, Operator); Ledgerline enforces proposer ≠ approver between accounts but cannot verify that two accounts belong to two different people.
 2. **Hosted payment link** (BLOCKED): Airwallex sandbox returns `configuration_error`; needs Airwallex to enable the capability. The labelled draft is the fallback, not the original capability.
 3. **Submission, video, judge repository access** (BLOCKED, owner).
-4. **Old stack retirement** (BLOCKED, owner approval).
+4. Old stack retired on 30 Oct (done).
 5. Limitations: single VM without redundancy; backups on the same disk; trial ends 28 Jan 2027; payer agents are simulations; scheduled polling is not implemented (owner-triggered discovery only); no email delivery; Airwallex credentials server-wide.
 6. Not measured: real customers' payment mix, time saved, adoption or willingness to pay.
 

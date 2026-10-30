@@ -3,7 +3,7 @@
 Only observed results. Sandbox, no real money. Long provider ids are shortened. Two hosts appear below and are kept apart:
 
 - **Current production: Google Cloud VM** (https://35-207-220-110.sslip.io, single host, SQLite). Operator organization `org_66646a497151` ("Ledgerline Operations") is the only one allowed to use the Airwallex sandbox credentials.
-- **Historical: Vercel + Render + Neon** (27–29 Oct). Same code line and the same Airwallex sandbox account; results are kept because the provider behaviour they prove does not depend on the host. That stack is not used by the live app.
+- **Historical: Vercel + Render + Neon** (27–29 Oct; retired and deleted 30 Oct). Same code line and the same Airwallex sandbox account; results are kept because the provider behaviour they prove does not depend on the host. That stack is not used by the live app.
 
 ## Current production (Google Cloud VM)
 
