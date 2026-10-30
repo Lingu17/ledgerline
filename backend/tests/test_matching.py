@@ -120,3 +120,13 @@ def test_small_fee_on_large_invoice_is_written_off_with_relative_cap():
     invoices = {"INV-7001": inv("INV-7001", amount=500_000)}
     p = initial_plan(dep(497_000, "INV-7001"), CUSTOMERS, invoices, 5_000, 100)
     assert p.category == "clean_with_fee"
+
+
+def test_plan_text_matches_its_action_when_the_payer_has_no_agent():
+    # Seen live on 30 Oct: the summary said "Ask the payer's agent" while the action escalated to a person.
+    p = initial_plan(dep(50_000, "", payer="NOAGENT"), CUSTOMERS, INVOICES, 5_000)
+    assert p.actions[0]["type"] == "escalate" and "Ask the payer's agent" not in p.summary and "a person decides" in p.summary
+    with_agent = initial_plan(dep(50_000, ""), CUSTOMERS, INVOICES, 5_000)
+    assert with_agent.actions[0]["type"] == "ask_payer_agent" and "Ask the payer's agent" in with_agent.summary
+    dup = initial_plan(dep(100_000, "INV-5000", payer="NOAGENT"), CUSTOMERS, {**INVOICES, "INV-5000": inv("INV-5000", cust="C3", amount=100_000, remaining=0, status="paid")}, 5_000)
+    assert dup.category == "apparent_duplicate" and "a person decides" in dup.summary

@@ -168,12 +168,13 @@ Environments: **Unit/API** = pytest, in-process, temp data (`backend/tests`, 297
 | D-07 | Low | Contrast scan | Muted text 4.41–4.48:1 | Darker muted colour (98ca048) | Contrast scan 0 below AA |
 | D-08 | Low | Live Claude run | Model cost not measurable | Token usage recorded per call (98ca048) | `test_claude_token_usage_is_recorded…` |
 | D-09 | Low | Local QA | Decision spread across sections | Decision path in payment detail (98ca048) | E2E |
+| D-10 | Low | Live refund review | First-plan text said "Ask the payer's agent" when the payer had no agent and the action was escalation to a person (also for apparent duplicates) | Plan text follows the action (`matching.py`) | `test_plan_text_matches_its_action_when_the_payer_has_no_agent`; accuracy harness |
 
 No FAIL items remain open.
 
 ## Remaining blockers and limitations
 
-1. **VM refund lifecycle completed** (30 Oct): independent second-member approval, provider SENT → PAID, one transfer, liability released only at PAID, balanced journal. Evidence below and in INTEGRATION_EVIDENCE. The SENT liability was reconstructed from timestamped immutable journal entries after settlement, not sampled live during the 13-second SENT interval.
+1. **VM refund lifecycle completed** (30 Oct): independent second-member approval, provider SENT → PAID, one transfer, liability released only at PAID, balanced journal. Evidence below and in INTEGRATION_EVIDENCE. The SENT state was also sampled live through the API at 04:20:43–04:20:56 UTC: deposit `refund_in_flight`, `refund_pending` 123, `refund_paid` 0, one attempt; after PAID: `refund_pending` 0, `refund_paid` 123, deposit `refunded`, EUR refund-liability check payable 0.00. The approver is a separate member account (`lingrajmalipatil17@…`, Operator); Ledgerline enforces proposer ≠ approver between accounts but cannot verify that two accounts belong to two different people.
 2. **Hosted payment link** (BLOCKED): Airwallex sandbox returns `configuration_error`; needs Airwallex to enable the capability. The labelled draft is the fallback, not the original capability.
 3. **Submission, video, judge repository access** (BLOCKED, owner).
 4. **Old stack retirement** (BLOCKED, owner approval).

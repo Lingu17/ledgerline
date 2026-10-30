@@ -97,7 +97,9 @@ def initial_plan(
         )
         plan = Plan(
             category="unknown_reference",
-            summary="No invoice reference on the deposit. Ask the payer's agent; never match on amount alone.",
+            summary=("No invoice reference on the deposit. Ask the payer's agent; never match on amount alone." if has_agent else
+                     "No invoice reference and no registered payer agent: a person decides (remittance text can be read as "
+                     "evidence); never match on amount alone."),
             customer_id=cid,
             actions=[ask_agent(f"Which invoice is the {ccy} deposit {deposit['id']} for?"),
                      {"type": "hold_unapplied", "amount_minor": amount}],
@@ -162,7 +164,8 @@ def initial_plan(
         reason = "references a not-yet-issued invoice" if scheduled else "every referenced invoice is already settled"
         return Plan(
             category="apparent_duplicate",
-            summary=f"Looks like a duplicate: {reason}. Proposed refund held until the payer's agent explains.",
+            summary=(f"Looks like a duplicate: {reason}. Proposed refund held until the payer's agent explains." if has_agent else
+                     f"Looks like a duplicate: {reason}. No registered payer agent, so a person decides before any refund."),
             customer_id=cid,
             actions=[ask_agent(f"Deposit {deposit['id']} references {', '.join(refs)}, which {reason}."),
                      {"type": "propose_refund", "amount_minor": amount, "status": "awaiting_evidence"}],
