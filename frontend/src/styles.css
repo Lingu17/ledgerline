@@ -6,7 +6,7 @@
   --line-strong: #cfd4dc;
   --ink: #141a23;
   --ink-2: #3c4655;
-  --ink-3: #6a7484;
+  --ink-3: #5f6979; /* 4.5:1+ on the page and table backgrounds (WCAG AA) */
   --nav: #0f1b2d;
   --nav-2: #16263d;
   --nav-ink: #c6cfdc;
@@ -344,3 +344,16 @@ table.integrations select { width: 100%; max-width: 230px; }
 .skip-link { position: absolute; left: 8px; top: -48px; z-index: 100; padding: 8px 12px; border-radius: 6px; background: #16263d; color: #fff; border: 0; }
 .skip-link:focus { top: 8px; }
 main.content:focus { outline: none; }
+
+/* Decision path in the payment drawer */
+.path { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
+.path li { display: grid; grid-template-columns: 92px 84px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.path li:last-child { border-bottom: 0; }
+.path-label { font-weight: 600; }
+.path-state { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.path-state.done { color: #11795f; }
+.path-state.waiting { color: #9a5b00; }
+.path-state.failed { color: #b42318; }
+.path-state.skip { color: var(--ink-3); }
+.path-text { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .path li { grid-template-columns: 1fr auto; } .path-text { grid-column: 1 / -1; } }

@@ -109,7 +109,16 @@ def load_keys(loc: KeyLocation) -> dict[str, str]:
             c.close()
         return {r["customer_id"]: decrypt(loc.secret, loc.target, r["customer_id"], r["private_key_enc"]) for r in rows}
     path = keys_path(loc)
-    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    if not path.is_file():
+        return {}
+    _owner_only(path)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _owner_only(path: Path) -> None:
+    """Private signing keys are readable by the service user only (POSIX). Also repairs files written before this rule."""
+    if os.name == "posix" and path.stat().st_mode & 0o077:
+        path.chmod(0o600)
 
 
 def ensure_keys(loc: KeyLocation) -> dict[str, str]:
@@ -135,8 +144,11 @@ def ensure_keys(loc: KeyLocation) -> dict[str, str]:
             c.close()
         return load_keys(loc)
     path = keys_path(loc)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(keys, indent=2), encoding="utf-8")
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(json.dumps(keys, indent=2))
+    _owner_only(path)
     return keys
 
 

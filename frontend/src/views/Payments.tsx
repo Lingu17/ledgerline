@@ -129,6 +129,8 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
           {x.source === "manual_import" && <div className="notice warn">Manually recorded by an operator. Not verified against a bank statement feed.</div>}
           {x.escalation_reason && x.status === "escalated" && <div className="notice risk"><b>Why this needs review:</b> {x.escalation_reason}</div>}
 
+          <DecisionPath x={x} />
+
           <div className="buckets" aria-label="Where this deposit went">
             <div><span>Applied to invoices</span><b>{money(x.buckets.allocated, x.currency)}</b></div>
             <div><span>Customer credit</span><b>{money(x.buckets.credited, x.currency)}</b></div>
@@ -210,6 +212,57 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
         </>
       )}
     </Drawer>
+  );
+}
+
+type StepState = "done" | "waiting" | "failed" | "skip";
+const STEP_LABEL: Record<StepState, string> = { done: "Done", waiting: "Waiting", failed: "Stopped", skip: "Not needed" };
+
+// One readable line per stage, computed only from stored records: receipt → first plan → evidence → checks →
+// decision → approval → settlement → accounting. Nothing here is inferred beyond what the API returned.
+function DecisionPath({ x }: { x: DepositDetail }) {
+  const first = x.plans[0];
+  const last = x.plans[x.plans.length - 1];
+  const ev = x.evidence[x.evidence.length - 1];
+  const appr = x.approvals[x.approvals.length - 1];
+  const op = x.operations[x.operations.length - 1];
+  const b = x.buckets;
+  const accounted = b.allocated + b.credited + b.refund_pending + b.refund_paid + b.unapplied;
+  const failed = ev?.checks.filter((c) => !c.passed) ?? [];
+  const approver = appr?.decided_by?.startsWith("policy:") ? "policy (within the refund auto-limit)" : appr?.decided_by;
+  const steps: [string, StepState, string][] = [
+    ["Received", "done", `${money(x.amount_minor, x.currency)} from ${x.payer_name} · ${SOURCE_LABEL[x.source] ?? x.source}`],
+    ["First plan", first ? "done" : "waiting", first ? first.summary : "Not planned yet"],
+    ["Evidence", ev ? "done" : x.status === "awaiting_evidence" ? "waiting" : x.status === "escalated" ? "waiting" : "skip",
+      ev ? `${ev.source === "mcp_signed" ? "Signed payer-agent claim" : ev.source === "claude_extracted" ? "Remittance read by Claude (advisory)" : "Remittance read by offline rules (advisory)"} · ${ev.id}`
+        : x.status === "matched" ? "Rules were enough; no evidence needed" : "None yet"],
+    ["Checks", !ev ? "skip" : ev.verdict === "verified" ? "done" : ev.verdict === "rejected" ? "failed" : "skip",
+      !ev ? "—" : ev.verdict === "advisory" ? "Unsigned text: advisory only, cannot authorise money"
+        : failed.length ? `Failed: ${failed.map((c) => c.label).join("; ")}` : `${ev.checks.length}/${ev.checks.length} passed`],
+    ["Decision", x.status === "escalated" ? "waiting" : last ? "done" : "waiting",
+      x.status === "escalated" ? `With a person: ${x.escalation_reason ?? "needs review"}` : last && last !== first ? `Revised: ${last.summary}` : last ? "First plan stands" : "—"],
+    ["Approval", !appr ? "skip" : appr.status === "approved" || appr.status === "executed" ? "done" : appr.status === "pending" ? "waiting" : "failed",
+      !appr ? "No money leaves, so none needed"
+        : appr.status === "executed" ? `${appr.id} approved by ${approver}, then executed`
+        : `${appr.id} ${appr.status}${approver ? ` by ${approver}` : ""}`],
+    ["Settlement", !op ? "skip" : op.status === "paid" ? "done" : op.status === "failed" || op.status === "cancelled" ? "failed" : "waiting",
+      !op ? "No money-out operation" : op.status === "sent" ? `${op.id} SENT: liability kept until PAID` : `${op.id} ${op.status}`],
+    ["Accounting", accounted === x.amount_minor ? "done" : "failed",
+      `Applied ${money(b.allocated, x.currency)} · credit ${money(b.credited, x.currency)} · refund ${money(b.refund_pending + b.refund_paid, x.currency)} · unapplied ${money(b.unapplied, x.currency)}${accounted === x.amount_minor ? " = received amount" : " ≠ received amount"}`],
+  ];
+  return (
+    <section aria-label="Decision path">
+      <h3 className="section-title">Decision path</h3>
+      <ol className="path">
+        {steps.map(([label, state, text]) => (
+          <li key={label} className={`path-${state}`}>
+            <span className="path-label">{label}</span>
+            <span className={`path-state ${state}`}>{STEP_LABEL[state]}</span>
+            <span className="path-text">{text}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

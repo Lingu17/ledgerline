@@ -194,3 +194,13 @@ test("amounts typed with thousands separators are accepted", async ({ page }) =>
   await dialog.getByRole("button", { name: "Create invoice" }).click();
   await expect(page.getByText(/Invoice INV-\d+ created/)).toBeVisible();
 });
+
+test("payment detail shows the decision path and accounts for every cent", async ({ page }) => {
+  await signUp(page, { org: `Path ${uniq()}`, email: `path-${uniq()}@e2e.test`, sample: true });
+  await page.goto("/#/payments?deposit=DEP-1001");
+  const path = page.getByRole("region", { name: "Decision path" }).or(page.getByLabel("Decision path"));
+  await expect(path.getByText("First plan stands")).toBeVisible();
+  await expect(path.getByText(/= received amount/)).toBeVisible();
+  await page.goto("/#/payments?deposit=DEP-1003");
+  await expect(page.getByLabel("Decision path").getByText(/Short by GBP 1,200\.00/)).toBeVisible();
+});

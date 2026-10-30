@@ -103,12 +103,13 @@ def _claude_read(ctx: AppContext, text: str, pdf: bytes | None = None) -> dict[s
         output_config={"effort": "low"},
         messages=[{"role": "user", "content": content}],
     )
+    usage = {"input_tokens": getattr(resp.usage, "input_tokens", None), "output_tokens": getattr(resp.usage, "output_tokens", None)}
     if resp.stop_reason == "refusal":
-        return {"tool": "escalate", "input": {"reason": "model declined to classify"}, "model": resp.model}
+        return {"tool": "escalate", "input": {"reason": "model declined to classify"}, "model": resp.model, "usage": usage}
     for block in resp.content:
         if getattr(block, "type", None) == "tool_use":
-            return {"tool": block.name, "input": dict(block.input), "model": resp.model}
-    return {"tool": "escalate", "input": {"reason": "model returned no tool call"}, "model": resp.model}
+            return {"tool": block.name, "input": dict(block.input), "model": resp.model, "usage": usage}
+    return {"tool": "escalate", "input": {"reason": "model returned no tool call"}, "model": resp.model, "usage": usage}
 
 
 _INV = re.compile(r"^INV-\d{3,6}$")
@@ -185,13 +186,16 @@ def read_remittance(ctx: AppContext, deposit_id: str, actor: str, text: str | No
         # Reserve before dispatch (its own committed transaction), call with no transaction open, then settle.
         call_id = control.reserve_claude_call(ctx.org["id"], ctx.settings.claude_daily_limit, ctx.settings.claude_server_daily_limit)
         try:
-            proposal = typed_proposal(_claude_read(ctx, text) if pdf is None else _claude_read(ctx, text, pdf))
+            raw = _claude_read(ctx, text) if pdf is None else _claude_read(ctx, text, pdf)
+            usage = raw.pop("usage", None) if isinstance(raw, dict) else None
+            proposal = typed_proposal(raw)
         except Exception as exc:  # noqa: BLE001 - network/auth/rate-limit errors surface as a provider failure
             from .providers.base import ProviderError
 
             control.settle_claude_call(call_id, False, f"{type(exc).__name__}: {str(exc)[:200]}")
             raise ProviderError(f"Claude API call failed: {type(exc).__name__}: {str(exc)[:200]}") from exc
-        control.settle_claude_call(call_id, True)
+        # Measured token usage per call, so cost can be computed from records rather than estimated.
+        control.settle_claude_call(call_id, True, json.dumps(usage, sort_keys=True) if usage else "")
         source, mode = "claude_extracted", f"Claude API ({proposal.get('model', ctx.settings.claude_model)})"
     else:
         proposal = _fixture_read(text)
