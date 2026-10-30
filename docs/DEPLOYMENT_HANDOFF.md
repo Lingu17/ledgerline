@@ -13,7 +13,7 @@ Updated 30 Oct 2026. Deadline 13 Nov 2026, 23:59 IST. No HackerEarth save/submit
 
 ## Pending with the owner
 
-1. **VM refund test.** Settings → Sandbox deposit verification: payer `Sandbox Refund Test GmbH`, amount 1.23 EUR, new request id → Simulate. Payments → that deposit → *Propose return to sender*. Team → Invite member (Operator) for a second real person; they accept, then Approvals → *Approve…* → *Execute refund*. Claude then records SENT → PAID, liability and conservation.
+1. **VM refund completed 30 Oct.** DEP-A5F71B22E4 / APR-FC97829A / OP-46BAA6D1: second real member approved and executed; SENT 04:20:43 → PAID 04:20:56 UTC. Independent provider lookup returns one PAID EUR 1.23 transfer; timestamped journal proves liability retained until PAID; all five EUR checks pass. No further refund action needed.
 2. Retire the old Vercel/Render/Neon stack (still running, untouched, holds its own key copies) when approved.
 3. Ask Airwallex to enable hosted payment links on the sandbox account if that capability matters for judging.
 4. Record the demo video; grant judges repository access; submit on HackerEarth.

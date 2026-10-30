@@ -32,7 +32,7 @@ Starter kits in the guide are examples ("take one as written, change it, or appl
 | B6 | Claude reads emails and PDFs when there is no agent | PASS (live) | Browser text and PDF reads on the VM with `claude-opus-5-5`; advisory evidence; prompt injection ignored and flagged |
 | B7 | Apparent duplicate becomes credit after evidence | PASS | DEP-1005 → verified advance credit, refund dropped before money moved |
 | B8 | FX: quote and convert only the shortfall above reserve | PASS | Tests; live conversion settled on the historical host (28 Oct), quote reuse refused |
-| B9 | Refund approval bound to scope, duplicate lock, request id, SENT not final | PASS (tests, historical live) / BLOCKED (VM live) | Live SENT→PAID with a second real approver on the historical host; on the VM it waits for the owner's deposit and a second real member |
+| B9 | Refund approval bound to scope, duplicate lock, request id, SENT not final | PASS (tests and VM live) | 30 Oct VM APR-FC97829A / OP-46BAA6D1: different member approved and executed; provider SENT→PAID; exactly one transfer; timestamped journal keeps EUR 1.23 payable at SENT and clears it only at PAID; all conservation checks pass |
 | B10 | One pause switch for all money-out | PASS | `test_pause_blocks_execution_and_pending_retries`, `test_pause_blocks_conversion` |
 | B11 | Ledger balances to the cent; scorecard | PASS | Per-currency conservation; scorecard 6 / 4 / 1 / 1 / 0 |
 | B12 | Beneficiary schema and creation | PASS (live) | Schema, validate, create on the VM (beneficiary 4f5abe34-…) |

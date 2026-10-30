@@ -4,7 +4,7 @@ Branch `deploy/vercel-render` (not merged; merge only after the owner approves).
 
 ## Only remaining work
 
-1. **VM refund with a second real approver** (owner): Settings → Sandbox deposit verification, payer `Sandbox Refund Test GmbH`, EUR 1.23, new request id → Simulate; Payments → that deposit → *Propose return to sender*; Team → Invite member (Operator) for a real second person, who approves and executes. Then record SENT → PAID (owner sandbox transition controls), one provider transfer, liability and conservation in INTEGRATION_EVIDENCE and the acceptance report, commit, CI, redeploy, `--verify`.
+1. **VM refund COMPLETE 30 Oct.** DEP-A5F71B22E4 → APR-FC97829A → OP-46BAA6D1, second real member approved/executed. Provider SENT 04:20:43 → PAID 04:20:56 UTC. Independent provider GET and request-id lookup confirm one PAID EUR 1.23 transfer (`a6c5d55a-…`); one local attempt. Timestamped journal reconstruction proves payable EUR 1.23 at SENT, zero at PAID; all five EUR checks pass. Do not submit or simulate this refund again. Documentation release/CI/deploy follows this evidence update.
 2. Owner decisions: retire old Vercel/Render/Neon stack; judge repository access; demo video; HackerEarth submission; merge to main.
 3. Optional: ask Airwallex to enable payment links (current: HTTP 400 configuration_error).
 
