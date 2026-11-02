@@ -9,15 +9,22 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { version } = useRefresh();
+  const latest = useRef(0); // a slower, older response must never overwrite a newer one
   const run = useCallback(() => {
+    const request = ++latest.current;
     setLoading(true);
     load()
       .then((d) => {
+        if (request !== latest.current) return;
         setData(d);
         setError(null);
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+      .catch((e: unknown) => {
+        if (request === latest.current) setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (request === latest.current) setLoading(false);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   useEffect(run, [run, version]);
