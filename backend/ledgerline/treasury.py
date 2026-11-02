@@ -137,8 +137,8 @@ def rank_bills(conn: sqlite3.Connection, ctx: AppContext, rates: dict[tuple[str,
     out = []
     for rank, bill in enumerate(bills, start=1):
         ccy, amount = bill["currency"], bill["amount_minor"]
-        have = max(0, available[ccy])
-        shortfall = max(0, amount - have)
+        # A wallet already below its reserve must be refilled first, so that gap is part of the shortfall.
+        shortfall = max(0, amount - available[ccy])
         source = None
         if shortfall == 0:
             decision = "fund"

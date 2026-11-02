@@ -51,7 +51,7 @@ def test_short_bill_converts_only_the_shortfall(empty):
 
 
 def test_one_surplus_is_not_promised_to_two_bills(empty):
-    setup_cash(empty, USD="6000")  # 1,000 USD surplus only
+    setup_cash(empty, USD="6000", EUR="2000")  # 1,000 USD surplus only; EUR sits exactly at its reserve
     first = bill(empty, "First", "EUR", "800", 1)
     second = bill(empty, "Second", "EUR", "800", 2)
     d = by_id(treasury.refresh_decisions(empty, "test"))
@@ -66,6 +66,13 @@ def test_flexible_bill_defers_only_when_it_has_a_permitted_date(empty):
     d = by_id(treasury.refresh_decisions(empty, "test"))
     assert d[can]["decision"] == "defer"
     assert d[cannot]["decision"] == "escalate"
+
+
+def test_shortfall_includes_refilling_the_reserve_and_matches_the_quote_plan(empty):
+    b = bill(empty, "Payroll", "EUR", "9000", 2, priority="critical")
+    d = by_id(treasury.refresh_decisions(empty, "test"))[b]
+    with empty.conn() as conn:
+        assert d["shortfall_minor"] == treasury.plan_for_obligation(conn, empty, b)["deficit"] == 1_100_000
 
 
 def test_critical_bill_cannot_be_given_a_later_date(empty):
