@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ApiError } from "../api";
+import { ApiError, post } from "../api";
 import { STATUS_LABEL, money, tone } from "../format";
 
 // ---------------------------------------------------------------- data loading
@@ -226,6 +226,34 @@ export function Field({ label, hint, error, children, wide, id }: { label: strin
       {children}
       {error ? <span className="err" id={`${id}-err`}>{error}</span> : hint ? <span className="hint">{hint}</span> : null}
     </div>
+  );
+}
+
+export function CsvImport({ title, path, columns, example, onClose }: { title: string; path: string; columns: string; example: string; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<{ created: number; errors: number; results: { line: number; status: string; error?: string }[] } | null>(null);
+  return (
+    <Modal title={title} onClose={onClose}>
+      {result ? (
+        <div className="stack" style={{ gap: 10 }}>
+          <div className="small">{result.created} added · {result.errors} with errors</div>
+          {result.results.filter((r) => r.error).map((r) => <div key={r.line} className="small neg">Line {r.line}: {r.error}</div>)}
+          <div className="form-actions"><button className="btn primary" onClick={onClose}>Done</button></div>
+        </div>
+      ) : (
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          const r = await run("csv", () => post<NonNullable<typeof result>>(path, { csv: text }));
+          if (r) setResult(r);
+        }}>
+          <Field id="csv-import" label="Paste CSV, including the header" hint={columns}>
+            <textarea id="csv-import" rows={8} className="mono" value={text} placeholder={`${columns}\n${example}`} onChange={(e) => setText(e.target.value)} />
+          </Field>
+          <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy || !text.trim()}>Import</button></div>
+        </form>
+      )}
+    </Modal>
   );
 }
 

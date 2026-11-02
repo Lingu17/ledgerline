@@ -1,8 +1,10 @@
 """Account, organization and team endpoints (control plane)."""
 from __future__ import annotations
 
+import json as _json
 from typing import Any, Literal
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
@@ -205,14 +207,13 @@ def remove_member(request: Request, user_id: str, p: Principal = Depends(require
 # --------------------------------------------------------------------------- organization settings & integrations
 @router.get("/organization")
 def org_settings(request: Request, p: Principal = Depends(require_role("viewer"))) -> dict[str, Any]:
-    import json as _json
-
     org = _control(request).org(p.session.org_id)
     s = request.app.state.settings
     return {
         "id": org["id"], "name": org["name"], "kind": org["kind"], "bank_mode": org["bank_mode"],
         "airwallex_global_accounts": _json.loads(org["airwallex_global_accounts"] or "{}"),
         "airwallex_webhook_secret_set": bool(org["airwallex_webhook_secret"]),
+        "airwallex_connected": bool(org["airwallex_credentials_enc"]),
         "webhook_path": f"/api/webhooks/airwallex/{org['id']}",
         "server": {"airwallex_credentials_present": s.airwallex_configured, "claude_key_present": s.claude_configured,
                    "claude_model": s.claude_model, "sandbox_allowed": s.sandbox_allowed(org["id"]),
@@ -229,12 +230,100 @@ def update_org(request: Request, body: dict[str, Any], p: Principal = Depends(re
     return org_settings(request, p)
 
 
+class ConnectAirwallexBody(BaseModel):
+    client_id: str = Field(strict=True, min_length=6, max_length=200)
+    api_key: str = Field(strict=True, min_length=6, max_length=500)
+    webhook_secret: str = Field(strict=True, min_length=8, max_length=200)
+
+
+def _no_money_activity(p: Principal) -> None:
+    """The ledger of an organization belongs to one bank: switching mid-way would mix two sets of balances."""
+    with p.ctx.conn() as conn:
+        if conn.execute("SELECT 1 FROM deposits LIMIT 1").fetchone() or conn.execute("SELECT 1 FROM operations LIMIT 1").fetchone() \
+                or conn.execute("SELECT 1 FROM wallet_opening LIMIT 1").fetchone():
+            raise HTTPException(409, "this organization already has payments or balances on its current bank; create a new organization to connect another account")
+
+
+@router.post("/integrations/airwallex/connect")
+def connect_airwallex(request: Request, body: ConnectAirwallexBody, p: Principal = Depends(require_role("owner"))) -> dict[str, Any]:
+    """Check the organization's own sandbox keys against Airwallex first; save them only if they work."""
+    from ..connections import discover_accounts, seal
+    from ..providers.airwallex import AirwallexSandbox
+    from ..providers.base import ProviderAmbiguous, ProviderError
+
+    s = request.app.state.settings
+    org = _control(request).org(p.session.org_id)
+    if org["kind"] == "sample":
+        raise HTTPException(409, "a practice company stays on the simulated bank; connect from your own organization")
+    if not org["airwallex_credentials_enc"]:
+        _no_money_activity(p)
+    try:
+        readiness = AirwallexSandbox(body.client_id.strip(), body.api_key.strip(), timeout=15).readiness()
+    except (ProviderError, ProviderAmbiguous, httpx.HTTPError) as exc:
+        # Only the error type: a provider message must not echo anything we sent.
+        raise HTTPException(422, f"Airwallex did not accept these sandbox keys ({type(exc).__name__}); nothing was saved") from exc
+    accounts = discover_accounts(readiness)
+    rotating = bool(org["airwallex_credentials_enc"])
+    if rotating and accounts != _json.loads(org["airwallex_global_accounts"] or "{}"):
+        # New keys for the same account are fine; a different account would mix two sets of balances in one ledger.
+        raise HTTPException(409, "these keys belong to a different account; create a new organization to connect it")
+    _control(request).set_airwallex_connection(org["id"], p.session.email, seal(s, org["id"], body.client_id.strip(), body.api_key.strip()),
+                                               accounts, body.webhook_secret.strip())
+    request.app.state.orgs.invalidate(org["id"])
+    if not rotating:
+        from .. import workspace
+
+        workspace.record_connected_opening(request.app.state.orgs.get(org["id"]), readiness["balances"], p.session.email)
+    return {"connected": True, "receiving_accounts": accounts, "balances": readiness["balances"],
+            "webhook_path": f"/api/webhooks/airwallex/{org['id']}",
+            "missing_currencies": sorted({"USD", "EUR", "GBP"} - set(accounts))}
+
+
+@router.post("/integrations/airwallex/disconnect")
+def disconnect_airwallex(request: Request, p: Principal = Depends(require_role("owner"))) -> dict[str, Any]:
+    org = _control(request).org(p.session.org_id)
+    if not org["airwallex_credentials_enc"]:
+        raise HTTPException(409, "this organization has no connected Airwallex account")
+    with p.ctx.conn() as conn:
+        if conn.execute("SELECT 1 FROM deposits LIMIT 1").fetchone() or conn.execute("SELECT 1 FROM operations LIMIT 1").fetchone():
+            raise HTTPException(409, "this organization has payments on this account, so the connection must stay for its records")
+    _control(request).set_airwallex_connection(org["id"], p.session.email, None, {}, None)
+    request.app.state.orgs.invalidate(org["id"])
+    return {"connected": False}
+
+
+@router.get("/setup")
+def setup_checklist(request: Request, p: Principal = Depends(require_role("viewer"))) -> dict[str, Any]:
+    """First-run steps for a real company, each computed from its own data."""
+    org = _control(request).org(p.session.org_id)
+    members = len(_control(request).members(org["id"]))
+    with p.ctx.conn() as conn:
+        n = lambda t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]  # noqa: E731 - fixed table names only
+        customers, invoices, bills, deposits = n("customers"), n("invoices"), n("obligations"), n("deposits")
+    steps = [
+        {"id": "bank", "label": "Connect your Airwallex account", "done": org["bank_mode"] != "local", "page": "settings"},
+        {"id": "customers", "label": "Add the customers who pay you", "done": customers > 0, "page": "customers"},
+        {"id": "invoices", "label": "Add open invoices", "done": invoices > 0, "page": "customers"},
+        {"id": "bills", "label": "Add upcoming bills and payroll", "done": bills > 0, "page": "treasury"},
+        {"id": "approver", "label": "Invite a second approver", "done": members > 1, "page": "team"},
+        {"id": "payment", "label": "Receive your first payment", "done": deposits > 0, "page": "payments"},
+    ]
+    return {"show": org["kind"] != "sample" and not all(x["done"] for x in steps), "steps": steps}
+
+
 @router.post("/integrations/check")
 def integration_check(request: Request, p: Principal = Depends(require_role("owner"))) -> dict[str, Any]:
     """Actively probe each configured integration and report exactly what happened. Nothing is assumed."""
     s = request.app.state.settings
     out: dict[str, Any] = {}
-    if s.airwallex_configured and not s.sandbox_allowed(p.session.org_id):
+    if p.ctx.org.get("own_airwallex") and p.ctx.sandbox is not None:
+        try:
+            r = p.ctx.sandbox.readiness()
+            money = ", ".join(f"{b['currency']} {b['available_amount']}" for b in r["balances"]) or "no balances"
+            out["airwallex"] = {"status": "ok", "detail": f"your account answered just now; {len(r['global_accounts'])} receiving accounts; available balances: {money}"[:600], **r}
+        except Exception as exc:  # noqa: BLE001 - reported to the owner
+            out["airwallex"] = {"status": "error", "detail": f"account check failed: {type(exc).__name__}"[:300]}
+    elif s.airwallex_configured and not s.sandbox_allowed(p.session.org_id):
         out["airwallex"] = {"status": "restricted", "detail": "the server's Airwallex sandbox account is reserved for operator-approved "
                                                               "organizations; this organization uses the simulated bank"}
     elif s.airwallex_configured:
@@ -276,8 +365,8 @@ class SandboxDepositBody(BaseModel):
 
 
 def _sandbox_context(request: Request, p: Principal):
-    if not request.app.state.settings.sandbox_allowed(p.session.org_id) or p.ctx.sandbox is None:
-        raise HTTPException(403, 'sandbox actions are reserved for the allowlisted operator organization in sandbox mode')
+    if p.ctx.sandbox is None or not (p.ctx.org.get("own_airwallex") or request.app.state.settings.sandbox_allowed(p.session.org_id)):
+        raise HTTPException(403, 'sandbox actions need a connected Airwallex account')
     return p.ctx
 
 

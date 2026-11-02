@@ -34,7 +34,7 @@ test("capture README screenshots", async ({ page }) => {
   await page.getByLabel("Organization", { exact: true }).fill("Northbeam Software");
   await page.getByLabel("Work email", { exact: true }).fill(`owner-${randomBytes(4).toString("hex")}@shots.test`);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
-  await page.getByText("Sample data", { exact: true }).click();
+  await page.getByText("Practice company", { exact: true }).click();
   await page.getByRole("button", { name: "Create organization" }).click();
   await expect(page.getByLabel("Main navigation")).toBeVisible();
   await shot(page, "03-inbox");

@@ -23,7 +23,8 @@ It is a working multi-tenant SaaS: sign-up (email or Google), organizations with
 **Honest scope**
 
 - Runs on one Google Cloud VM (SQLite per organization, nightly backups on the same disk), Free Trial credit until 28 Jan 2027.
-- Judge organizations use a built-in simulated bank and simulated payer agents (real MCP and Ed25519). The Airwallex sandbox is reserved for the operator's organization.
+- Any company can connect its own Airwallex sandbox keys (checked first, encrypted per organization, test environment only). Practice companies use a built-in simulated bank. Payer agents run on the server (real MCP and Ed25519); a customer's own hosted agent cannot be connected yet.
+- Short-cash decisions: bills due soon are ranked by priority and date, then funded, converted, deferred or escalated; new cash reopens only the decisions it changes. Deciding moves no money, and Ledgerline does not send supplier payments.
 - Verified against the Airwallex sandbox: signed deposit webhooks, deposits, an EUR→GBP conversion with single-use quotes, an independently approved refund through SENT→PAID, current rates, beneficiary schema and validation, deposit listing as a webhook fallback. Hosted payment links were refused by the sandbox (HTTP 401); Ledgerline keeps a labelled draft instead of inventing a URL. Airwallex's dashboard replay did not produce a second delivery, so replay protection is shown by tests.
 - Claude (`claude-opus-5-5`) was exercised live and returned a schema-valid proposal stored as advisory evidence.
 - Full evidence: `docs/INTEGRATION_EVIDENCE.md`; acceptance matrix: `docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md`.

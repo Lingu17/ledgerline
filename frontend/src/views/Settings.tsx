@@ -9,7 +9,7 @@ const CCYS: Ccy[] = ["USD", "EUR", "GBP"];
 
 interface OrgSettings {
   id: string; name: string; kind: string; bank_mode: "local" | "airwallex_sandbox";
-  airwallex_global_accounts: Partial<Record<Ccy, string>>; airwallex_webhook_secret_set: boolean; webhook_path: string;
+  airwallex_global_accounts: Partial<Record<Ccy, string>>; airwallex_webhook_secret_set: boolean; airwallex_connected: boolean; webhook_path: string;
   server: { airwallex_credentials_present: boolean; claude_key_present: boolean; claude_model: string; sandbox_allowed: boolean; claude_daily_limit: number };
   control_audit: { id: number; at: string; actor: string; action: string; detail: string }[];
 }
@@ -24,8 +24,9 @@ export function Settings() {
     <div className="stack">
       <PauseCard st={s.data} />
       <OrgCard org={org.data} />
+      {org.data.kind !== "sample" && (!org.data.server.sandbox_allowed || org.data.airwallex_connected) && <ConnectAirwallex org={org.data} />}
       <IntegrationsCard st={s.data} org={org.data} />
-      {org.data.server.sandbox_allowed && org.data.bank_mode === 'airwallex_sandbox' && <><SandboxReceipts /><SandboxBeneficiaries /></>}
+      {org.data.bank_mode === 'airwallex_sandbox' && <><SandboxReceipts /><SandboxBeneficiaries /></>}
       <PolicyEditor policy={s.data.policy} />
       <div className="grid-2">
         <AccountCard />
@@ -89,8 +90,45 @@ function OrgCard({ org }: { org: OrgSettings }) {
       }}>
         <Field id="org-name" label="Name"><input id="org-name" type="text" value={name} disabled={!owner} onChange={(e) => setName(e.target.value)} style={{ width: 280 }} /></Field>
         {owner && <button className="btn" disabled={!!busy || name === org.name}>Save</button>}
-        <span className="small muted">{org.kind === "sample" ? "Sample organization (synthetic data, walkthrough available)" : "Workspace"} · <span className="mono">{org.id}</span></span>
+        <span className="small muted">{org.kind === "sample" ? "Practice company (made-up data)" : "Workspace"} · <span className="mono">{org.id}</span></span>
       </form>
+    </Card>
+  );
+}
+
+function ConnectAirwallex({ org }: { org: OrgSettings }) {
+  const { can, refresh } = useAuth();
+  const { run, busy } = useAction();
+  const owner = can("owner");
+  const [f, setF] = useState({ client_id: "", api_key: "", webhook_secret: "" });
+  const [missing, setMissing] = useState<string[]>([]);
+  const webhookUrl = window.location.origin + org.webhook_path;
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  if (org.airwallex_connected) {
+    return (
+      <Card title="Your Airwallex account" actions={owner && <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("aw-off", () => post("/integrations/airwallex/disconnect"), "Airwallex account disconnected")) refresh(); }}>Disconnect</button>}>
+        <div className="row"><Pill status="matched" label="Connected (test environment)" /><span className="small muted">Keys are encrypted and never shown again.</span></div>
+        {missing.length > 0 && <div className="notice small" style={{ marginTop: 10 }}>No single-currency receiving account was found for {missing.join(", ")}. Create one in Airwallex and enter its id below.</div>}
+        <Field id="aw-url" label="Webhook address to add in Airwallex (deposit.settled)"><input id="aw-url" type="text" readOnly className="mono" value={webhookUrl} onFocus={(e) => e.target.select()} /></Field>
+      </Card>
+    );
+  }
+  return (
+    <Card title="Connect your Airwallex account">
+      <p className="small muted" style={{ marginTop: 0 }}>Use your sandbox client ID and API key from the Airwallex developer settings. Ledgerline checks them with Airwallex first and saves them encrypted only if they work. This connection reaches the Airwallex test environment only, so no real money can move.</p>
+      {owner ? (
+        <form className="form-grid" autoComplete="off" onSubmit={async (e) => {
+          e.preventDefault();
+          const r = await run("aw-on", () => post<{ missing_currencies: string[] }>("/integrations/airwallex/connect", f), "Airwallex account connected");
+          setF({ client_id: "", api_key: "", webhook_secret: "" });
+          if (r) { setMissing(r.missing_currencies); refresh(); }
+        }}>
+          <Field id="aw-client" label="Client ID"><input id="aw-client" type="text" autoComplete="off" value={f.client_id} onChange={set("client_id")} /></Field>
+          <Field id="aw-key" label="API key"><input id="aw-key" type="password" autoComplete="off" value={f.api_key} onChange={set("api_key")} /></Field>
+          <Field id="aw-hook" label="Webhook secret" hint={`Create a webhook in Airwallex for ${webhookUrl}, then paste its secret`}><input id="aw-hook" type="password" autoComplete="off" value={f.webhook_secret} onChange={set("webhook_secret")} /></Field>
+          <div className="wide form-actions" style={{ marginTop: 0 }}><button className="btn primary" disabled={!!busy || !f.client_id || !f.api_key || f.webhook_secret.length < 8}>{busy === "aw-on" ? "Checking…" : "Check and connect"}</button></div>
+        </form>
+      ) : <p className="small muted">An owner can connect the account.</p>}
     </Card>
   );
 }
@@ -125,17 +163,16 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
             <tr>
               <td style={{ width: "28%" }}><b>Bank</b><div className="secondary">{st.bank.label}</div></td>
               <td>
-                {owner ? (
+                {owner && org.server.sandbox_allowed && !org.airwallex_connected ? (
                   <select aria-label="Bank mode" value={org.bank_mode} disabled={!!busy}
                     onChange={(e) => run("bank", () => post("/organization", { bank_mode: e.target.value }, "PUT"), "Bank mode updated")}>
-                    <option value="local">Local workspace (simulated bank)</option>
-                    <option value="airwallex_sandbox" disabled={!org.server.sandbox_allowed}>Airwallex sandbox{org.server.sandbox_allowed ? "" : org.server.airwallex_credentials_present ? " (reserved for operator-approved organizations)" : " (server credentials missing)"}</option>
+                    <option value="local">Not connected</option>
+                    <option value="airwallex_sandbox">Airwallex test environment</option>
                   </select>
-                ) : <Pill status="muted" label={org.bank_mode === "local" ? "Local simulation" : "Airwallex sandbox"} />}
+                ) : <Pill status="muted" label={org.bank_mode === "local" ? "Not connected" : "Airwallex test environment"} />}
               </td>
               <td className="small">
-                Airwallex API credentials are set by the server operator ({org.server.airwallex_credentials_present ? "present" : "not set"}).
-                  Run readiness check to verify the current sandbox connection. Results appear below; checking the connection does not move money.
+                Run the readiness check to test the current connection. Checking does not move money.
                 {check?.airwallex && <div style={{ marginTop: 4 }}><Pill status={tone(check.airwallex.status)} label={check.airwallex.status.replace("_", " ")} /> {check.airwallex.detail}</div>}
               </td>
             </tr>
@@ -149,7 +186,7 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
             <tr>
               <td><b>Payer agents</b><div className="secondary">{st.payer_agents.label}</div></td>
               <td><Pill status="muted" label={st.payer_agents.transport} /></td>
-              <td className="small">explain_payment is called over MCP. The customer agents in this build are local simulations with their own signing keys.</td>
+              <td className="small">explain_payment is called over MCP. In this version the customer agents run on this server with their own signing keys; a customer's own hosted agent cannot be connected yet.</td>
             </tr>
             <tr>
               <td><b>Webhooks</b><div className="secondary">This organization's endpoint</div></td>

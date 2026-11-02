@@ -42,7 +42,8 @@ def conservation(conn: sqlite3.Connection) -> dict[str, Any]:
         in_transit = _bal(conn, "cash_in_transit", ccy)
         refunds_out_returned = _s(conn, "SELECT COALESCE(SUM(debit_minor),0) FROM journal_lines WHERE account = ? AND currency = ? AND entry_id IN (SELECT id FROM journal_entries WHERE memo LIKE 'Refund % returned')", (f"cash:{ccy}", ccy))
         refunds_out = _s(conn, "SELECT COALESCE(SUM(credit_minor),0) FROM journal_lines WHERE account = ? AND currency = ? AND entry_id IN (SELECT id FROM journal_entries WHERE memo LIKE 'Refund % funds leave wallet')", (f"cash:{ccy}", ccy))
-        cash_expected = opening + deposits + fx_in - fx_out - refunds_out + refunds_out_returned
+        bills_paid = _bal(conn, "bills_paid", ccy)
+        cash_expected = opening + deposits + fx_in - fx_out - refunds_out + refunds_out_returned - bills_paid
         m = lambda v: fmt(v, ccy)  # noqa: E731 - details are read by people: show money, not minor units
         checks = [
             {"name": "deposit_conservation", "passed": deposits == rhs,
@@ -51,7 +52,7 @@ def conservation(conn: sqlite3.Connection) -> dict[str, Any]:
             {"name": "refund_liability", "passed": refund_payable == refunds_pending,
              "detail": f"refund payable {m(refund_payable)} vs refunds not yet paid {m(refunds_pending)}"},
             {"name": "cash_walk", "passed": cash == cash_expected,
-             "detail": f"journal cash {m(cash)} vs opening + deposits ± FX − refunds {m(cash_expected)}"},
+             "detail": f"journal cash {m(cash)} vs opening + deposits ± FX − refunds − bills paid {m(cash_expected)}"},
             {"name": "no_negative_unapplied", "passed": unapplied >= 0, "detail": f"unapplied {m(unapplied)}"},
         ]
         balanced = all(c["passed"] for c in checks)

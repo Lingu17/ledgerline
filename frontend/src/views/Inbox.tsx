@@ -32,12 +32,26 @@ export function Inbox() {
   const tr = useLoad(() => get<TreasuryLite & { wallets: Wallet[] }>("/treasury"), []);
   const activity = useLoad(() => get<AuditEvent[]>("/audit?limit=12"), []);
   const status = useLoad(() => get<{ now: string }>("/status"), []);
+  const setup = useLoad(() => get<{ show: boolean; steps: { id: string; label: string; done: boolean; page: string }[] }>("/setup"), []);
 
   if (ov.error) return <ErrorNote error={ov.error} onRetry={ov.reload} />;
   const o = ov.data;
 
   return (
     <div className="stack">
+      {setup.data?.show && (
+        <Card title="Set up your company">
+          <ul className="setup-list">
+            {setup.data.steps.map((s) => (
+              <li key={s.id} className={s.done ? "done" : ""}>
+                <span aria-hidden="true">{s.done ? "✓" : "○"}</span>
+                {s.done ? <span>{s.label}</span> : <a href={`#/${s.page}`}>{s.label}</a>}
+                <span className="sr-only">{s.done ? "done" : "to do"}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <section aria-labelledby="cash-h">
         <h2 className="section-title" id="cash-h">Cash by currency</h2>
         <div className="wallets">
@@ -123,7 +137,7 @@ export function Inbox() {
 
           <Card title="Reconciliation status">
             {!o ? <Loading rows={3} /> : o.scorecard.deposits === 0 ? (
-              <Empty title="No deposits received yet">Record a payment, receive a webhook, or use the walkthrough.</Empty>
+              <Empty title="No deposits received yet">Payments appear here when your bank reports them, or when you record or import them.</Empty>
             ) : (
               <dl className="kv">
                 <dt>Deposits received</dt><dd className="num" style={{ textAlign: "left" }}>{o.scorecard.deposits}</dd>

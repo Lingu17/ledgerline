@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
@@ -290,6 +290,21 @@ def import_payments(request: Request, body: CsvBody, operator: str = Depends(req
     return workspace.import_payments_csv(ctx_of(request), body.csv, operator)
 
 
+@router.post("/customers/import")
+def import_customers(request: Request, body: CsvBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.import_customers_csv(ctx_of(request), body.csv, operator)
+
+
+@router.post("/invoices/import")
+def import_invoices(request: Request, body: CsvBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.import_invoices_csv(ctx_of(request), body.csv, operator)
+
+
+@router.post("/treasury/obligations/import")
+def import_bills(request: Request, body: CsvBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return workspace.import_bills_csv(ctx_of(request), body.csv, operator)
+
+
 @router.post("/treasury/obligations")
 def create_obligation(request: Request, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
     return workspace.create_obligation(ctx_of(request), body, operator)
@@ -458,8 +473,8 @@ def sync(request: Request, op_id: str, operator: str = Depends(require_operator)
 def simulate_bank(request: Request, op_id: str, body: SimStatus, operator: str = Depends(require_operator)) -> dict[str, Any]:
     ctx = ctx_of(request)
     if ctx.provider.name == 'airwallex_sandbox':
-        if request.state.principal.role != 'owner' or not request.app.state.settings.sandbox_allowed(ctx.org['id']):
-            raise HTTPException(403, 'sandbox transfer simulation is restricted to the allowlisted owner')
+        if request.state.principal.role != 'owner' or not (ctx.org.get('own_airwallex') or request.app.state.settings.sandbox_allowed(ctx.org['id'])):
+            raise HTTPException(403, 'sandbox transfer simulation is restricted to the owner of a connected account')
     return payouts.simulate_bank_status(ctx, op_id, body.next_status)
 
 
@@ -507,6 +522,22 @@ def treasury_rates(request: Request) -> dict[str, Any]:
     return out
 
 
+@router.get("/treasury/decisions", dependencies=read)
+def treasury_decisions(request: Request) -> dict[str, Any]:
+    """The ranked plan, refreshed from the current position. Only decisions that changed get a new version."""
+    return treasury.refresh_decisions(ctx_of(request), "position review")
+
+
+@router.post("/treasury/obligations/{obligation_id}/defer")
+def defer_bill(request: Request, obligation_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return treasury.apply_deferral(ctx_of(request), obligation_id, operator)
+
+
+@router.post("/treasury/obligations/{obligation_id}/mark-paid")
+def bill_paid(request: Request, obligation_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return treasury.mark_bill_paid(ctx_of(request), obligation_id, operator)
+
+
 @router.post("/treasury/obligations/{obligation_id}/quote")
 def quote(request: Request, obligation_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
     return treasury.create_quote(ctx_of(request), obligation_id, operator)
@@ -548,7 +579,7 @@ def audit_export(request: Request) -> Response:
             "organization": ctx.org,
             "exported_by": request.state.principal.actor,
             "mode": {"bank": ctx.provider.label, "claude": "claude_api" if ctx.settings.claude_configured else "deterministic_fixture"},
-            "synthetic_data_only": True,
+            "synthetic_data_only": bool(ctx.org and ctx.org.get("kind") == "sample"),
             "deposits": db.rows(conn, "SELECT * FROM deposits ORDER BY id"),
             "plans": [_loads(p, "actions") for p in db.rows(conn, "SELECT * FROM plans ORDER BY deposit_id, version")],
             "evidence": [_loads(e, "checks", "envelope") for e in db.rows(conn, "SELECT * FROM evidence ORDER BY deposit_id, version")],
@@ -633,7 +664,7 @@ def scorecard(request: Request) -> dict[str, Any]:
 
 # --------------------------------------------------------------------------- webhooks
 @router.post("/webhooks/airwallex/{org_id}")
-async def airwallex_webhook(request: Request, org_id: str) -> dict[str, Any]:
+async def airwallex_webhook(request: Request, org_id: str, background: BackgroundTasks) -> dict[str, Any]:
     """Each organization has its own webhook URL and secret. HMAC is the only credential."""
     try:
         ctx = request.app.state.orgs.get(org_id)
@@ -646,7 +677,10 @@ async def airwallex_webhook(request: Request, org_id: str) -> dict[str, Any]:
     source = "airwallex_sandbox_webhook" if ctx.settings.airwallex_webhook_secret else "local_simulated_webhook"
     from starlette.concurrency import run_in_threadpool
 
-    return await run_in_threadpool(
+    result = await run_in_threadpool(
         webhooks.handle, ctx, raw_body=raw, timestamp_ms=request.headers.get("x-timestamp"),
         signature=request.headers.get("x-signature"), secret=secret, source=source,
     )
+    # New cash may change a bill decision. Done after the response, so a rate lookup cannot delay the receipt.
+    background.add_task(treasury.refresh_decisions, ctx, "deposit received")
+    return result

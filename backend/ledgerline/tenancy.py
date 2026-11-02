@@ -44,18 +44,26 @@ def build_org_context(settings: Settings, org: dict[str, Any], clock: Clock) -> 
     if s.provider == "airwallex_sandbox":
         from .providers.airwallex import AirwallexSandbox
 
-        if not settings.sandbox_allowed(org["id"]):
+        if org.get("airwallex_credentials_enc"):
+            # The organization connected its own account.
+            from .connections import unseal
+
+            client_id, api_key = unseal(settings, org["id"], org["airwallex_credentials_enc"])
+            sandbox = AirwallexSandbox(client_id, api_key)
+        elif settings.sandbox_allowed(org["id"]):
+            sandbox = AirwallexSandbox(s.airwallex_client_id, s.airwallex_api_key)
+        else:
             # Shared sandbox credentials are reserved for operator-approved organizations (LEDGERLINE_SANDBOX_ORGS).
             from .control import AuthError
 
             raise AuthError(403, "this organization is not authorized to use the server's Airwallex sandbox credentials")
-        sandbox = AirwallexSandbox(s.airwallex_client_id, s.airwallex_api_key)
         provider: Any = sandbox
     else:
         local_bank = LocalBank(settings.pg_target("b", org["id"]) if settings.postgres else data_dir / "local_bank.sqlite3", clock)
         provider = local_bank
     ctx = AppContext(settings=s, clock=clock, provider=provider, local_bank=local_bank, sandbox=sandbox)
     ctx.org = {k: org[k] for k in ("id", "name", "kind", "bank_mode")}
+    ctx.org["own_airwallex"] = bool(org.get("airwallex_credentials_enc"))
     return ctx
 
 
@@ -70,7 +78,7 @@ class OrgRegistry:
     def get(self, org_id: str) -> AppContext:
         with self._lock:
             ctx = self._cache.get(org_id)
-            if ctx is not None and ctx.sandbox is not None and not self.settings.sandbox_allowed(org_id):
+            if ctx is not None and ctx.sandbox is not None and not ctx.org.get("own_airwallex") and not self.settings.sandbox_allowed(org_id):
                 # Allow-list checked at every use, so withdrawing access applies even to a cached context.
                 self._cache.pop(org_id, None)
                 ctx = None

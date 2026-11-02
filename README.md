@@ -70,13 +70,17 @@ Every payment shows this as a **decision path**: received → first plan → evi
 
 ## 🚀 Try it (five minutes)
 
-1. Open **https://35-207-220-110.sslip.io** → **Get started** → any name and email (nothing is emailed) → **Sample data**.
+1. Open **https://35-207-220-110.sslip.io** → **Get started** → any name and email (nothing is emailed) → **Practice company**.
 2. **Payments → DEP-1005 → Ask payer's agent**: the duplicate becomes verified advance credit.
 3. **Payments → DEP-1004 → Ask payer's agent**: a correctly signed claim for another customer's invoice is rejected.
 4. **Read remittance…** on DEP-1004: paste an email or upload a PDF; Claude proposes, a person decides.
 5. **Walkthrough**: FX for the EUR bill, the refund a person approves, bank SENT then PAID, and the scorecard.
 
-Your organization is isolated from every other judge's. It uses the built-in simulated bank; the real Airwallex sandbox is reserved for the operator's organization so no judge can touch shared funds.
+Your organization is isolated from every other one. A practice company uses made-up data and a simulated bank. To use your own company instead, choose **My company**, then connect your Airwallex sandbox keys under Settings: they are checked with Airwallex first, stored encrypted per organization, and can only reach the Airwallex test environment.
+
+**When cash is short:** Treasury → *What to pay first* ranks bills due soon by priority, then due date, and decides each one: fund, convert only the shortfall, defer to a date you allowed, or escalate. New cash reopens only the decisions it changes, and each change is audited. Deciding moves no money.
+
+**Not done yet:** live-money Airwallex access, and connecting a customer's own hosted payer agent (payer agents currently run on this server).
 
 ---
 

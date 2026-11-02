@@ -26,7 +26,7 @@ function AuthFrame({ title, children, foot }: { title: string; children: React.R
         {children}
         {foot && <div className="auth-foot">{foot}</div>}
       </main>
-      <p className="auth-note">Reconciliation for multi-currency receivables. Local workspaces use a simulated bank and synthetic data.</p>
+      <p className="auth-note">Reconciliation and cash decisions for multi-currency businesses.</p>
     </div>
   );
 }
@@ -102,9 +102,9 @@ export function SignIn({ initialMode = "signin" }: { initialMode?: "signin" | "s
           <fieldset className="choice">
             <legend>Start with</legend>
             <label><input type="radio" name="start" checked={f.start_with === "empty"} onChange={() => setF({ ...f, start_with: "empty" })} />
-              <span><b>An empty workspace</b><small>Add your customers, invoices and received payments.</small></span></label>
+              <span><b>My company</b><small>Connect your account, then add customers, invoices and bills.</small></span></label>
             <label><input type="radio" name="start" checked={f.start_with === "sample"} onChange={() => setF({ ...f, start_with: "sample" })} />
-              <span><b>Sample data</b><small>A synthetic company with six received payments to work through.</small></span></label>
+              <span><b>Practice company</b><small>Made-up customers and six payments, to learn it safely first.</small></span></label>
           </fieldset>
         )}
         {err && <div className="notice risk small" role="alert">{err}</div>}

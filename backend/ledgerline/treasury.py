@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -94,6 +95,142 @@ def plan_for_obligation(conn: sqlite3.Connection, ctx: AppContext, obligation_id
             f"Convert only the {ob['currency']} shortfall of {fmt(deficit, ob['currency'])}; reserves in every currency are preserved."
         ),
     }
+
+
+# --------------------------------------------------------------------------- short-cash decisions
+PRIORITY_ORDER = {"critical": 0, "normal": 1, "flexible": 2}
+_RATE_CACHE: dict[str, tuple[float, dict[tuple[str, str], Decimal]]] = {}
+
+
+def decision_rates(ctx: AppContext) -> dict[tuple[str, str], Decimal]:
+    """Indicative rates for planning. Call outside a transaction: a connected account may need a network read.
+    An unavailable rate leaves that pair out, so the plan escalates instead of guessing."""
+    if ctx.provider.name != "airwallex_sandbox":
+        return dict(DEMO_RATES)
+    key = ctx.org["id"] if ctx.org else "default"
+    hit = _RATE_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < 60:
+        return hit[1]
+    rates: dict[tuple[str, str], Decimal] = {}
+    for sell, buy in DEMO_RATES:
+        try:
+            rates[(sell, buy)] = Decimal(ctx.provider.current_rate(sell, buy)["rate"])
+        except (ProviderError, ProviderAmbiguous):
+            continue
+    _RATE_CACHE[key] = (time.monotonic(), rates)
+    return rates
+
+
+def rank_bills(conn: sqlite3.Connection, ctx: AppContext, rates: dict[tuple[str, str], Decimal]) -> list[dict[str, Any]]:
+    """Rank the bills in the look-ahead window and decide each one: fund, convert, defer or escalate.
+
+    Most important first, then earliest due. Each decision uses up cash, so a surplus is never promised twice.
+    A source currency only offers what is left after its own reserve, held funds and bills in the window.
+    """
+    pos = wallet_position(conn, ctx)
+    now = ctx.clock.now()
+    horizon = now + timedelta(days=ctx.policy(conn)["obligation_lookahead_days"])
+    available = {c: p["projected_after_pending_fx"] + p["obligations_due_in_window"] for c, p in pos.items()}
+    surplus = {c: max(0, p["free_after_commitments"]) for c, p in pos.items()}
+    bills = [b for b in db.rows(conn, "SELECT * FROM obligations WHERE status = 'scheduled'") if parse_iso(b["due_at"]) <= horizon]
+    bills.sort(key=lambda b: (PRIORITY_ORDER.get(b["priority"], 1), b["due_at"], b["id"]))
+    out = []
+    for rank, bill in enumerate(bills, start=1):
+        ccy, amount = bill["currency"], bill["amount_minor"]
+        have = max(0, available[ccy])
+        shortfall = max(0, amount - have)
+        source = None
+        if shortfall == 0:
+            decision = "fund"
+            reason = f"{ccy} cash covers this bill after the reserve, held funds and higher-ranked bills."
+        else:
+            options = []
+            for sell in surplus:
+                rate = rates.get((sell, ccy))
+                if sell != ccy and rate and surplus[sell] > 0 and convert_round(surplus[sell], sell, ccy, rate) >= shortfall:
+                    options.append((convert_round(surplus[sell], sell, ccy, rate), sell))
+            if options:
+                decision, source = "convert", max(options)[1]
+                # Round the amount to sell up, so the same surplus cannot also be offered to a lower-ranked bill.
+                sell_minor = convert_round(shortfall, ccy, source, rates.get((ccy, source)) or 1 / rates[(source, ccy)]) + 1
+                surplus[source] = max(0, surplus[source] - sell_minor)
+                reason = f"Short {fmt(shortfall, ccy)}: convert only that amount from {source} surplus above its reserve."
+            elif bill["defer_until"] and parse_iso(bill["defer_until"]) > max(now, parse_iso(bill["due_at"])):
+                decision = "defer"
+                reason = f"Short {fmt(shortfall, ccy)} with no surplus to convert: this bill may wait until {bill['defer_until'][:10]}."
+            else:
+                decision = "escalate"
+                reason = f"Short {fmt(shortfall, ccy)}, no surplus to convert and no permitted later date: a person must decide."
+        if decision in ("fund", "convert"):
+            available[ccy] = max(0, available[ccy] - amount) if decision == "fund" else 0
+        out.append({"obligation_id": bill["id"], "payee": bill["payee"], "currency": ccy, "amount_minor": amount,
+                    "due_at": bill["due_at"], "priority": bill["priority"], "defer_until": bill["defer_until"], "rank": rank,
+                    "decision": decision, "shortfall_minor": shortfall, "source_currency": source, "reason": reason})
+    return out
+
+
+def refresh_decisions(ctx: AppContext, trigger: str, actor: str = "system") -> dict[str, Any]:
+    """Re-run the plan and reopen only the decisions the new position changes. Decides; moves no money."""
+    rates = decision_rates(ctx)
+    with ctx.conn() as conn, db.transaction(conn):
+        now = iso(ctx.clock.now())
+        ranked = rank_bills(conn, ctx, rates)
+        stored = {d["obligation_id"]: d for d in db.rows(conn, "SELECT * FROM treasury_decisions")}
+        changed, unchanged = [], 0
+        live = set()
+        for d in ranked:
+            live.add(d["obligation_id"])
+            old = stored.get(d["obligation_id"])
+            same = old and (old["decision"], old["shortfall_minor"], old["source_currency"]) == (d["decision"], d["shortfall_minor"], d["source_currency"])
+            if same:
+                unchanged += 1
+                if old["rank_no"] != d["rank"]:
+                    conn.execute("UPDATE treasury_decisions SET rank_no = ? WHERE obligation_id = ?", (d["rank"], d["obligation_id"]))
+                continue
+            version = (old["version"] + 1) if old else 1
+            conn.execute("DELETE FROM treasury_decisions WHERE obligation_id = ?", (d["obligation_id"],))
+            conn.execute("INSERT INTO treasury_decisions(obligation_id, decision, rank_no, shortfall_minor, source_currency, reason, version, decided_at, trigger)"
+                         " VALUES (?,?,?,?,?,?,?,?,?)",
+                         (d["obligation_id"], d["decision"], d["rank"], d["shortfall_minor"], d["source_currency"], d["reason"], version, now, trigger))
+            audit.record(conn, now, actor, "treasury.decision", "obligation", d["obligation_id"],
+                         {"from": old["decision"] if old else None, "to": d["decision"], "shortfall_minor": d["shortfall_minor"],
+                          "source_currency": d["source_currency"], "trigger": trigger, "reason": d["reason"]})
+            changed.append({"obligation_id": d["obligation_id"], "from": old["decision"] if old else None, "to": d["decision"]})
+        for gone in set(stored) - live:  # paid, or moved out of the window by an applied deferral
+            conn.execute("DELETE FROM treasury_decisions WHERE obligation_id = ?", (gone,))
+        kept = {d["obligation_id"]: d for d in db.rows(conn, "SELECT * FROM treasury_decisions")}
+    return {"decisions": [{**d, "version": kept[d["obligation_id"]]["version"], "decided_at": kept[d["obligation_id"]]["decided_at"],
+                           "trigger": kept[d["obligation_id"]]["trigger"]} for d in ranked],
+            "changed": changed, "unchanged": unchanged, "rates_available": len(rates) == len(DEMO_RATES)}
+
+
+def apply_deferral(ctx: AppContext, obligation_id: str, actor: str) -> dict[str, Any]:
+    """A person accepts a deferral: the due date moves to the bill's permitted date, with the old date audited."""
+    with ctx.conn() as conn, db.transaction(conn):
+        bill = db.row(conn, "SELECT * FROM obligations WHERE id = ?", (obligation_id,))
+        if bill is None:
+            raise TreasuryError("unknown bill")
+        d = db.row(conn, "SELECT * FROM treasury_decisions WHERE obligation_id = ?", (obligation_id,))
+        if d is None or d["decision"] != "defer":
+            raise TreasuryError("the current decision for this bill is not to defer it")
+        now = iso(ctx.clock.now())
+        conn.execute("UPDATE obligations SET due_at = ?, defer_until = NULL WHERE id = ?", (bill["defer_until"], obligation_id))
+        audit.record(conn, now, actor, "obligation.deferred", "obligation", obligation_id, {"from": bill["due_at"], "to": bill["defer_until"]})
+    return refresh_decisions(ctx, f"{obligation_id} deferred", actor)
+
+
+def mark_bill_paid(ctx: AppContext, obligation_id: str, actor: str) -> dict[str, Any]:
+    """Record a bill paid from the business account. Ledgerline does not send supplier payments itself."""
+    with ctx.conn() as conn, db.transaction(conn):
+        bill = db.row(conn, "SELECT * FROM obligations WHERE id = ?", (obligation_id,))
+        if bill is None or bill["status"] != "scheduled":
+            raise TreasuryError("only a scheduled bill can be marked paid")
+        now = iso(ctx.clock.now())
+        conn.execute("UPDATE obligations SET status = 'paid' WHERE id = ?", (obligation_id,))
+        audit.post(conn, now, f"Bill {obligation_id} paid: {bill['payee']}", "obligation", obligation_id,
+                   audit.move("bills_paid", f"cash:{bill['currency']}", bill["currency"], bill["amount_minor"]))
+        audit.record(conn, now, actor, "obligation.paid", "obligation", obligation_id, {"amount_minor": bill["amount_minor"], "currency": bill["currency"]})
+    return refresh_decisions(ctx, f"{obligation_id} paid", actor)
 
 
 def create_quote(ctx: AppContext, obligation_id: str, actor: str) -> dict[str, Any]:

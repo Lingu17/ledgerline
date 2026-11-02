@@ -58,7 +58,7 @@ const NAV: { id: string; label: string; section?: string; sampleOnly?: boolean }
   { id: "activity", label: "Activity" },
   { id: "team", label: "Team", section: "Organization" },
   { id: "settings", label: "Settings" },
-  { id: "walkthrough", label: "Walkthrough", sampleOnly: true },
+  { id: "walkthrough", label: "Practice steps", sampleOnly: true },
 ];
 
 const TITLES: Record<string, [string, string]> = {
@@ -66,13 +66,13 @@ const TITLES: Record<string, [string, string]> = {
   payments: ["Payments", "Received funds, how each was matched, and what is left"],
   approvals: ["Approvals", "Money-out decisions bound to an exact scope"],
   evidence: ["Evidence", "Payer answers, the three checks, and how plans changed"],
-  treasury: ["Treasury", "Reserves, upcoming obligations and conversions"],
+  treasury: ["Treasury", "What to pay first, reserves and conversions"],
   ledger: ["Ledger", "Per-currency conservation and the journal"],
   customers: ["Customers & invoices", "Who pays, what they owe, and their credits"],
   activity: ["Activity", "Audit trail of every decision and operation"],
   team: ["Team", "Members, roles and invitations"],
   settings: ["Settings", "Organization, integrations, controls and policy"],
-  walkthrough: ["Walkthrough", "Optional guided run of the reference scenario"],
+  walkthrough: ["Practice steps", "A guided run through the practice company's payments"],
 };
 
 function OrgMenu({ me }: { me: Me }) {
@@ -94,7 +94,7 @@ function OrgMenu({ me }: { me: Me }) {
     <div className="org-menu" ref={ref}>
       <button className="org-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="org-name">{org.name}</span>
-        <small>{org.kind === "sample" ? "Sample organization" : "Organization"} · {ROLE_LABEL[org.role]}</small>
+        <small>{org.kind === "sample" ? "Practice company" : "Organization"} · {ROLE_LABEL[org.role]}</small>
       </button>
       {open && (
         <div className="menu" role="menu" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
@@ -102,7 +102,7 @@ function OrgMenu({ me }: { me: Me }) {
           {me.organizations.map((o) => (
             <button key={o.id} role="menuitemradio" aria-checked={o.id === org.id} className="menu-item"
               onClick={() => { setOpen(false); if (o.id !== org.id) switchOrg(o.id).catch((e) => toast(e.message, "error")); }}>
-              <span>{o.name}</span><small>{ROLE_LABEL[o.role]}{o.kind === "sample" ? " · sample" : ""}</small>
+              <span>{o.name}</span><small>{ROLE_LABEL[o.role]}{o.kind === "sample" ? " · practice" : ""}</small>
             </button>
           ))}
           <div className="menu-sep" />
@@ -125,8 +125,8 @@ function OrgMenu({ me }: { me: Me }) {
               <Field id="no-name" label="Name"><input id="no-name" type="text" value={name} onChange={(e) => setName(e.target.value)} /></Field>
               <fieldset className="choice">
                 <legend>Start with</legend>
-                <label><input type="radio" name="ns" checked={start === "empty"} onChange={() => setStart("empty")} /><span><b>Empty workspace</b></span></label>
-                <label><input type="radio" name="ns" checked={start === "sample"} onChange={() => setStart("sample")} /><span><b>Sample data</b><small>Synthetic customers and six payments; includes the walkthrough.</small></span></label>
+                <label><input type="radio" name="ns" checked={start === "empty"} onChange={() => setStart("empty")} /><span><b>My company</b></span></label>
+                <label><input type="radio" name="ns" checked={start === "sample"} onChange={() => setStart("sample")} /><span><b>Practice company</b><small>Made-up customers and six payments, separate from your real data.</small></span></label>
               </fieldset>
               {err && <div className="notice risk small" role="alert">{err}</div>}
             </div>
@@ -206,8 +206,8 @@ function Shell({ me }: { me: Me }) {
             {me.role === "viewer" && <span className="badge" title="You can view and export, but not change anything"><b>Read-only</b></span>}
             {s && (
               <a className="badge" href="#/settings" title={s.bank.label}>
-                <b>{localMode ? "Local workspace" : "Sandbox"}</b>
-                <span className="hide-sm">{localMode ? "simulated bank" : "Airwallex test"}</span>
+                <b>{isSample ? "Practice company" : localMode ? "No bank connected" : "Airwallex"}</b>
+                <span className="hide-sm">{isSample ? "made-up data" : localMode ? "manual records" : "test environment"}</span>
               </a>
             )}
           </div>

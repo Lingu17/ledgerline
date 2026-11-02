@@ -116,6 +116,7 @@ CREATE TABLE claude_calls (
 );
 CREATE INDEX claude_calls_day ON claude_calls(day, org_id)
 """),
+    (4, "each organization's own Airwallex credentials, encrypted", "ALTER TABLE organizations ADD COLUMN airwallex_credentials_enc TEXT"),
 ]
 
 
@@ -147,6 +148,20 @@ TENANT: list[Migration] = [
     (2, "invoice adjustments, approval author, edit timestamps", _tenant_v2),
     # Hosted mode stores the simulated payer agents' private keys here, encrypted (payer_agents/keys.py).
     (3, "encrypted payer-agent signing keys", "CREATE TABLE IF NOT EXISTS agent_keys (customer_id TEXT PRIMARY KEY, private_key_enc TEXT NOT NULL, created_at TEXT NOT NULL)"),
+    (4, "bill priority, deferral limit and short-cash decisions", """
+ALTER TABLE obligations ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal';
+ALTER TABLE obligations ADD COLUMN defer_until TEXT;
+CREATE TABLE IF NOT EXISTS treasury_decisions (
+  obligation_id TEXT PRIMARY KEY REFERENCES obligations(id),
+  decision TEXT NOT NULL,
+  rank_no INTEGER NOT NULL,
+  shortfall_minor INTEGER NOT NULL,
+  source_currency TEXT,
+  reason TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  decided_at TEXT NOT NULL,
+  trigger TEXT NOT NULL
+)"""),
 ]
 
 

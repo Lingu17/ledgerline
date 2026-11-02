@@ -75,12 +75,13 @@ const CASES = [
 ];
 
 const FAQ = [
-  ["Is this a bank?", "No. Ledgerline sits beside your business account. It reads incoming payments and, when you approve, asks the account provider to return funds. In a local workspace the bank is simulated and every figure is synthetic."],
-  ["Which banking provider does it use?", "New workspaces use a built-in simulated bank so you can try every flow safely. The Airwallex sandbox adapter is available when a server administrator configures sandbox API credentials. The current status is always shown in the top bar and under Settings → Integrations."],
+  ["Is this a bank?", "No. Ledgerline sits beside your business account. It reads incoming payments and, when you approve, asks the account provider to return funds."],
+  ["Which banking provider does it use?", "Airwallex. Each company connects its own account under Settings; the keys are checked first and stored encrypted. Today the connection reaches the Airwallex test environment only, so no real money moves. Until you connect, you can record or import payments by hand."],
+  ["What happens when cash is short?", "Ledgerline ranks bills due soon by priority and date, then decides each one: fund it, convert only the shortfall, defer it to a date you allowed, or escalate to a person. New cash reopens only the decisions it changes. Deciding moves no money."],
   ["Where does AI come in?", "The payer side is an agent reached over the Model Context Protocol, and its answers are only accepted as signed, verified evidence. Claude can optionally read free-text remittance advice; its output is advisory and is checked against your invoices before anyone acts on it."],
   ["Can an AI move money on its own?", "Claude cannot: its output is advisory and never authorises anything. A payer agent's signed claim counts only after all three checks pass. Even then, a refund above your auto-limit needs a person other than the proposer, returns proposed by an operator always do, and small refunds auto-approve only on verified evidence within the limit you set. Operators can pause all money-out at any time; only an owner can resume."],
-  ["How is data separated between companies?", "Each organization has its own database, simulated bank and signing keys. Every request is resolved from the signed-in session to a membership before any data is opened."],
-  ["What does it cost?", "Nothing. Ledgerline is a hackathon project for the Airwallex Agentic Banking Hackathon and has no billing. It is not production banking software."],
+  ["How is data separated between companies?", "Each organization has its own database, encrypted bank connection and signing keys. Every request is resolved from the signed-in session to a membership before any data is opened."],
+  ["Is it ready for live money?", "Not yet. It runs against the Airwallex test environment. Going live needs Airwallex production access and an independent security review. There is no billing today."],
 ];
 
 export function Landing() {
@@ -139,7 +140,7 @@ export function Landing() {
               <a className="lp-btn primary lg" href={primary.href}>{primary.label}</a>
               <a className="lp-btn outline lg" href="#how">See how it works</a>
             </div>
-            <p className="lp-fineprint">Free to try with a sample company. Synthetic data and a simulated bank by default.</p>
+            <p className="lp-fineprint">Connect your Airwallex test account, or learn it first with a practice company.</p>
           </div>
 
           <div className="lp-stage" aria-hidden="true">
@@ -258,8 +259,8 @@ export function Landing() {
             <p>Every screen shows which bank you are working against. Nothing is labelled live unless it has been checked.</p>
           </div>
           <div className="lp-integrations">
-            <article><span className="lp-tag">Default</span><h3>Simulated bank</h3><p>A local bank with synthetic accounts, webhooks, FX and refunds, including failures and delays, for safe practice.</p></article>
-            <article><span className="lp-tag warn">Sandbox</span><h3>Airwallex</h3><p>Verified in the sandbox: signed deposit webhooks, current FX rates, beneficiaries, conversions and an approved refund from SENT to PAID. Reserved for the operator's organization, so sample workspaces never touch it.</p></article>
+            <article><span className="lp-tag warn">Test environment</span><h3>Airwallex</h3><p>Connect your own account. Verified in the test environment: signed deposit webhooks, current FX rates, beneficiaries, conversions and an approved refund from SENT to PAID.</p></article>
+            <article><span className="lp-tag">Practice</span><h3>Practice company</h3><p>A separate company with made-up accounts, webhooks, FX and refunds, including failures and delays, for safe training.</p></article>
             <article><span className="lp-tag">Optional</span><h3>Claude</h3><p>Reads free-text remittance advice into structured suggestions. Advisory only, and verified against your invoices.</p></article>
             <article><span className="lp-tag">Protocol</span><h3>MCP payer agents</h3><p>Payers answer questions about their payments through the Model Context Protocol with signed responses.</p></article>
           </div>
@@ -286,8 +287,8 @@ export function Landing() {
       <section className="lp-cta">
         <div className="lp-wrap lp-cta-row">
           <div>
-            <h2>See it with a sample company in under a minute.</h2>
-            <p>Six received payments, three currencies and every hard case, ready to work through.</p>
+            <h2>Put your receivables and bills in one place.</h2>
+            <p>Connect your account, import customers, invoices and bills, and invite a second approver.</p>
           </div>
           <a className="lp-btn primary lg" href={primary.href}>{primary.label}</a>
         </div>
@@ -296,7 +297,7 @@ export function Landing() {
       <footer className="lp-footer">
         <div className="lp-wrap lp-footer-row">
           <Logo />
-          <p>Built for the Airwallex Agentic Banking Hackathon. Not a bank and not production banking software. Local workspaces use synthetic data only.</p>
+          <p>Not a bank. Runs against the Airwallex test environment; no real money moves.</p>
           <nav aria-label="Footer">
             <a href="#how">How it works</a>
             <a href="#faq">FAQ</a>

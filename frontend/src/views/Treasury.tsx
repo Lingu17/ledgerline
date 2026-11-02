@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { get, post, type Operation, type Wallet } from "../api";
-import { Card, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
+import { Card, CsvImport, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { useAuth } from "../auth";
 import { parseMajor, plainAmount } from "../format";
 import { money, when, day } from "../format";
@@ -23,7 +23,7 @@ export function Treasury({ localMode }: { localMode: boolean }) {
   const { can } = useAuth();
   const op = can("operator");
   const owner = can("owner");
-  const [modal, setModal] = useState<"" | "obligation" | "opening">("");
+  const [modal, setModal] = useState<"" | "obligation" | "opening" | "import">("");
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const i = setInterval(() => setNow(Date.now()), 1000);
@@ -70,9 +70,11 @@ export function Treasury({ localMode }: { localMode: boolean }) {
         </div>
       </Card>
 
+      <BillDecisions op={op} />
+
       <div className="split">
-        <Card title="Obligations" pad={false} actions={op && <button className="btn small primary" onClick={() => setModal("obligation")}>Add obligation</button>}>
-          {d.obligations.length === 0 && <Empty title="No upcoming obligations">Add supplier bills and payroll so Ledgerline can keep each currency covered.</Empty>}
+        <Card title="Bills" pad={false} actions={op && <><button className="btn small" onClick={() => setModal("import")}>Import CSV</button><button className="btn small primary" onClick={() => setModal("obligation")}>Add bill</button></>}>
+          {d.obligations.length === 0 && <Empty title="No upcoming bills">Add supplier bills and payroll so Ledgerline can keep each currency covered.</Empty>}
           <div className="table-wrap">
           <table>
             <thead><tr><th>Payee</th><th>Due</th><th className="num">Amount</th><th>Coverage</th><th /></tr></thead>
@@ -107,7 +109,7 @@ export function Treasury({ localMode }: { localMode: boolean }) {
 
         <Card title="Conversion quote">
           {!liveQuote ? (
-            <Empty title="No live quote">Request a quote for an obligation that is short. Quotes expire and can be used once.</Empty>
+            <Empty title="No live quote">Request a quote for a bill that is short. Quotes expire and can be used once.</Empty>
           ) : (
             <QuoteBox q={liveQuote} now={now} busy={busy} canConvert={op}
               onConvert={() => run("convert", () => post<Operation>(`/treasury/quotes/${liveQuote.quote.id}/execute`), (op) => `Conversion ${op.id}: ${op.status}`)} />
@@ -152,26 +154,78 @@ export function Treasury({ localMode }: { localMode: boolean }) {
           </div>
         )}
       </Card>
+      {modal === "import" && <CsvImport title="Import bills" path="/treasury/obligations/import" columns="payee,currency,amount,due_date,priority,defer_until,description"
+        example={"Northbeam Payroll,EUR,9000.00,2026-11-28,critical,,November payroll\nStudio Fabrik,EUR,1200.00,2026-11-20,flexible,2026-12-15,Design retainer"} onClose={() => setModal("")} />}
       {modal === "obligation" && <ObligationForm onClose={() => setModal("")} />}
       {modal === "opening" && <OpeningForm onClose={() => setModal("")} />}
     </div>
   );
 }
 
+interface Decision {
+  obligation_id: string; payee: string; currency: string; amount_minor: number; due_at: string; priority: string; rank: number;
+  decision: "fund" | "convert" | "defer" | "escalate"; shortfall_minor: number; source_currency: string | null; reason: string; version: number; trigger: string;
+}
+const DECISION: Record<Decision["decision"], [string, string]> = {
+  fund: ["matched", "Fund"], convert: ["info", "Convert"], defer: ["pending", "Defer"], escalate: ["escalated", "Escalate"],
+};
+
+function BillDecisions({ op }: { op: boolean }) {
+  const plan = useLoad(() => get<{ decisions: Decision[]; changed: unknown[]; unchanged: number; rates_available: boolean }>("/treasury/decisions"), []);
+  const { run, busy } = useAction();
+  if (plan.error) return <ErrorNote error={plan.error} onRetry={plan.reload} />;
+  if (!plan.data) return <div className="card"><Loading rows={3} /></div>;
+  const items = plan.data.decisions;
+  return (
+    <Card title="What to pay first" pad={false}>
+      {items.length === 0 ? <Empty title="No bills due in the planning window">Bills due soon are ranked here with a decision for each.</Empty> : (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Bill</th><th>Due</th><th className="num">Amount</th><th>Decision</th><th /></tr></thead>
+            <tbody>
+              {items.map((b) => (
+                <tr key={b.obligation_id}>
+                  <td>{b.rank}</td>
+                  <td style={{ minWidth: 140 }}><div className="primary-text">{b.payee}</div><div className="secondary">{b.priority === "normal" ? "Normal" : b.priority === "critical" ? "Critical" : "Flexible"}</div></td>
+                  <td className="nowrap">{day(b.due_at)}</td>
+                  <td className="num"><Money minor={b.amount_minor} ccy={b.currency} /></td>
+                  <td className="small" style={{ minWidth: 240 }}>
+                    <Pill status={DECISION[b.decision][0]} label={DECISION[b.decision][1]} />
+                    <div className="secondary">{b.reason}</div>
+                    {b.version > 1 && <div className="secondary">Revised (version {b.version}) after: {b.trigger}</div>}
+                  </td>
+                  <td className="num nowrap">
+                    {op && b.decision === "defer" && <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("defer", () => post(`/treasury/obligations/${b.obligation_id}/defer`), "Bill deferred")) plan.reload(); }}>Accept deferral</button>}
+                    {op && <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("paid", () => post(`/treasury/obligations/${b.obligation_id}/mark-paid`), "Bill marked paid")) plan.reload(); }}>Mark paid</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="card-body small muted">
+        Ranked by priority, then due date. Each decision uses up cash, and a reserve is never spent. New cash reopens only the decisions it changes. Deciding moves no money.
+        {!plan.data.rates_available && <div className="neg">Current rates are unavailable, so bills that would need a conversion are escalated.</div>}
+      </div>
+    </Card>
+  );
+}
+
 function ObligationForm({ onClose }: { onClose: () => void }) {
   const { run, busy } = useAction();
-  const [f, setF] = useState({ payee: "", currency: "EUR", amount: "", due_date: "", description: "" });
+  const [f, setF] = useState({ payee: "", currency: "EUR", amount: "", due_date: "", description: "", priority: "normal", defer_until: "" });
   const [err, setErr] = useState<string | null>(null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   return (
-    <Modal title="Add an obligation" onClose={onClose}>
+    <Modal title="Add a bill" onClose={onClose}>
       <form noValidate onSubmit={async (e) => {
         e.preventDefault();
         if (f.payee.trim().length < 2) return setErr("Enter who is being paid.");
         if ((parseMajor(f.amount) ?? 0) <= 0) return setErr("Enter an amount greater than zero, like 9000.00.");
         if (!f.due_date) return setErr("Choose a due date.");
         setErr(null);
-        if (await run("ob", () => post("/treasury/obligations", { ...f, amount: plainAmount(f.amount) }), "Obligation added")) onClose();
+        if (await run("ob", () => post("/treasury/obligations", { ...f, amount: plainAmount(f.amount), defer_until: f.priority === "critical" ? null : f.defer_until || null }), "Bill added")) onClose();
       }}>
         <div className="form-grid">
           <Field id="ob-payee" label="Payee" wide><input id="ob-payee" type="text" value={f.payee} onChange={set("payee")} /></Field>
@@ -179,9 +233,11 @@ function ObligationForm({ onClose }: { onClose: () => void }) {
           <Field id="ob-amt" label="Amount"><input id="ob-amt" type="text" inputMode="decimal" value={f.amount} onChange={set("amount")} /></Field>
           <Field id="ob-due" label="Due date"><input id="ob-due" type="date" value={f.due_date} onChange={set("due_date")} /></Field>
           <Field id="ob-desc" label="Description"><input id="ob-desc" type="text" value={f.description} onChange={set("description")} /></Field>
+          <Field id="ob-pri" label="Priority"><select id="ob-pri" value={f.priority} onChange={set("priority")}><option value="critical">Critical (payroll, tax)</option><option value="normal">Normal</option><option value="flexible">Flexible</option></select></Field>
+          {f.priority !== "critical" && <Field id="ob-defer" label="Can wait until" hint="Leave empty if it cannot be paid late"><input id="ob-defer" type="date" value={f.defer_until} onChange={set("defer_until")} /></Field>}
         </div>
         {err && <div className="notice risk small" role="alert" style={{ marginTop: 12 }}>{err}</div>}
-        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy}>Add obligation</button></div>
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy}>Add bill</button></div>
       </form>
     </Modal>
   );

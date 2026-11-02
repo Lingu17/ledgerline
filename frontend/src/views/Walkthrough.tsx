@@ -20,7 +20,7 @@ export function Walkthrough() {
   if (!st.data) return <div className="card"><Loading /></div>;
   const s = st.data;
   if (!s.available)
-    return <div className="card"><div className="empty"><b>The walkthrough runs in sample organizations</b>Create one from the organization menu with “Sample data”. Your real workspace is never touched.</div></div>;
+    return <div className="card"><div className="empty"><b>Practice steps run in a practice company</b>Create one from the organization menu. Your real company is never touched.</div></div>;
   return (
     <div className="stack" style={{ maxWidth: 820 }}>
       <div className="notice small">

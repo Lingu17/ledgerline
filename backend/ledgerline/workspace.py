@@ -387,6 +387,59 @@ def import_payments_csv(ctx: AppContext, text: Any, actor: str) -> dict[str, Any
             "errors": sum(r["status"] == "error" for r in results), "results": results}
 
 
+def _import_rows(text: Any, columns: list[str], handle) -> dict[str, Any]:
+    """Shared CSV rules: exact header, 500 rows at most, and one bad row does not block the others."""
+    import csv
+    import io
+
+    if not isinstance(text, str) or not text.strip():
+        raise InputError("paste CSV text with a header row")
+    reader = csv.DictReader(io.StringIO(text.strip()))
+    if [h.strip() for h in (reader.fieldnames or [])] != columns:
+        raise InputError("header must be: " + ",".join(columns))
+    results = []
+    for n, row in enumerate(reader, start=2):
+        if n > 502:
+            raise InputError("at most 500 rows per import")
+        try:
+            results.append({"line": n, "status": "created", "id": handle({k: (row.get(k) or "").strip() for k in columns})})
+        except ValueError as exc:  # InputError, ReconcileError, MoneyError: that row's error, not the import's
+            results.append({"line": n, "status": "error", "error": str(exc)})
+    return {"rows": len(results), "created": sum(r["status"] == "created" for r in results),
+            "errors": sum(r["status"] == "error" for r in results), "results": results}
+
+
+def import_customers_csv(ctx: AppContext, text: Any, actor: str) -> dict[str, Any]:
+    """payer_names holds up to five remitter names separated by | as they appear on bank statements."""
+    return _import_rows(text, ["name", "country", "payer_names", "refund_beneficiary"], lambda r: create_customer(ctx, {
+        "name": r["name"], "country": r["country"].upper(), "refund_beneficiary": r["refund_beneficiary"],
+        "payer_names": [p.strip() for p in r["payer_names"].split("|") if p.strip()]}, actor)["id"])
+
+
+def import_invoices_csv(ctx: AppContext, text: Any, actor: str) -> dict[str, Any]:
+    """customer is the customer's exact name or id, so a file can be prepared without knowing ids."""
+    with ctx.conn() as conn:
+        lookup = {}
+        for c in db.rows(conn, "SELECT id, name FROM customers"):
+            lookup[c["id"].upper()] = c["id"]
+            lookup[c["name"].upper()] = c["id"]
+
+    def handle(r: dict[str, str]) -> str:
+        customer = lookup.get(r["customer"].upper())
+        if customer is None:
+            raise InputError(f"no customer named {r['customer']!r}")
+        return create_invoice(ctx, {"customer_id": customer, "currency": r["currency"].upper(), "amount": r["amount"],
+                                    "due_date": r["due_date"], "description": r["description"]}, actor)["id"]
+
+    return _import_rows(text, ["customer", "currency", "amount", "due_date", "description"], handle)
+
+
+def import_bills_csv(ctx: AppContext, text: Any, actor: str) -> dict[str, Any]:
+    return _import_rows(text, ["payee", "currency", "amount", "due_date", "priority", "defer_until", "description"], lambda r: create_obligation(ctx, {
+        "payee": r["payee"], "currency": r["currency"].upper(), "amount": r["amount"], "due_date": r["due_date"],
+        "priority": r["priority"].lower() or "normal", "defer_until": r["defer_until"] or None, "description": r["description"]}, actor)["id"])
+
+
 # --------------------------------------------------------------------------- treasury setup
 def create_obligation(ctx: AppContext, body: dict[str, Any], actor: str) -> dict[str, Any]:
     payee = _text(body.get("payee"), "payee", 2, 80)
@@ -401,13 +454,46 @@ def create_obligation(ctx: AppContext, body: dict[str, Any], actor: str) -> dict
         raise InputError("due_date must be YYYY-MM-DD") from exc
     if amount <= 0:
         raise InputError("amount must be greater than zero")
+    priority = body.get("priority") or "normal"
+    if priority not in ("critical", "normal", "flexible"):
+        raise InputError("priority must be critical, normal or flexible")
+    defer_until = None
+    if body.get("defer_until"):
+        try:
+            later = date.fromisoformat(str(body["defer_until"]))
+        except ValueError as exc:
+            raise InputError("defer_until must be YYYY-MM-DD") from exc
+        if later <= due:
+            raise InputError("defer_until must be after the due date")
+        if priority == "critical":
+            raise InputError("a critical bill cannot be deferred")
+        defer_until = iso(datetime.combine(later, time(12), tzinfo=timezone.utc))
     with ctx.conn() as conn, db.transaction(conn):
         ob_id = "OBL-" + uuid.uuid4().hex[:8].upper()
-        conn.execute("INSERT INTO obligations VALUES (?,?,?,?,?,?, 'scheduled')",
-                     (ob_id, payee, ccy, amount, iso(datetime.combine(due, time(12), tzinfo=timezone.utc)), description))
+        conn.execute("INSERT INTO obligations(id, payee, currency, amount_minor, due_at, description, status, priority, defer_until) VALUES (?,?,?,?,?,?, 'scheduled', ?, ?)",
+                     (ob_id, payee, ccy, amount, iso(datetime.combine(due, time(12), tzinfo=timezone.utc)), description, priority, defer_until))
         audit.record(conn, iso(ctx.clock.now()), actor, "obligation.created", "obligation", ob_id,
-                     {"payee": payee, "currency": ccy, "amount_minor": amount})
+                     {"payee": payee, "currency": ccy, "amount_minor": amount, "priority": priority, "defer_until": defer_until})
         return db.row(conn, "SELECT * FROM obligations WHERE id = ?", (ob_id,))
+
+
+def record_connected_opening(ctx: AppContext, balances: list[dict[str, Any]], actor: str) -> dict[str, int]:
+    """On connecting an account, its available balances become the ledger's opening cash, once per currency."""
+    posted: dict[str, int] = {}
+    with ctx.conn() as conn, db.transaction(conn):
+        now = iso(ctx.clock.now())
+        for b in balances:
+            ccy = b.get("currency")
+            if ccy not in ("USD", "EUR", "GBP") or db.row(conn, "SELECT 1 FROM wallet_opening WHERE currency = ?", (ccy,)):
+                continue
+            amount = to_minor(str(b.get("available_amount") or 0), ccy)
+            if amount <= 0:
+                continue
+            conn.execute("INSERT INTO wallet_opening VALUES (?,?)", (ccy, amount))
+            audit.post(conn, now, f"Opening {ccy} wallet balance", "opening", ccy, audit.move(f"cash:{ccy}", "opening_equity", ccy, amount))
+            audit.record(conn, now, actor, "wallet.opening_balance_from_account", "wallet", ccy, {"amount_minor": amount})
+            posted[ccy] = amount
+    return posted
 
 
 def set_opening_balance(ctx: AppContext, body: dict[str, Any], actor: str) -> dict[str, Any]:

@@ -209,6 +209,13 @@ class ControlPlane:
                         {k: ("<set>" if k == "airwallex_webhook_secret" and v else v) for k, v in changes.items()})
             return db.row(c, "SELECT * FROM organizations WHERE id = ?", (org_id,))
 
+    def set_airwallex_connection(self, org_id: str, actor: str, sealed: str | None, accounts: dict[str, str], webhook_secret: str | None) -> None:
+        """Store (or with sealed=None, remove) the organization's own Airwallex connection. Audit never holds secrets."""
+        with self.conn() as c, db.transaction(c):
+            c.execute("UPDATE organizations SET airwallex_credentials_enc = ?, bank_mode = ?, airwallex_global_accounts = ?, airwallex_webhook_secret = ? WHERE id = ?",
+                      (sealed, "airwallex_sandbox" if sealed else "local", json.dumps(accounts), webhook_secret, org_id))
+            self._audit(c, actor, "org.airwallex_connected" if sealed else "org.airwallex_disconnected", org_id, {"receiving_accounts": accounts})
+
     # ---------------------------------------------------------------- users & sessions
     def signup(self, *, email: Any, name: Any, password: Any, org_name: Any, kind: str, user_agent: str = "") -> tuple[str, str]:
         email = validate_email(email)

@@ -11,7 +11,7 @@ async function signUp(page: Page, opts: { org: string; email: string; sample: bo
   await page.getByLabel("Organization", { exact: true }).fill(opts.org);
   await page.getByLabel("Work email", { exact: true }).fill(opts.email);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
-  if (opts.sample) await page.getByText("Sample data", { exact: true }).click();
+  if (opts.sample) await page.getByText("Practice company", { exact: true }).click();
   await page.getByRole("button", { name: "Create organization" }).click();
   await expect(page.getByRole("navigation", { name: "Main navigation" }).or(page.getByLabel("Main navigation"))).toBeVisible();
 }
@@ -23,7 +23,7 @@ async function nav(page: Page, label: string) {
 test("sign up with sample data, sign out, sign back in", async ({ page }) => {
   const email = `owner-${uniq()}@e2e.test`;
   await signUp(page, { org: `Sample ${uniq()}`, email, sample: true });
-  await expect(page.getByLabel("Main navigation").getByText("Walkthrough")).toBeVisible();
+  await expect(page.getByLabel("Main navigation").getByText("Practice steps")).toBeVisible();
   await nav(page, "Payments");
   await expect(page.getByText("DEP-1001").first()).toBeVisible();
 
@@ -84,7 +84,7 @@ test("wrong password is refused without revealing whether the account exists", a
 
 test("empty workspace: record a manual payment through the form", async ({ page }) => {
   await signUp(page, { org: `Empty ${uniq()}`, email: `ops-${uniq()}@e2e.test`, sample: false });
-  await expect(page.getByLabel("Main navigation").getByText("Walkthrough")).toHaveCount(0);
+  await expect(page.getByLabel("Main navigation").getByText("Practice steps")).toHaveCount(0);
   await nav(page, "Payments");
   await page.getByRole("button", { name: "Record payment" }).click();
   const ref = `BANK-${uniq()}`;

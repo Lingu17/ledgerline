@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { get, getPage, post, type AuditEvent, type Customer, type Invoice } from "../api";
 import { useAuth } from "../auth";
-import { Card, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
+import { Card, CsvImport, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { PAGE_SIZE, Pager } from "../components/Pager";
 import { day, money, parseMajor, plainAmount, when } from "../format";
 import { go, type Route } from "../App";
@@ -29,7 +29,7 @@ export function Customers({ route }: { route: Route }) {
   useEffect(() => setOffset(0), [iqd, filter]);
   const qs = new URLSearchParams({ ...(filter && { status: filter }), ...(iqd && { q: iqd }), limit: String(PAGE_SIZE), offset: String(offset) });
   const invoices = useLoad(() => getPage<Invoice[]>(`/invoices?${qs}`), [qs.toString()]);
-  const [modal, setModal] = useState<"" | "customer" | "invoice">("");
+  const [modal, setModal] = useState<"" | "customer" | "invoice" | "import-customers" | "import-invoices">("");
   const [editing, setEditing] = useState<Customer | null>(null);
   const invoiceId = route.params.get("invoice");
 
@@ -37,6 +37,7 @@ export function Customers({ route }: { route: Route }) {
     <div className="stack">
       <Card title="Customers" pad={false} actions={<>
         <input type="search" aria-label="Search customers" placeholder="Search customers" value={cq} onChange={(e) => setCq(e.target.value)} />
+        {op && <button className="btn small" onClick={() => setModal("import-customers")}>Import CSV</button>}
         {op && <button className="btn primary small" onClick={() => setModal("customer")}>New customer</button>}
       </>}>
         {customers.error ? <div className="card-body"><ErrorNote error={customers.error} onRetry={customers.reload} /></div> : !customers.data ? <Loading /> : customers.data.length === 0 ? (
@@ -66,6 +67,7 @@ export function Customers({ route }: { route: Route }) {
         <select aria-label="Invoice status" value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="outstanding">Outstanding</option><option value="paid">Paid</option><option value="scheduled">Scheduled</option><option value="void">Void</option><option value="">All</option>
         </select>
+        {op && <button className="btn small" onClick={() => setModal("import-invoices")}>Import CSV</button>}
         {op && <button className="btn primary small" onClick={() => setModal("invoice")}>New invoice</button>}
       </>}>
         {invoices.error ? <div className="card-body"><ErrorNote error={invoices.error} onRetry={invoices.reload} /></div> : !invoices.data ? <Loading /> : invoices.data.items.length === 0 ? <Empty title="No invoices in this view" /> : (
@@ -91,6 +93,10 @@ export function Customers({ route }: { route: Route }) {
           </>
         )}
       </Card>
+      {modal === "import-customers" && <CsvImport title="Import customers" path="/customers/import" columns="name,country,payer_names,refund_beneficiary"
+        example="Orchard Tea Co,GB,ORCHARD TEA CO|ORCHARD TEA LTD,Orchard Tea GBP account" onClose={() => { setModal(""); allCustomers.reload(); }} />}
+      {modal === "import-invoices" && <CsvImport title="Import invoices" path="/invoices/import" columns="customer,currency,amount,due_date,description"
+        example="Orchard Tea Co,GBP,1250.00,2026-11-30,October supply" onClose={() => setModal("")} />}
       {modal === "customer" && <CustomerForm onClose={() => setModal("")} />}
       {editing && <CustomerForm existing={editing} onClose={() => setEditing(null)} />}
       {modal === "invoice" && <NewInvoice customers={allCustomers.data ?? []} onClose={() => setModal("")} />}

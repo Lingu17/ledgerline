@@ -103,7 +103,7 @@ def reset_demo(conn: sqlite3.Connection, data_dir, now: datetime) -> None:
                        audit.move(f"cash:{ccy}", "opening_equity", ccy, amt))
         for oid, payee, ccy, amt, due, desc in OBLIGATIONS:
             conn.execute(
-                "INSERT INTO obligations VALUES (?,?,?,?,?,?, 'scheduled')",
+                "INSERT INTO obligations(id, payee, currency, amount_minor, due_at, description, status) VALUES (?,?,?,?,?,?, 'scheduled')",
                 (oid, payee, ccy, amt, iso(now + timedelta(days=due)), desc),
             )
         audit.record(conn, iso(now), "system", "demo.reset", "demo", "scenario",
