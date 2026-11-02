@@ -41,4 +41,4 @@ Duplicate event ids and the same deposit under a new event id are booked once, i
 
 ## Access and limits
 
-Airwallex credentials are server-wide and reserved for the operator organization; judge organizations use the simulated bank. The repository is private: judges need to be granted access by the owner. No HackerEarth submission or public post has been made by Claude. `LEDGERLINE_SECRET_KEY` is unused on the VM (SQLite mode) and was never changed on Render.
+Airwallex credentials are server-wide and reserved for the operator organization; judge organizations use the simulated bank. The repository is private: judges need to be granted access by the owner. No HackerEarth submission or public post has been made. `LEDGERLINE_SECRET_KEY` is unused on the VM (SQLite mode) and was never changed on Render.

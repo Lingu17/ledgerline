@@ -33,7 +33,7 @@ A finance team receives money in USD, EUR and GBP. Some payments match an invoic
 | 🎯 **For** | small multi-currency companies on Airwallex Global Accounts |
 | 🧠 **Agentic part** | agent-to-agent evidence over MCP, verified before trust; Claude as a typed, advisory reader |
 | 🛡️ **Safety** | money rules in code · four-eyes · duplicate lock · stable request ids · pause switch · SENT ≠ PAID |
-| ✅ **Proof** | 297 backend tests · 13 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID |
+| ✅ **Proof** | 362 backend tests · 15 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
 
 ---
 
@@ -74,7 +74,7 @@ Every payment shows this as a **decision path**: received → first plan → evi
 2. **Payments → DEP-1005 → Ask payer's agent**: the duplicate becomes verified advance credit.
 3. **Payments → DEP-1004 → Ask payer's agent**: a correctly signed claim for another customer's invoice is rejected.
 4. **Read remittance…** on DEP-1004: paste an email or upload a PDF; Claude proposes, a person decides.
-5. **Walkthrough**: FX for the EUR bill, the refund a person approves, bank SENT then PAID, and the scorecard.
+5. **Practice steps**: FX for the EUR bill, the refund a person approves, bank SENT then PAID, and the scorecard.
 
 Your organization is isolated from every other one. A practice company uses made-up data and a simulated bank. To use your own company instead, choose **My company**, then connect your Airwallex sandbox keys under Settings: they are checked with Airwallex first, stored encrypted per organization, and can only reach the Airwallex test environment.
 
@@ -88,6 +88,98 @@ Your organization is isolated from every other one. A practice company uses made
 
 ---
 
+## 👩‍💼 Using it at work
+
+Everything an employee needs to act on is in the **Inbox**, so start there each day. Each item opens the page where it can be resolved.
+
+### Your daily routine
+
+| When | Go to | What you do |
+|:--|:--|:--|
+| Start of day | **Inbox** | Work through what is waiting: unclear payments, approvals and payments whose bank outcome is unknown |
+| A payment is unclear | **Payments** → open it | Read the decision path, then **Ask payer's agent** or **Read remittance…**. Ledgerline checks the answer against your records |
+| Someone needs a second person | **Approvals** | Check the amount and destination, then approve or reject. You cannot approve your own proposal |
+| Bills are due | **Treasury** → *What to pay first* | Each bill shows one answer: fund, convert, defer or escalate, with the reason |
+| Cash is short | **Treasury** → *Bring cash in early* | Offer a capped discount on an invoice not yet due, and share the link with the customer yourself |
+| End of day or audit | **Ledger** and **Activity** | Confirm every currency balances, **Verify log integrity**, **Download evidence** |
+
+### How to run each feature
+
+<details>
+<summary><b>Set up your company (Owner, about 10 minutes)</b></summary>
+
+1. **Get started** → **My company**. For a safe trial with made-up data, choose **Practice company**.
+2. **Settings → Connect your Airwallex**: paste your sandbox keys. They are checked first and stored encrypted.
+3. **Team → Invite member**: add at least one more **Operator**, because money-out needs a second person. Nothing is emailed, so send the invitation link yourself.
+4. **Settings → Policy**: set reserves, the refund auto-limit, the fee tolerance and the maximum early-payment discount.
+5. **Customers & invoices → Import CSV**, or **New customer** and **New invoice**. **Treasury → Bills → Import CSV** or **Add bill**.
+
+CSV columns:
+
+| File | Columns |
+|:--|:--|
+| Customers | `name,country,payer_names,refund_beneficiary` |
+| Invoices | `customer,currency,amount,due_date,description` |
+| Bills | `payee,currency,amount,due_date,priority,defer_until,description` |
+</details>
+
+<details>
+<summary><b>Handle an incoming payment</b></summary>
+
+1. Connected accounts receive payments by signed webhook. **Settings → Find missed deposits** catches any that were missed. Otherwise use **Payments → Record payment** or **Import CSV**.
+2. Clean matches settle on their own, and a bank fee within tolerance is written off.
+3. For anything else, open the payment and use **Ask payer's agent** or **Read remittance…** (paste an email or upload a PDF). The AI reader only suggests, and a person decides.
+4. The result is one of: invoice settled, exact balance requested, credit held, refund proposed, or escalated with the reason.
+</details>
+
+<details>
+<summary><b>Pay a bill</b></summary>
+
+1. **Treasury** → the bill must show **Fund**. Click **Pay** and choose the beneficiary. Who can receive it comes from your Airwallex account.
+2. A **different** team member approves it under **Approvals** (or **Treasury → Bill payments**).
+3. Click **Send payment**. The plan is checked again before anything reaches the bank.
+4. **Check status** until it shows paid. SENT is not final: the bill stays open and its cash stays committed until PAID.
+5. On a sandbox account, an Owner moves the transfer on with **Test bank: sent**, then **Test bank: paid**.
+</details>
+
+<details>
+<summary><b>Bring cash in early</b></summary>
+
+1. When a bill shows **Defer** or **Escalate**, **Treasury → Bring cash in early** lists invoices not yet due, with the discount cost and the cash each one brings in.
+2. **Create offer** makes a hosted Airwallex link. Send it to the customer yourself.
+3. After they pay, click **Check payment**. Ledgerline books the discount and the cash, then re-plans the bills.
+
+In a practice company, **Practice: customer pays** runs the same path without a card.
+</details>
+
+<details>
+<summary><b>When cash is tight or something looks wrong</b></summary>
+
+- **Stop all money-out:** **Settings → Pause all money-out**. Any Operator can pause, and only an Owner can resume. Matching keeps running.
+- **"Outcome unknown":** click **Check status**. Do not pay again, because Ledgerline looks the request up before any retry.
+- **Keep cash out of planning:** **Settings → Policy → Set aside from planning**.
+- **Check a past decision:** **Treasury → Plan history → Replay**.
+</details>
+
+### Who can do what
+
+| Job | Role |
+|:--|:--|
+| Auditor or manager who only needs to look | **Viewer** |
+| Finance staff doing the daily work and approving each other's payments | **Operator** |
+| Finance lead: team, policy, Airwallex connection, resuming money-out, sandbox test buttons | **Owner** |
+
+### What saves the team time
+
+- **One queue:** the Inbox replaces checking the bank, email and spreadsheets separately.
+- **Clean payments need no one:** in the reference company, 4 of 6 payments settled without a person.
+- **Reasons on screen:** each decision shows why it was made, so a colleague can pick it up without asking.
+- **Bulk import:** bring customers, invoices, bills and payments in by CSV.
+- **Hard to make costly mistakes:** a second approver, a duplicate lock and a pause switch are enforced by the system, not by memory.
+- **Audit in one click:** **Download evidence** exports the record, and **Verify log integrity** checks it.
+
+---
+
 ## 📊 Measured, not claimed
 
 | What | Result | Where |
@@ -96,6 +188,8 @@ Your organization is isolated from every other one. A practice company uses made
 | Randomized companies | **50** companies · **2,127** payments · **0** allocations disagreeing with an independent reference model | [EVALUATION](docs/EVALUATION.md) |
 | Accuracy harness | **250** companies · **64,215** checks · **0** mismatches | [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) |
 | Live Airwallex sandbox (Google Cloud host) | signed webhooks booked once · beneficiary validated and created · current FX rates · refund approved by a second member, **one** transfer, SENT → PAID, liability released only at PAID | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
+| Live hosted link (2 Nov) | a test-card payment of EUR 197 on a Singapore sandbox account was reported paid by Airwallex and booked once; the invoice settled and the bill moved from Escalate to Fund | Live app |
+| Live bill payment (2 Nov) | Airwallex accepted a EUR 100 transfer, which reached SENT. Both approving accounts belong to the owner, so this tests the control and the bank call, not independent review | Live app |
 | Live Claude | text and PDF remittances read by `claude-opus-5-5`; a planted prompt injection was ignored and flagged; nothing applied | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
 | Release | CI 5/5 jobs · public smoke 32/32 · data survives restart, VM reboot and redeploy (8/8 each) | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
 
@@ -243,7 +337,7 @@ backend\.venv\Scripts\python scripts\evaluate.py --seeds 50
 
 | Variable | Purpose |
 |:--|:--|
-| `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex sandbox (server-wide) |
+| `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex sandbox (server-wide). Companies can instead connect their own keys under Settings |
 | `LEDGERLINE_SANDBOX_ORGS` | the only organizations allowed to use them |
 | `ANTHROPIC_API_KEY` | Claude reader (`claude-opus-5-5`, daily budgets per organization and server) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Sign in with Google |
@@ -282,7 +376,7 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 ## ⚠️ Honest limits
 
 - Payer agents are simulations (real MCP and signatures); real customers' agents would be discovered at onboarding.
-- Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov; the earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
+- Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov and it was paid with a test card; someone has to click **Check payment**, because link webhooks are not used yet, and settlement timing is not tracked. The earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
 - Deposit discovery is owner-triggered, not a scheduled poller; Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery, password reset, SSO/MFA or billing.
 

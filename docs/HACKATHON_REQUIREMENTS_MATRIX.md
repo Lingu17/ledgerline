@@ -8,7 +8,7 @@ Sources read 29 Oct and 2 Nov (read-only): the HackerEarth event page and team d
 
 | # | Requirement (source) | Status | Evidence / gap |
 |---|---|---|---|
-| A1 | Submission by 13 Nov 2026 (official site; HackerEarth platform and organizer on Slack now say 15 Nov, so treat 13 Nov as the safe date); team of 1–4; one submission per team | BLOCKED (owner) | Shortlisted from the idea phase. The owner submits; Claude never saves or submits |
+| A1 | Submission by 13 Nov 2026 (official site; HackerEarth platform and organizer on Slack now say 15 Nov, so treat 13 Nov as the safe date); team of 1–4; one submission per team | BLOCKED (owner) | Shortlisted from the idea phase. The owner submits |
 | A2 | Sandbox only, no real money (guide) | PASS | Airwallex adapter has a fixed sandbox base URL (`test_sandbox_host_is_fixed`); judge organizations use the simulated bank |
 | A3 | Synthetic data (guide) | PASS | Sample company, customers and payers are fictional |
 | A4 | Amounts, limits, reserves, validation, duplicate protection and state transitions in code, not prompts (guide) | PASS | `matching.py`, `payouts.py`, `treasury.py`; Claude only proposes typed tools, validated by `typed_proposal` |
