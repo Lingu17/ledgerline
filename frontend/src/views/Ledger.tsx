@@ -40,7 +40,7 @@ export function Ledger() {
             <span className="term"><span>Credits</span>{amountOnly(c.customer_credits)}</span><span className="op">+</span>
             <span className="term"><span>Refunds paid</span>{amountOnly(c.refunds_paid)}</span><span className="op">+</span>
             <span className="term"><span>Refunds pending</span>{amountOnly(c.refunds_pending)}</span><span className="op">+</span>
-            <span className="term"><span>Unapplied (journal)</span>{amountOnly(c.unapplied)}</span>
+            <span className="term"><span>Not yet placed (journal)</span>{amountOnly(c.unapplied)}</span>
             {c.converted > 0 && <><span className="op">+</span><span className="term"><span>Converted for invoices</span>{amountOnly(c.converted)}</span></>}
           </div>
           <div className="grid-2" style={{ marginTop: 14 }}>

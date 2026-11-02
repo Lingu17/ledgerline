@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { get, type AuditEvent, type Wallet } from "../api";
 import { Card, Empty, ErrorNote, Loading, Money, Pill, useLoad } from "../components/ui";
 import { CATEGORY_LABEL, money, relativeDays, when } from "../format";
@@ -27,11 +28,36 @@ const QUEUE_ACTION: Record<string, string> = {
   processing: "Reconcile with provider",
 };
 
+const GUIDE_KEY = "ledgerline.guide.hidden";
+
+function guideHidden() {
+  try { return localStorage.getItem(GUIDE_KEY) === "1"; } catch { return false; }
+}
+
+function FirstVisit() {
+  const [hidden, setHidden] = useState(guideHidden);
+  if (hidden) return null;
+  const hide = () => {
+    try { localStorage.setItem(GUIDE_KEY, "1"); } catch { /* the guide simply comes back next time */ }
+    setHidden(true);
+  };
+  return (
+    <Card title="See what it does in three minutes" actions={<button className="btn small" onClick={hide}>Hide this guide</button>}>
+      <ol className="small" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
+        <li><a href="#/payments?deposit=DEP-1005">Open this payment</a> and click <b>Ask payer's agent</b>: what looks like a duplicate turns out to be an advance, and the refund is dropped before any money moves.</li>
+        <li><a href="#/payments?deposit=DEP-1004">Open this one</a> and ask again: the answer is correctly signed but false, so it is rejected and a person gets the reason.</li>
+        <li><a href="#/walkthrough">Run the practice steps</a>: a currency conversion, a refund that needs approval, and the bank moving from SENT to PAID.</li>
+        <li><a href="#/ceo">See the CEO view</a>: the whole company on one screen.</li>
+      </ol>
+    </Card>
+  );
+}
+
 export function Inbox() {
   const ov = useLoad(() => get<Overview>("/overview"), []);
   const tr = useLoad(() => get<TreasuryLite & { wallets: Wallet[] }>("/treasury"), []);
   const activity = useLoad(() => get<AuditEvent[]>("/audit?limit=12"), []);
-  const status = useLoad(() => get<{ now: string }>("/status"), []);
+  const status = useLoad(() => get<{ now: string; org: { kind: string } | null }>("/status"), []);
   const setup = useLoad(() => get<{ show: boolean; steps: { id: string; label: string; done: boolean; page: string }[] }>("/setup"), []);
 
   if (ov.error) return <ErrorNote error={ov.error} onRetry={ov.reload} />;
@@ -39,6 +65,7 @@ export function Inbox() {
 
   return (
     <div className="stack">
+      {status.data?.org?.kind === "sample" && <FirstVisit />}
       {setup.data?.show && (
         <Card title="Set up your company">
           <ul className="setup-list">
@@ -66,7 +93,7 @@ export function Inbox() {
               <dl>
                 <dt>Reserve kept</dt><dd>{money(w.reserve, w.currency)}</dd>
                 <dt>Held for customers</dt><dd>{money(w.customer_credits + w.unapplied_held + w.refunds_reserved, w.currency)}</dd>
-                <dt>Bills due in window</dt><dd>{money(w.obligations_due_in_window, w.currency)}</dd>
+                <dt>Bills due soon</dt><dd>{money(w.obligations_due_in_window, w.currency)}</dd>
                 {w.fx_out_reserved > 0 && (<><dt>Reserved for FX out</dt><dd>{money(w.fx_out_reserved, w.currency)}</dd></>)}
                 {w.fx_in_pending > 0 && (<><dt>Pending FX in (forecast)</dt><dd>{money(w.fx_in_pending, w.currency)}</dd></>)}
                 {w.free_after_commitments < 0 ? (
@@ -138,9 +165,9 @@ export function Inbox() {
             ) : (
               <dl className="kv">
                 <dt>Deposits received</dt><dd className="num" style={{ textAlign: "left" }}><a href="#/payments">{o.scorecard.deposits}</a></dd>
-                <dt>Resolved by rules and verified evidence</dt><dd><a href="#/payments?status=matched">{o.scorecard.settled_without_human}</a></dd>
+                <dt>Settled with no person</dt><dd><a href="#/payments?status=matched">{o.scorecard.settled_without_human}</a></dd>
                 <dt>Decided by a person</dt><dd><a href="#/approvals">{o.scorecard.approvals_by_person}</a></dd>
-                <dt>Escalated for review</dt><dd><a href="#/payments?status=escalated">{o.scorecard.escalations}</a></dd>
+                <dt>Waiting for a person</dt><dd><a href="#/payments?status=escalated">{o.scorecard.escalations}</a></dd>
                 <dt>Duplicate payouts</dt><dd><a href="#/ledger">{o.scorecard.double_payments}</a></dd>
                 <dt>Ledger</dt><dd>{o.all_balanced ? <Pill status="matched" label="Balanced per currency" /> : <Pill status="escalated" label="Check ledger" />}</dd>
               </dl>
@@ -150,7 +177,7 @@ export function Inbox() {
       </div>
 
       <Card title="Recent activity" pad={false} actions={<a className="btn small" href="#/activity">Full audit trail</a>}>
-        {!activity.data ? <Loading rows={4} /> : activity.data.length === 0 ? <Empty title="No activity yet" /> : (
+        {!activity.data ? <Loading rows={4} /> : activity.data.length === 0 ? <Empty title="No activity yet">Every decision and money movement will be recorded here.</Empty> : (
           <div className="table-wrap">
             <table>
               <tbody>

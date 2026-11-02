@@ -13,6 +13,10 @@ from .reconcile import invoice_views
 MINUTES_PER_PAYMENT = 15
 
 
+def _needing(n: int) -> str:
+    return "1 item needs a person." if n == 1 else f"{n} items need a person."
+
+
 def summary(ctx: AppContext, work_queue: list[dict[str, Any]]) -> dict[str, Any]:
     rates = treasury.decision_rates(ctx)
     score = demo.scorecard(ctx)
@@ -42,7 +46,7 @@ def summary(ctx: AppContext, work_queue: list[dict[str, Any]]) -> dict[str, Any]
     if not trusted:
         verdict, headline = "problem", "Stop and check: the records do not reconcile."
     elif short or work_queue:
-        verdict, headline = "attention", f"The books are sound. {len(work_queue) + len(short)} item(s) need a person."
+        verdict, headline = "attention", f"The books are sound. {_needing(len(work_queue) + len(short))}"
     else:
         verdict, headline = "ok", "Nothing needs you today."
     return {

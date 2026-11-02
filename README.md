@@ -33,7 +33,7 @@ A finance team receives money in USD, EUR and GBP. Some payments match an invoic
 | 🎯 **For** | small multi-currency companies on Airwallex Global Accounts |
 | 🧠 **Agentic part** | agent-to-agent evidence over MCP, verified before trust; Claude as a typed, advisory reader |
 | 🛡️ **Safety** | money rules in code · four-eyes · duplicate lock · stable request ids · pause switch · SENT ≠ PAID |
-| ✅ **Proof** | 388 backend tests · 18 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
+| ✅ **Proof** | 389 backend tests · 19 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
 
 ---
 
@@ -295,8 +295,9 @@ Every rule is enforced by the API; the UI only hides what you cannot do.
 | | |
 |:--:|:--:|
 | ![Landing](docs/screenshots/01-landing.png) | ![Architecture](docs/screenshots/02-architecture.png) |
-| ![Inbox](docs/screenshots/03-inbox.png) | ![Treasury](docs/screenshots/06-treasury.png) |
-| ![Walkthrough](docs/screenshots/08-walkthrough-done.png) | ![Ledger](docs/screenshots/09-ledger.png) |
+| ![Inbox](docs/screenshots/03-inbox.png) | ![Approval](docs/screenshots/07-approval.png) |
+| ![CEO view](docs/screenshots/11-ceo.png) | ![Ledger](docs/screenshots/09-ledger.png) |
+| ![Walkthrough](docs/screenshots/08-walkthrough-done.png) | ![Treasury](docs/screenshots/06-treasury.png) |
 
 <sub>Captured from a real run on a synthetic company (`frontend/e2e/screenshots.spec.ts`). Desktop and 375 px layouts; every page meets WCAG AA contrast.</sub>
 

@@ -50,7 +50,7 @@ export function Team() {
 
       {owner && (
         <Card title="Open invitations" pad={false}>
-          {d.invitations.length === 0 ? <Empty title="No open invitations" /> : (
+          {d.invitations.length === 0 ? <Empty title="No open invitations">Money leaving needs a second person, so invite at least one Operator.</Empty> : (
             <table>
               <thead><tr><th>Email</th><th>Role</th><th className="hide-sm">Expires</th><th /></tr></thead>
               <tbody>

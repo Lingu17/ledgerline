@@ -61,7 +61,7 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
       )}
 
       <Card title="Money-out operations" pad={false}>
-        {!ops.data ? <Loading /> : ops.data.length === 0 ? <Empty title="No operations yet" /> : (
+        {!ops.data ? <Loading /> : ops.data.length === 0 ? <Empty title="No operations yet">Refunds and conversions appear here from booking until the bank reports them final.</Empty> : (
           <div className="table-wrap">
             <table>
               <thead><tr><th>Operation</th><th>Status</th><th className="num">Amount</th><th className="hide-sm">History</th><th /></tr></thead>

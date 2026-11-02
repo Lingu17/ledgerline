@@ -141,7 +141,7 @@ export function Treasury({ localMode }: { localMode: boolean }) {
       </div>
 
       <Card title="Conversions" pad={false}>
-        {d.conversions.length === 0 ? <Empty title="No conversions yet" /> : (
+        {d.conversions.length === 0 ? <Empty title="No conversions yet">A conversion appears here once you book one for a bill or a wrong-currency payment.</Empty> : (
           <div className="table-wrap">
           <table>
             <thead><tr><th>Operation</th><th>Status</th><th className="num">Sold</th><th className="num">Bought</th><th /></tr></thead>
@@ -248,6 +248,7 @@ interface Offer { id: string; invoice_id: string; customer: string; currency: st
 function CloseTheGap({ op, localMode }: { op: boolean; localMode: boolean }) {
   const opts = useLoad(() => get<GapOptions>("/treasury/early-pay/options"), []);
   const offers = useLoad(() => get<Offer[]>("/treasury/early-pay"), []);
+  const checked = useLoad(() => get<{ at: string | null }>("/treasury/links-last-checked"), []);
   const { run, busy } = useAction();
   const gaps = Object.entries(opts.data?.gaps ?? {});
   if (!gaps.length && !offers.data?.length) return null;
@@ -275,6 +276,9 @@ function CloseTheGap({ op, localMode }: { op: boolean; localMode: boolean }) {
             </tbody>
           </table>
         </div>
+      )}
+      {!localMode && offers.data?.some((o) => o.status === "open") && (
+        <div className="card-body small muted">Paid links are found automatically every two minutes{checked.data?.at ? `. Last checked ${when(checked.data.at)}` : ""}.</div>
       )}
       {!!offers.data?.length && (
         <div className="table-wrap">

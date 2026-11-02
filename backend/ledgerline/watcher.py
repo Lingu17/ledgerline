@@ -32,6 +32,9 @@ def _check_links(ctx) -> None:
         early_pay.check(ctx, o["id"], ACTOR)
     for link in links:
         payment_links.check(ctx, link["id"], ACTOR)
+    if offers or links:
+        with ctx.conn() as conn, db.transaction(conn):
+            db.set_setting(conn, "links_last_checked", iso(ctx.clock.now()))
 
 
 def sweep(orgs: Any, control: Any, *, deposits: bool = False) -> int:

@@ -67,7 +67,7 @@ export function Payments({ route }: { route: Route }) {
               <thead>
                 <tr>
                   <th>Received</th><th>Payer</th><th className="hide-sm">Reference</th><th className="num">Amount</th>
-                  <th>Status</th><th className="hide-sm">Decision</th><th className="num hide-sm">Unapplied</th>
+                  <th>Status</th><th className="hide-sm">Decision</th><th className="num hide-sm">Not yet placed</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,6 +134,20 @@ function WrongCurrency({ id, canAct, run, busy }: { id: string; canAct: boolean;
   );
 }
 
+function nextStep(x: DepositDetail): string {
+  const linkWaiting = x.payment_links.some((l) => l.status === "sandbox_created");
+  switch (x.status) {
+    case "awaiting_evidence": return "Ask the payer's agent, or read their remittance.";
+    case "escalated": return x.category === "wrong_currency" ? "Convert only what the invoice needs, or leave it held." : "A person decides, using the reason below.";
+    case "refund_awaiting_approval": return "A second person approves or rejects the refund under Approvals.";
+    case "refund_in_flight": return "Nothing for you to do. The refund stays open until the bank reports it paid.";
+    case "partially_applied": return linkWaiting ? "Waiting for the customer to pay the link. It is checked automatically." : "Request the balance from the customer.";
+    case "credited": return "Nothing for you to do. The credit is held for this customer.";
+    case "matched": case "refunded": return "Nothing more to do.";
+    default: return "Ledgerline is working out the first plan.";
+  }
+}
+
 function balanceEmail(l: { invoice_id: string; amount_minor: number; url: string | null }, ccy: string, payer: string) {
   const subject = `Balance due on ${l.invoice_id}`;
   const body = `Hello ${payer},\n\nThank you for your recent payment. ${money(l.amount_minor, ccy)} is still due on ${l.invoice_id}.\n\n`
@@ -161,6 +175,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
             <div className="row"><Pill status={x.status} /><span className="small">{CATEGORY_LABEL[x.category ?? ""] ?? x.category}</span></div>
             <span className="muted small">Reference: <span className="mono">{x.reference || "none"}</span></span>
           </div>
+          <div className="notice small"><b>Next:</b> {nextStep(x)}</div>
           {x.source === "manual_import" && <div className="notice warn">Manually recorded by an operator. Not verified against a bank statement feed.</div>}
           {x.escalation_reason && x.status === "escalated" && <div className="notice risk"><b>Why this needs review:</b> {x.escalation_reason}</div>}
 
@@ -172,7 +187,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
             <div><span>Refund pending</span><b>{money(x.buckets.refund_pending, x.currency)}</b></div>
             <div><span>Refunded</span><b>{money(x.buckets.refund_paid, x.currency)}</b></div>
             {x.buckets.converted > 0 && <div><span>Converted for an invoice</span><b>{money(x.buckets.converted, x.currency)}</b></div>}
-            <div><span>Unapplied</span><b className={x.buckets.unapplied ? "" : "muted"}>{money(x.buckets.unapplied, x.currency)}</b></div>
+            <div><span>Not yet placed</span><b className={x.buckets.unapplied ? "" : "muted"}>{money(x.buckets.unapplied, x.currency)}</b></div>
           </div>
 
           {x.category === "wrong_currency" && x.status === "escalated" && <WrongCurrency id={x.id} canAct={can("operator")} run={run} busy={busy} />}
@@ -291,7 +306,7 @@ function DecisionPath({ x }: { x: DepositDetail }) {
     ["Settlement", !op ? "skip" : op.status === "paid" ? "done" : op.status === "failed" || op.status === "cancelled" ? "failed" : "waiting",
       !op ? "No money-out operation" : op.status === "sent" ? `${op.id} SENT: liability kept until PAID` : `${op.id} ${op.status}`],
     ["Accounting", accounted === x.amount_minor ? "done" : "failed",
-      `Applied ${money(b.allocated, x.currency)} · credit ${money(b.credited, x.currency)} · refund ${money(b.refund_pending + b.refund_paid, x.currency)} · unapplied ${money(b.unapplied, x.currency)}${accounted === x.amount_minor ? " = received amount" : " ≠ received amount"}`],
+      `Applied ${money(b.allocated, x.currency)} · credit ${money(b.credited, x.currency)} · refund ${money(b.refund_pending + b.refund_paid, x.currency)} · not yet placed ${money(b.unapplied, x.currency)}${accounted === x.amount_minor ? " = received amount" : " ≠ received amount"}`],
   ];
   return (
     <section aria-label="Decision path">
@@ -466,7 +481,7 @@ function ResolveForm({ x, onDone }: { x: DepositDetail; onDone: () => void }) {
             </select>
           </Field>
         )}
-        <Field id="rs-amt" label={`Amount (${x.currency})`} hint={`Unapplied: ${money(x.buckets.unapplied, x.currency)}`}>
+        <Field id="rs-amt" label={`Amount (${x.currency})`} hint={`Not yet placed: ${money(x.buckets.unapplied, x.currency)}`}>
           <input id="rs-amt" type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
         <Field id="rs-note" label="Note" wide hint="Recorded in the audit trail">

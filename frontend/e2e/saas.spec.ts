@@ -231,7 +231,7 @@ test("wrong-currency payment converts only what the invoice needs; balance reque
 test("CEO view answers the four questions and its numbers lead to the detail", async ({ page }) => {
   await signUp(page, { org: `Ceo ${uniq()}`, email: `ceo-${uniq()}@e2e.test`, sample: true });
   await nav(page, "CEO view");
-  await expect(page.getByText("item(s) need a person")).toBeVisible();
+  await expect(page.getByText(/items? needs? a person/)).toBeVisible();
   await expect(page.getByRole("heading", { name: /Are we safe/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "What needs you" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "What the agent handled" })).toBeVisible();
@@ -242,6 +242,20 @@ test("CEO view answers the four questions and its numbers lead to the detail", a
   await expect(page.getByText("DEP-1001").first()).toBeVisible();
   await page.getByRole("button", { name: "Add a wrong-currency payment" }).click();
   await expect(page.getByText(/USD paid against a EUR invoice/)).toBeVisible();
+});
+
+test("first-visit guide leads to the agent's decision, and can be hidden", async ({ page }) => {
+  await signUp(page, { org: `Guide ${uniq()}`, email: `g-${uniq()}@e2e.test`, sample: true });
+  await page.goto("/#/inbox");
+  await page.getByRole("link", { name: "Open this payment" }).click();
+  await expect(page.getByText("Next:", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ask the payer's agent, or read their remittance.")).toBeVisible();
+  await page.goto("/#/inbox");
+  await page.getByRole("button", { name: "Hide this guide" }).click();
+  await expect(page.getByRole("heading", { name: "See what it does in three minutes" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Cash by currency" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "See what it does in three minutes" })).toHaveCount(0);
 });
 
 test("phone width: bill payments read as cards with nothing to scroll sideways", async ({ browser }) => {

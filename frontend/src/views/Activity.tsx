@@ -46,7 +46,7 @@ export function Activity() {
       )}
       <Card pad={false}>
         {a.error ? <div className="card-body"><ErrorNote error={a.error} onRetry={a.reload} /></div> : !a.data ? <Loading rows={8} /> : rows.length === 0 ? (
-          <Empty title={q ? "Nothing matches that filter" : "No activity yet"} />
+          <Empty title={q ? "Nothing matches that filter" : "No activity yet"}>{q ? "Clear the filter to see everything." : "Every decision and money movement will be recorded here."}</Empty>
         ) : (
           <div className="table-wrap">
             <table>

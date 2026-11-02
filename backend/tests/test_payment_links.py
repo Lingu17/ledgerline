@@ -138,3 +138,10 @@ def test_watcher_ignores_old_links_and_survives_a_failing_organization(ctx):
     assert watcher.sweep(SimpleNamespace(get=get), control) == 1
     with ctx.conn() as conn:
         assert db.row(conn, 'SELECT status FROM payment_links WHERE id = ?', (link['id'],))['status'] == 'sandbox_created'
+
+
+def test_watcher_records_when_it_last_checked(ctx):
+    published(ctx, paid=False)
+    assert watcher.sweep(SimpleNamespace(get=lambda _id: ctx), FakeControl(connected())) == 1
+    with ctx.conn() as conn:
+        assert db.get_setting(conn, 'links_last_checked', None)

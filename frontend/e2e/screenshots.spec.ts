@@ -62,6 +62,8 @@ test("capture README screenshots", async ({ page }) => {
   await shot(page, "08-walkthrough-done");
   await page.goto("/#/ledger");
   await shot(page, "09-ledger");
+  await page.goto("/#/ceo");
+  await shot(page, "11-ceo");
 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/#/inbox");

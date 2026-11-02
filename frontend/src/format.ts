@@ -60,7 +60,7 @@ export const STATUS_LABEL: Record<string, string> = {
   escalated: "Needs review",
   credited: "Held as credit",
   refund_awaiting_approval: "Refund for approval",
-  refund_in_flight: "Refund in flight",
+  refund_in_flight: "Refund on its way",
   refunded: "Refunded",
 };
 
@@ -75,11 +75,11 @@ export const CATEGORY_LABEL: Record<string, string> = {
   wrong_currency: "Wrong currency",
   apparent_duplicate: "Possible duplicate",
   overpayment: "Overpayment",
-  evidence_rejected: "Evidence rejected",
+  evidence_rejected: "Payer's answer rejected",
   verified_invoice_payment: "Verified invoice payment",
   verified_advance_credit: "Verified advance → credit",
   verified_duplicate: "Verified duplicate",
-  operator_resolution: "Resolved by operator",
+  operator_resolution: "Decided by a person",
   converted_settlement: "Converted to settle an invoice",
 };
 

@@ -37,6 +37,9 @@ export function Ceo() {
         <b style={{ fontSize: 17 }}>{headline}</b>
         <Pill status={VERDICT[verdict][0]} label={VERDICT[verdict][1]} />
       </div>
+      {agent.payments === 0 && currencies.every((c) => c.bills_due === 0) && (
+        <div className="notice small"><b>Nothing has happened here yet.</b> <a href="#/inbox">Finish setting up your company</a>, then add customers, invoices and bills, and this page fills in by itself.</div>
+      )}
       {paused && <div className="notice risk"><b>Money-out is paused.</b> Matching keeps running. An owner can resume it under Settings.</div>}
 
       <Card title={`Are we safe? Cash and the next ${lookahead_days} days`} pad={false}>

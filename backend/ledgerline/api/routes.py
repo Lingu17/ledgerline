@@ -663,6 +663,12 @@ class EarlyPayBody(BaseModel):
     discount_bps: StrictInt
 
 
+@router.get("/treasury/links-last-checked", dependencies=read)
+def links_last_checked(request: Request) -> dict[str, Any]:
+    with ctx_of(request).conn() as conn:
+        return {"at": db.get_setting(conn, "links_last_checked", None)}
+
+
 @router.get("/treasury/early-pay/options", dependencies=read)
 def early_pay_options(request: Request) -> dict[str, Any]:
     return early_pay.options(ctx_of(request))
