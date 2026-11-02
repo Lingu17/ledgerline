@@ -16,9 +16,18 @@ interface QuotePreview {
 interface Rates { source: string; label: string; as_of: string | null; rates: { sell: string; buy: string; rate: string }[] }
 interface TreasuryData { wallets: Wallet[]; obligations: Obligation[]; plans: Record<string, ObPlan>; quotes: QuotePreview[]; conversions: Operation[]; rates: { sell: string; buy: string; rate: string }[]; rate_source: string }
 
+const RATE_REFRESH_MS = 60_000; // the server caches Airwallex rates for 60 s, so asking sooner would show nothing new
+
 export function Treasury({ localMode }: { localMode: boolean }) {
   const t = useLoad(() => get<TreasuryData>("/treasury"), []);
   const rates = useLoad(() => get<Rates>("/treasury/rates"), []);
+  const liveRates = rates.data?.source === "airwallex_sandbox";
+  useEffect(() => {
+    if (!liveRates) return;
+    const timer = setInterval(() => { if (!document.hidden) rates.reload(); }, RATE_REFRESH_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveRates]);
   const decisions = useLoad(() => get<DecisionPlan>("/treasury/decisions"), []);
   const payments = useLoad(() => get<BillPayment[]>("/treasury/bill-payments"), []);
   const [paying, setPaying] = useState<Decision | null>(null);
@@ -114,13 +123,13 @@ export function Treasury({ localMode }: { localMode: boolean }) {
             <QuoteBox q={liveQuote} now={now} busy={busy} canConvert={op}
               onConvert={() => run("convert", () => post<Operation>(`/treasury/quotes/${liveQuote.quote.id}/execute`), (op) => `Conversion ${op.id}: ${op.status}`)} />
           )}
-          <div className="small muted" style={{ marginTop: 12 }} aria-live="polite">
+          <div className="small muted" style={{ marginTop: 12 }}>
             {rates.error ? (
               <span>Current rates unavailable: {rates.error}. <button className="btn small" onClick={rates.reload}>Retry</button></span>
             ) : !rates.data ? "Loading current rates…" : (
               <>
                 <b>{rates.data.source === "synthetic" ? "Synthetic rates" : "Current rates"}</b> · {rates.data.label}
-                {rates.data.as_of && <> · as of {when(rates.data.as_of)}</>}
+                {rates.data.as_of && <> · as of {when(rates.data.as_of)} · updates every minute</>}
                 <div className="rate-grid">
                   {rates.data.rates.map((r) => <span key={r.sell + r.buy} className="mono">{r.sell}→{r.buy} {r.rate}</span>)}
                 </div>
