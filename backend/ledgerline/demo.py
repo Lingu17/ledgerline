@@ -21,7 +21,7 @@ STEPS = [
     ("links", "Request the short balance", "Publish a payment link for the exact balance, or record an honest draft if links are unavailable."),
     ("agents", "Ask payer agents", "Call explain_payment over MCP, verify the three checks, revise plans."),
     ("treasury", "Cover the EUR bill", "Quote and convert only the EUR shortfall above reserve."),
-    ("approve", "Approve the refund", "A person approves the over-limit refund on the Approvals page, then it executes under the duplicate lock."),
+    ("approve", "Approve and send the refund", "One member approves the over-limit refund on the Approvals page, and a different member sends it under the duplicate lock. Invite a second member under Team."),
     ("bank_sent", "Bank reports SENT", "The refund is SENT. Not final: the liability stays on the books."),
     ("bank_paid", "Bank reports PAID", "Final. Liability released; conservation checked to the cent."),
 ]
