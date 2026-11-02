@@ -31,10 +31,10 @@ export function Settings() {
       <div className="grid-2">
         <AccountCard />
         <SignInMethods />
-        <Card title="Reference rates">
+        {s.data.bank.mode === "local" && <Card title="Reference rates">
           <div className="small muted" style={{ marginBottom: 8 }}>{s.data.bank.mode === "local" ? "Fixed synthetic rates used by the local workspace. Not market data." : "Sandbox quotes are fetched per conversion."}</div>
           <table><tbody>{s.data.demo_fx_rates.map((r) => <tr key={r.sell + r.buy}><td>{r.sell} → {r.buy}</td><td className="num">{r.rate}</td></tr>)}</tbody></table>
-        </Card>
+        </Card>}
       </div>
       {org.data.control_audit.length > 0 && (
         <Card title="Organization changes" pad={false}>
@@ -296,8 +296,8 @@ function SandboxBeneficiaries() {
   }, [corridor]);
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   const text = (k: string, label: string) => <Field key={k} id={`bn-${k}`} label={label}><input id={`bn-${k}`} value={f[k] ?? ''} onChange={set(k)} required /></Field>;
-  return <Card title="Refund beneficiaries (Airwallex sandbox)">
-    <p className="small muted">Refunds are paid to a sandbox beneficiary. New ones are checked by Airwallex (validate) before they are created. Synthetic details only; account numbers are shown masked.</p>
+  return <Card title="Beneficiaries (Airwallex sandbox)">
+    <p className="small muted">Refunds and bill payments go to a sandbox beneficiary. New ones are checked by Airwallex (validate) before they are created. Synthetic details only; account numbers are shown masked.</p>
     {list.error && <ErrorNote error={list.error} onRetry={list.reload} />}
     {list.data && (list.data.items.length === 0 ? <p className="small">No beneficiaries yet.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Currency</th><th>Method</th><th>Account</th><th>Id</th></tr></thead><tbody>
       {list.data.items.map((b) => <tr key={b.id}><td>{b.name}</td><td>{b.currency} · {b.country}</td><td>{b.methods.join(', ')}</td><td className="mono">{b.account}</td><td className="mono small">{b.id}</td></tr>)}
@@ -453,7 +453,7 @@ function SignInMethods() {
           <span className="sm-icon" aria-hidden="true">@</span>
           <div><b>Email and password</b><small>{d.has_password ? "Set" : "Not set: this account signs in with a provider"}</small></div>
         </li>
-        {(["google", "apple"] as ProviderId[]).map((p) => {
+        {(["google", "apple"] as ProviderId[]).filter((p) => p !== "apple" || d.available.apple || d.identities.some((i) => i.provider === "apple")).map((p) => {
           const linked = d.identities.find((i) => i.provider === p);
           return (
             <li key={p}>

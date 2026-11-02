@@ -36,6 +36,16 @@ const RefreshCtx = createContext<{ version: number; bump: () => void }>({ versio
 export function RefreshProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
+  // A colleague may have changed things while this window was in the background.
+  useEffect(() => {
+    const onReturn = () => { if (!document.hidden) bump(); };
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+    };
+  }, [bump]);
   return <RefreshCtx.Provider value={{ version, bump }}>{children}</RefreshCtx.Provider>;
 }
 export const useRefresh = () => useContext(RefreshCtx);

@@ -18,7 +18,7 @@ Small companies that bill in several currencies lose hours every week matching i
 
 Money rules live in code. Approvals are bound to the exact scope; refunds use stable request ids, a per-deposit duplicate lock and treat SENT as not final (only PAID releases the liability); a pause switch stops all money-out. Every currency reconciles to the cent: deposits = applied + credits + refunds + unapplied.
 
-It is a working multi-tenant SaaS: sign-up (email or Google), organizations with owner/operator/viewer roles, four-eyes approvals, CSV import, audit export, isolated data per organization. In the reference scenario 4 of 6 deposits settle without a person, one refund needs an approval, one bad agent claim is escalated with its reason, and there are 0 double payments; a randomized harness ran 64,215 checks across 250 synthetic companies with 0 mismatches.
+It is a working multi-tenant SaaS: sign-up (email or Google), organizations with owner/operator/viewer roles, four-eyes approvals, CSV import, audit export, isolated data per organization. In the reference scenario 4 of 6 deposits settle without a person, one refund needs an approval, one bad agent claim is escalated with its reason, and there are 0 double payments; a randomized harness ran 51,475 checks across 200 synthetic companies and 25 sample walkthroughs with 0 mismatches.
 
 **Honest scope**
 

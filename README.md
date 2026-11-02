@@ -33,7 +33,7 @@ A finance team receives money in USD, EUR and GBP. Some payments match an invoic
 | 🎯 **For** | small multi-currency companies on Airwallex Global Accounts |
 | 🧠 **Agentic part** | agent-to-agent evidence over MCP, verified before trust; Claude as a typed, advisory reader |
 | 🛡️ **Safety** | money rules in code · four-eyes · duplicate lock · stable request ids · pause switch · SENT ≠ PAID |
-| ✅ **Proof** | 389 backend tests · 19 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
+| ✅ **Proof** | 389 backend tests · 20 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
 
 ---
 
@@ -196,7 +196,7 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 |:--|:--|:--|
 | Reference company (6 payments) | **4** settled with no person · **1** approval · **1** escalation with its reason · **0** double payments · ledger balanced | [EVALUATION](docs/EVALUATION.md) |
 | Randomized companies | **50** companies · **2,127** payments · **0** allocations disagreeing with an independent reference model | [EVALUATION](docs/EVALUATION.md) |
-| Accuracy harness | **250** companies · **64,215** checks · **0** mismatches | [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) |
+| Accuracy harness | **200** companies and 25 sample walkthroughs · **51,475** checks · **0** mismatches | [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) |
 | Live Airwallex sandbox (Google Cloud host) | signed webhooks booked once · beneficiary validated and created · current FX rates · refund approved by a second member, **one** transfer, SENT → PAID, liability released only at PAID | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
 | Live hosted link (2 Nov) | a test-card payment of EUR 197 on a Singapore sandbox account was reported paid by Airwallex and booked once; the invoice settled and the bill moved from Escalate to Fund | Live app |
 | Live bill payment (2 Nov) | Airwallex accepted a EUR 100 transfer, moved by its sandbox simulation through SENT to PAID; the bill closed and one journal entry reduced cash only at PAID. Proposer and approver were two accounts of the same owner, so this tests the control and the bank call, not independent review | Live app |
@@ -241,7 +241,7 @@ backend/ledgerline/
   payouts.py        scoped approvals, four-eyes      treasury.py    reserves, single-use quotes
   ledger.py         double entry, conservation       providers/     local simulated bank, Airwallex sandbox
   payer_agents/     MCP server + Ed25519 keys        beneficiaries.py, sandbox_receipts.py
-frontend/src/       React views: Inbox, Payments, Approvals, Evidence, Treasury, Ledger, Customers, Activity, Team, Settings, Walkthrough, Architecture
+frontend/src/       React views: Inbox, Payments, Approvals, Evidence, Treasury, Ledger, Customers, Activity, Team, Settings, CEO view, Practice steps, Architecture
 deploy/vm/          setup.sh, update.sh, Caddyfile, systemd units, backup.py
 scripts/            smoke_deploy.py, evaluate.py, accuracy_run.py
 ```
