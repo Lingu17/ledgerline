@@ -6,13 +6,20 @@ interface Summary {
   verdict: "ok" | "attention" | "problem"; headline: string; lookahead_days: number; paused: boolean;
   currencies: { currency: string; cash: number; reserve: number; bills_due: number; free: number; held: number; owed_to_us: number; overdue: number }[];
   agent: { payments: number; settled_without_person: number; refunds_avoided: number; false_claims_caught: number; early_cash_offers_paid: number; estimated_minutes_saved: number; minutes_per_payment_assumed: number };
-  needs_you: { kind: string; id: string; currency: string; amount_minor: number; payer_name: string; reason: string | null }[];
+  needs_you: { kind: string; id: string; status: string; currency: string; amount_minor: number; payer_name: string; reason: string | null }[];
   needs_you_total: number;
   short_bills: { obligation_id: string; payee: string; currency: string; amount_minor: number; due_at: string; decision: string; reason: string }[];
   trust: { ledger_balanced: boolean; log_intact: boolean; log_events: number; double_payments: number };
 }
 
 const VERDICT = { ok: ["matched", "All clear"], attention: ["pending", "Needs attention"], problem: ["escalated", "Problem"] } as const;
+
+const NEXT_STEP: Record<string, string> = {
+  awaiting_evidence: "Ask the payer's agent.",
+  refund_awaiting_approval: "A person must approve or reject the refund.",
+  refund_in_flight: "Refund on its way; track it until paid.",
+  pending: "A person must approve or reject this.",
+};
 
 function link(kind: string, id: string) {
   return kind === "deposit" ? `#/payments?deposit=${id}` : "#/approvals";
@@ -64,7 +71,7 @@ export function Ceo() {
               ))}
               {needs_you.map((w) => (
                 <div key={w.id} className="small">
-                  <a href={link(w.kind, w.id)}><b>{w.id}</b></a>: {money(w.amount_minor, w.currency)}, {w.payer_name}.{w.reason ? ` ${w.reason}` : ""}
+                  <a href={link(w.kind, w.id)}><b>{w.id}</b></a>: {money(w.amount_minor, w.currency)}, {w.payer_name}.{" "}{w.reason ?? NEXT_STEP[w.status] ?? ""}
                 </div>
               ))}
               {needs_you_total > needs_you.length && <a className="small" href="#/inbox">{needs_you_total - needs_you.length} more in the Inbox</a>}
