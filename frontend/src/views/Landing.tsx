@@ -36,10 +36,10 @@ const STEPS = [
 ];
 
 const FEATURES = [
-  { icon: "inbox", title: "Operational inbox", body: "One queue of payments that need a decision, ranked by what blocks cash. Everything else is posted and out of the way." },
-  { icon: "split", title: "Partial and overpayments", body: "A 970 payment against a 1,000 invoice stays partial with 30 due. Fees within your tolerance close the invoice; anything more is escalated." },
+  { icon: "inbox", title: "Operational inbox", body: "One queue of payments that need a decision, oldest first. Everything else is posted and out of the way." },
+  { icon: "split", title: "Partial and overpayments", body: "A 970 payment against a 1,000 invoice stays partial with 30 due. Fees within your tolerance close the invoice; anything more stays open with the exact balance requested." },
   { icon: "shield", title: "Signed payer evidence", body: "Three checks on every claim: signature, freshness and binding to this payment, and agreement with your own invoices." },
-  { icon: "approve", title: "Four-eyes approvals", body: "Refunds need a second person. An approval is a hash of deposit, amount, currency and destination; if anything changes, it is void." },
+  { icon: "approve", title: "Four-eyes approvals", body: "Refunds above your limit need a second person, and the proposer can never approve. An approval is a hash of deposit, amount, currency and destination; if anything changes, it is void." },
   { icon: "fx", title: "Treasury and FX", body: "Wallet positions by currency, committed versus free cash, upcoming obligations and conversions that only post when settled." },
   { icon: "ledger", title: "Double-entry ledger", body: "Every movement is a balanced journal. Per-currency conservation checks run on every read of the ledger." },
   { icon: "audit", title: "Complete audit trail", body: "Who did what, when and why, searchable and exportable. Money history is never edited: changes are adjustments." },
@@ -78,7 +78,7 @@ const FAQ = [
   ["Is this a bank?", "No. Ledgerline sits beside your business account. It reads incoming payments and, when you approve, asks the account provider to return funds. In a local workspace the bank is simulated and every figure is synthetic."],
   ["Which banking provider does it use?", "New workspaces use a built-in simulated bank so you can try every flow safely. The Airwallex sandbox adapter is available when a server administrator configures sandbox API credentials. The current status is always shown in the top bar and under Settings → Integrations."],
   ["Where does AI come in?", "The payer side is an agent reached over the Model Context Protocol, and its answers are only accepted as signed, verified evidence. Claude can optionally read free-text remittance advice; its output is advisory and is checked against your invoices before anyone acts on it."],
-  ["Can an AI move money on its own?", "No. Money-out always needs an approval from a person other than the proposer, bound to the exact amount and destination, and an owner can pause all money-out at any time."],
+  ["Can an AI move money on its own?", "Claude cannot: its output is advisory and never authorises anything. A payer agent's signed claim counts only after all three checks pass. Even then, a refund above your auto-limit needs a person other than the proposer, returns proposed by an operator always do, and small refunds auto-approve only on verified evidence within the limit you set. Operators can pause all money-out at any time; only an owner can resume."],
   ["How is data separated between companies?", "Each organization has its own database, simulated bank and signing keys. Every request is resolved from the signed-in session to a membership before any data is opened."],
   ["What does it cost?", "Nothing. Ledgerline is a hackathon project for the Airwallex Agentic Banking Hackathon and has no billing. It is not production banking software."],
 ];
@@ -133,7 +133,7 @@ export function Landing() {
             <h1>Every incoming payment, matched and settled with proof.</h1>
             <p className="lp-lead">
               Ledgerline reconciles the money your customers send against the invoices they owe, asks the payer's agent when
-              something does not add up, and keeps a person in control of every payment that leaves.
+              something does not add up, and keeps a person in control of money leaving above the limit you set.
             </p>
             <div className="lp-hero-cta">
               <a className="lp-btn primary lg" href={primary.href}>{primary.label}</a>
@@ -220,7 +220,7 @@ export function Landing() {
         <div className="lp-wrap lp-safety">
           <div>
             <span className="lp-eyebrow">Safety by design</span>
-            <h2>Agents can propose. People decide what leaves.</h2>
+            <h2>Agents can propose. Code verifies. People approve what is above your limit.</h2>
             <p>
               Ledgerline treats every answer from an AI or a payer as data to be checked, never as an instruction. The controls
               that protect money-out are enforced by the server, not just hidden in the interface.
@@ -259,7 +259,7 @@ export function Landing() {
           </div>
           <div className="lp-integrations">
             <article><span className="lp-tag">Default</span><h3>Simulated bank</h3><p>A local bank with synthetic accounts, webhooks, FX and refunds, including failures and delays, for safe practice.</p></article>
-            <article><span className="lp-tag warn">Sandbox</span><h3>Airwallex</h3><p>Sandbox adapter for global accounts, conversions and transfers, enabled when an administrator adds sandbox credentials.</p></article>
+            <article><span className="lp-tag warn">Sandbox</span><h3>Airwallex</h3><p>Verified in the sandbox: signed deposit webhooks, current FX rates, beneficiaries, conversions and an approved refund from SENT to PAID. Reserved for the operator's organization, so sample workspaces never touch it.</p></article>
             <article><span className="lp-tag">Optional</span><h3>Claude</h3><p>Reads free-text remittance advice into structured suggestions. Advisory only, and verified against your invoices.</p></article>
             <article><span className="lp-tag">Protocol</span><h3>MCP payer agents</h3><p>Payers answer questions about their payments through the Model Context Protocol with signed responses.</p></article>
           </div>

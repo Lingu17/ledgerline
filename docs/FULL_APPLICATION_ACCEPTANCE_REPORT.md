@@ -174,7 +174,7 @@ No FAIL items remain open.
 
 ## Remaining blockers and limitations
 
-1. **VM refund lifecycle completed** (30 Oct): independent second-member approval, provider SENT → PAID, one transfer, liability released only at PAID, balanced journal. Evidence below and in INTEGRATION_EVIDENCE. The SENT state was also sampled live through the API at 04:20:43–04:20:56 UTC: deposit `refund_in_flight`, `refund_pending` 123, `refund_paid` 0, one attempt; after PAID: `refund_pending` 0, `refund_paid` 123, deposit `refunded`, EUR refund-liability check payable 0.00. The approver is a separate member account (`lingrajmalipatil17@…`, Operator); Ledgerline enforces proposer ≠ approver between accounts but cannot verify that two accounts belong to two different people.
+1. **VM refund lifecycle completed** (30 Oct): independent second-member approval, provider SENT → PAID, one transfer, liability released only at PAID, balanced journal. Evidence below and in INTEGRATION_EVIDENCE. The SENT state was also sampled live through the API at 04:20:43–04:20:56 UTC: deposit `refund_in_flight`, `refund_pending` 123, `refund_paid` 0, one attempt; after PAID: `refund_pending` 0, `refund_paid` 123, deposit `refunded`, EUR refund-liability check payable 0.00. The approver is a separate member account (Operator role); Ledgerline enforces proposer ≠ approver between accounts but cannot verify that two accounts belong to two different people.
 2. **Hosted payment link** (BLOCKED): Airwallex sandbox returns `configuration_error`; needs Airwallex to enable the capability. The labelled draft is the fallback, not the original capability.
 3. **Submission, video, judge repository access** (BLOCKED, owner).
 4. Old stack retired on 30 Oct (done).

@@ -1,6 +1,6 @@
 # Submission draft (not submitted)
 
-The owner submits on HackerEarth. Nothing in this repository saves or submits anything there. The Build Phase submission fields were not visible without starting a new submission, so this draft covers the usual items (title, track, description, links, video) and should be pasted into whatever fields the form shows.
+The owner submits on HackerEarth. Nothing in this repository saves or submits anything there. Required (official FAQ): a working demo, a video walkthrough under five minutes, and a repository link with setup instructions; one submission per team. Dates conflict: the official site says 13 Nov, HackerEarth and the organizer on Slack say 15 Nov, so **submit by 13 Nov 23:59 IST**. The Build Phase submission fields were not visible without starting a new submission, so this draft covers the usual items (title, track, description, links, video) and should be pasted into whatever fields the form shows.
 
 **Title:** Ledgerline: incoming-payment reconciliation with verified payer-agent evidence
 

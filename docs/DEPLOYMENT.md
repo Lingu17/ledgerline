@@ -73,6 +73,10 @@ Restore: `sudo systemctl stop ledgerline`, copy the snapshot's files over `/var/
 
 Limitation: backups live on the same persistent disk, so they protect against bad writes and mistakes, not against losing the disk or the project. A Compute Engine snapshot schedule or an off-VM copy would cover that (it would use trial credit and has not been set up).
 
+## Known VM log noise
+
+Google's Ops Agent (not part of Ledgerline) runs on this VM without permission to write to Cloud Logging, so its exports fail and it logs those failures locally, about 0.4 GB of disk a day (observed 29 Oct–2 Nov). At that rate the 12 GB free lasts about a month. Either grant the VM's service account *Logs Writer* and *Monitoring Metric Writer*, or disable the agent with `sudo systemctl disable --now google-cloud-ops-agent`. The application does not depend on it.
+
 ## Proxy and client addresses
 
 In single-host mode the browser connects to Caddy directly. Caddy overwrites `X-Forwarded-For` with the real peer, and the app trusts exactly one hop, so a client cannot choose the address used for the per-IP sign-in budget (verified: a forged header was ignored). The per-account budget (5 failures per email per 15 minutes) applies as well.

@@ -162,7 +162,7 @@ export function Architecture() {
           <li><b>Rules in code.</b> Exact, partial, fee-tolerated, duplicate and unknown payments get a deterministic first plan, all in integer minor units.</li>
           <li><b>Payer agent over MCP.</b> <code>explain_payment</code> returns an Ed25519-signed claim; signature, freshness and our records must all agree.</li>
           <li><b>Claude.</b> Reads pasted text or a PDF and must answer through one of four typed tools. The output is advisory evidence and can never authorise money.</li>
-          <li><b>Money out.</b> Refunds and conversions need scoped approvals (a second person above the limit), a stable request id and a pause switch; SENT is not final, only PAID releases the liability.</li>
+          <li><b>Money out.</b> Refunds need scoped approvals (a second person above the limit); conversions use single-use quotes that keep reserves intact; every operation has a stable request id and obeys the pause switch; SENT is not final, only PAID releases the liability.</li>
           <li><b>Storage.</b> Each organization has its own SQLite files and payer keys on the VM's persistent disk, backed up nightly.</li>
         </ol>
       </main>

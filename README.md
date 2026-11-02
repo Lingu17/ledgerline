@@ -26,7 +26,7 @@
 
 A finance team receives money in USD, EUR and GBP. Some payments match an invoice cleanly; many don't: no reference, a bank fee shaved off, a customer who paid twice, the wrong currency. Today one person chases each of those by email, for days.
 
-**Ledgerline turns that into a decision engine.** Rules in code settle the clean cases. For the unclear ones it asks **the payer's own accounts-payable agent** what the money was for, over MCP, and treats the signed answer as **a claim to verify, not a fact**. Only after three checks pass does it act: settle an invoice, hold credit, request the exact balance, convert only the FX shortfall, or propose a refund that **a second person must approve**. Claude reads emails and PDFs when there is no agent, but it can only *suggest*. It never moves money.
+**Ledgerline turns that into a decision engine.** Rules in code settle the clean cases. For the unclear ones it asks **the payer's own accounts-payable agent** what the money was for, over MCP, and treats the signed answer as **a claim to verify, not a fact**. Only after three checks pass does it act: settle an invoice, hold credit, request the exact balance, convert only the FX shortfall, or propose a refund, which above your limit **a second person must approve**. Claude reads emails and PDFs when there is no agent, but it can only *suggest*. It never moves money.
 
 | | |
 |:--|:--|
@@ -193,7 +193,23 @@ Every rule is enforced by the API; the UI only hides what you cannot do.
 ## 🧪 Run it yourself
 
 <details>
-<summary><b>Locally (Windows, Python 3.12+, Node 22.12+)</b></summary>
+<summary><b>Locally (Python 3.12+, Node 22.12+)</b></summary>
+
+Linux or macOS:
+
+```bash
+python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements-lock.txt
+```
+
+```bash
+(cd frontend && npm ci && npm run build)
+```
+
+```bash
+cd backend && .venv/bin/python -m ledgerline
+```
+
+Windows:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
@@ -258,7 +274,7 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 ## ⚠️ Honest limits
 
 - Payer agents are simulations (real MCP and signatures); real customers' agents would be discovered at onboarding.
-- Airwallex hosted payment links are refused by the sandbox account (`configuration_error`); Ledgerline keeps a labelled draft and never invents a URL.
+- Airwallex hosted payment links are refused for this sandbox account (`configuration_error`, which Airwallex attributes to account-region support); Ledgerline keeps a labelled draft and never invents a URL.
 - Deposit discovery is owner-triggered, not a scheduled poller; Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery, password reset, SSO/MFA or billing.
 
