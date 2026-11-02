@@ -167,6 +167,24 @@ test("sign-up says which field is missing", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("password of at least 12 characters");
 });
 
+test("a real company sees setup steps and short-cash decisions", async ({ page }) => {
+  await signUp(page, { org: `Real ${uniq()}`, email: `r-${uniq()}@e2e.test`, sample: false });
+  await expect(page.getByRole("heading", { name: "Set up your company" })).toBeVisible();
+  await page.goto("/#/treasury");
+  await page.getByRole("button", { name: "Add bill" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Payee").fill("November payroll");
+  await dialog.getByLabel("Amount").fill("9000");
+  await dialog.getByLabel("Due date").fill(new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10));
+  await dialog.getByLabel("Priority").selectOption("critical");
+  await dialog.getByRole("button", { name: "Add bill" }).click();
+  await expect(page.getByRole("heading", { name: "What to pay first" })).toBeVisible();
+  await expect(page.locator(".pill", { hasText: "Escalate" })).toBeVisible();
+  await page.screenshot({ path: "test-results/treasury-decisions.png", fullPage: true });
+  await page.goto("/#/settings");
+  await expect(page.getByRole("heading", { name: "Connect your Airwallex account" })).toBeVisible();
+});
+
 test("dialogs opened from the sidebar are readable and keep focus while typing", async ({ page }) => {
   await signUp(page, { org: `Dialog ${uniq()}`, email: `d-${uniq()}@e2e.test`, sample: false });
   await page.locator(".org-button").click();
