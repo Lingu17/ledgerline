@@ -18,85 +18,117 @@
   <img alt="CI" src="https://github.com/Lingu17/ledgerline/actions/workflows/ci.yml/badge.svg">
 </p>
 
-<h3 align="center">Resolve unclear incoming payments using verified evidence,<br>with every decision explained and every cent accounted for.</h3>
+<h3 align="center">Ledgerline works out what every incoming payment was for, checks the answer,<br>and keeps a person in control of any money that leaves.</h3>
+
+<p align="center"><b>Built for small companies that bill in several currencies.</b> Sandbox and made-up data only: no real money moves.</p>
 
 ---
 
-## ⚡ In thirty seconds
+## ⚡ What it does, in plain English
 
-A finance team receives money in USD, EUR and GBP. Some payments match an invoice cleanly; many don't: no reference, a bank fee shaved off, a customer who paid twice, the wrong currency. Today one person chases each of those by email, for days.
+A 12-person company bills customers in the US, Europe and the UK. Money arrives with a missing reference, a bank fee taken off, or in the wrong currency, and sometimes a customer pays twice. One finance person chases each case by email, for days, while bills fall due in another currency.
 
-**Ledgerline turns that into a decision engine.** Rules in code settle the clean cases. For the unclear ones it asks **the payer's own accounts-payable agent** what the money was for, over MCP, and treats the signed answer as **a claim to verify, not a fact**. Only after three checks pass does it act: settle an invoice, hold credit, request the exact balance, convert only the FX shortfall, or propose a refund, which above your limit **a second person must approve**. Claude reads emails and PDFs when there is no agent, but it can only *suggest*. It never moves money.
+**Ledgerline does that chasing.** It settles the clear payments by itself. When one is unclear, it asks the customer's own finance agent what the money was for, and it **checks the answer before believing it**. Then it settles the invoice, holds a credit, requests the exact balance, or proposes a refund that a second person must approve.
 
-| | |
+> **The moment that shows it.** A payment looks like a duplicate, so the first plan is to refund it. The customer's agent answers, with a signature, that it was an advance. Ledgerline checks that answer, changes its decision, and **no wrong refund ever leaves the bank**. Another agent gives a signed but false answer: it is rejected, and a person gets the reason.
+
+<p align="center"><img src="docs/screenshots/11-ceo.png" alt="The CEO view: cash, what needs a person, what the agent handled, and whether the numbers can be trusted" width="85%"></p>
+
+### Why a CEO would care
+
+| You want | What you get |
 |:--|:--|
-| 🎯 **For** | small multi-currency companies on Airwallex Global Accounts |
-| 🧠 **Agentic part** | agent-to-agent evidence over MCP, verified before trust; Claude as a typed, advisory reader |
-| 🛡️ **Safety** | money rules in code · four-eyes · duplicate lock · stable request ids · pause switch · SENT ≠ PAID |
-| ✅ **Proof** | 389 backend tests · 20 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
+| **Less manual chasing** | Clear payments settle with no person (4 of 6 in the reference company), and the rest arrive with the reason and the next step |
+| **No costly mistakes** | No double payments, no refund of money that was really an advance, and no money out on one person's say-so |
+| **To know where you stand** | The **CEO view** answers four questions on one screen: are we safe, what happened, what needs me, can I trust these numbers |
+| **Cash in the right place** | Each bill gets one answer: pay it, convert only what is short, delay it, or ask a person. It can also bring cash in early |
+| **Proof for an audit** | Every decision shows its reason, can be replayed to the same answer, and sits in a tamper-evident log |
+
+### Why a judge should look closer
+
+| What stands out | Where to check it |
+|:--|:--|
+| **Agents on both sides of a payment.** The customer's agent answers over MCP with a signed claim, treated as a claim and not a fact | Payments → DEP-1005 and DEP-1004 |
+| **The decision changes when evidence arrives,** before any money moves, and the whole path is on screen | Payments → any payment → Decision path |
+| **Money rules live in code.** Claude reads messy emails and PDFs through typed tools, cannot state an amount, and can never move money | [Money rules](#%EF%B8%8F-money-rules-the-code-enforces) |
+| **Real Airwallex sandbox runs,** with honest labels on everything that is simulated | [Measured, not claimed](#-measured-not-claimed) |
 
 ---
 
-## 🎬 The story the demo tells
+## ✨ Features
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Bank as Airwallex (sandbox)
-    participant L as Ledgerline
-    participant Agent as Payer's AP agent (MCP)
-    participant Op as Finance team
-    Bank->>L: deposit.settled (signed webhook)
-    L->>L: First plan from rules: "looks like a duplicate, propose refund"
-    L->>Agent: explain_payment(deposit, amount, currency)
-    Agent-->>L: Ed25519-signed claim: "advance for INV-2291"
-    L->>L: Check 1 signer ✓ · Check 2 bound to this deposit & fresh ✓ · Check 3 our records agree ✓
-    L->>L: Revised plan: hold as customer credit, refund dropped before any money moved
-    Note over L,Op: A different payer claims another customer's invoice → signature ✓, records ✗ → rejected, escalated with the reason
-    L->>Op: Genuine duplicate over the auto-limit → approval bound to amount, destination, evidence
-    Op->>L: Second person approves
-    L->>Bank: One transfer, stable request id
-    Bank-->>L: SENT (liability kept) → PAID (liability released)
-    L->>L: Ledger: deposits = applied + credits + refunds + unapplied, per currency, to the cent
-```
+**Live** means it has run against the real Airwallex sandbox. **Tested** means automated tests on the simulated bank, not yet run on the sandbox.
 
-Every payment shows this as a **decision path**: received → first plan → evidence → checks → decision → approval → settlement → accounting.
-
-| Apparent duplicate becomes credit | Signed but false claim is rejected | Approval bound to the exact scope |
-|:--:|:--:|:--:|
-| ![Evidence](docs/screenshots/05-evidence.png) | ![Escalated](docs/screenshots/04-payment-escalated.png) | ![Approval](docs/screenshots/07-approval.png) |
+| Feature | What it does | Status |
+|:--|:--|:--:|
+| **Payment matching** | Clean matches, bank fees written off, part payments, duplicates and missing references | Live |
+| **Ask the payer's agent** | A signed answer must pass three checks: who signed it, that it is about this payment and still fresh, and that your records agree | Tested, simulated agents |
+| **AI document reader** | Claude reads remittance emails and PDFs and suggests; a person decides | Live |
+| **Second-person approval** | The approver sees the exact amount and destination; if anything changes, the approval is void | Live |
+| **Refunds and bill payments** | One transfer under a duplicate lock. SENT is not final; only PAID closes it | Live |
+| **What to pay first** | Ranks bills and decides: fund, convert, defer or escalate. A bill that releases more cash than it costs goes first | Tested |
+| **Convert only the shortfall** | Keeps a reserve per currency and buys only what a bill needs | Live |
+| **Bring cash in early** | A capped discount through a hosted Airwallex link, booked once it is paid | Live |
+| **Exact-balance request** | A payment link and a ready email draft for what is still owed | Link created live; paid link tested |
+| **Wrong-currency payments** | Recommends converting only what the invoice needs, or holding; a person clicks | Tested |
+| **CEO view** | One screen for whoever runs the company | Tested |
+| **Live rates** | Airwallex sandbox rates, refreshed every minute on a connected account | Live |
+| **Background checks** | Finds paid links and missed deposits by itself | Tested |
+| **Ledger to the cent** | Double entry, balanced per currency, and currencies are never added together | Live |
+| **Tamper-evident log and replay** | Detects an edited or removed event, and reruns any plan on its stored inputs | Live |
+| **Pause switch** | Stops all money leaving at once while matching keeps running | Tested |
+| **Real company accounts** | Sign-up, isolated data per company, Owner, Operator and Viewer roles, CSV import, and each company's own encrypted Airwallex keys | Live |
 
 ---
 
 ## 🚀 Try it (five minutes)
 
 1. Open **https://35-207-220-110.sslip.io** → **Get started** → any name and email (nothing is emailed) → **Practice company**.
-2. **Payments → DEP-1005 → Ask payer's agent**: the duplicate becomes verified advance credit.
-3. **Payments → DEP-1004 → Ask payer's agent**: a correctly signed claim for another customer's invoice is rejected.
-4. **Read remittance…** on DEP-1004: paste an email or upload a PDF; Claude proposes, a person decides.
-5. **Practice steps**: FX for the EUR bill, the refund a person approves, bank SENT then PAID, and the scorecard.
+2. The **Inbox** has a short guide. **Payments → DEP-1005 → Ask payer's agent**: the duplicate turns out to be an advance, and the refund is dropped.
+3. **Payments → DEP-1004 → Ask payer's agent**: a correctly signed but false answer is rejected.
+4. **Practice steps**: a currency conversion, a refund a person approves, and the bank moving from SENT to PAID.
+5. **CEO view**: the whole company on one screen.
 
-Your organization is isolated from every other one. A practice company uses made-up data and a simulated bank. To use your own company instead, choose **My company**, then connect your Airwallex sandbox keys under Settings: they are checked with Airwallex first, stored encrypted per organization, and can only reach the Airwallex test environment.
+Each company's data is isolated. A practice company uses made-up data and a simulated bank. For your own company, choose **My company** and connect your Airwallex sandbox keys under Settings.
 
-**When cash is short:** Treasury → *What to pay first* ranks bills due soon by priority, then due date, and decides each one: fund, convert only the shortfall, defer to a date you allowed, or escalate. New cash reopens only the decisions it changes, and each change is audited. Deciding moves no money. A funded bill can then be paid through the bank: a second person approves the exact amount and destination, the plan is rechecked before sending, and the bill closes only on PAID. **Add a cash squeeze** shows all four decisions in a practice company, and **Set aside from planning** (Settings → Policy) creates a real shortfall on a pre-funded sandbox wallet.
+**What it does not do yet:** handle live money, send email from the server (balance requests open as a draft in your own mail), or connect a customer's own hosted agent (payer agents run on this server). Time saved has not been measured with a real customer.
 
-**Bring cash in early:** when bills are short, Treasury prices a discount on invoices not yet due (capped by policy, 2% by default) and creates a hosted Airwallex link. Nothing is emailed. Once Airwallex reports the link paid, the discount and cash are booked and the bills re-planned, within about two minutes or at once with **Check payment**. Link payment webhooks are not used yet.
+---
 
-**Proof you can check:** Treasury → *Plan history* → **Replay** runs the planner again on a decision's stored inputs and compares the result. Activity → **Verify log integrity** recomputes the audit hash chain, which detects an edited or removed event. Someone with database write access could rewrite the whole chain, so keep the head hash from a downloaded evidence export to rule that out.
+## 🎬 How the decision works
 
-**CEO view:** one screen says whether the company is safe, what the agent handled, what needs a person, and whether the numbers can be trusted. It only reads; any time-saved figure is labelled as an estimate with its assumption.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Bank as Airwallex (sandbox)
+    participant L as Ledgerline
+    participant Agent as Customer's finance agent (MCP)
+    participant Op as Finance team
+    Bank->>L: Payment received (signed webhook)
+    L->>L: First plan from rules: "looks like a duplicate, propose refund"
+    L->>Agent: What was this payment for?
+    Agent-->>L: Signed answer: "advance for INV-2291"
+    L->>L: Check 1 signer ✓ · Check 2 this payment and fresh ✓ · Check 3 our records agree ✓
+    L->>L: New plan: hold as customer credit. Refund dropped before any money moved
+    Note over L,Op: Another payer claims a different customer's invoice → signature ✓, records ✗ → rejected, a person gets the reason
+    L->>Op: A real duplicate over the limit → approval tied to amount, destination, evidence
+    Op->>L: Second person approves
+    L->>Bank: One transfer, stable request id
+    Bank-->>L: SENT (still owed) → PAID (closed)
+    L->>L: Ledger balances to the cent, per currency
+```
 
-**Bills that release cash:** a bill can name the invoice its payment releases. Within a priority, a bill that releases more than it costs goes first, and the reason says so. Critical bills still come first.
+Every payment shows this as a **decision path**: received → first plan → evidence → checks → decision → approval → settlement → accounting.
 
-**Paid in the wrong currency:** the payment is held and Ledgerline recommends converting only what the invoice needs, or holding it if a bill in that currency is short. A person clicks **Convert and apply**; the invoice settles when the bank reports the conversion settled.
-
-**Not done yet:** live-money Airwallex access, sending email from the server (balance requests open as a draft in your own mail), and connecting a customer's own hosted payer agent (payer agents currently run on this server).
+| Apparent duplicate becomes credit | Signed but false claim is rejected | Approval tied to the exact amount |
+|:--:|:--:|:--:|
+| ![Evidence](docs/screenshots/05-evidence.png) | ![Escalated](docs/screenshots/04-payment-escalated.png) | ![Approval](docs/screenshots/07-approval.png) |
 
 ---
 
 ## 👩‍💼 Using it at work
 
-Everything an employee needs to act on is in the **Inbox**, so start there each day. Each item opens the page where it can be resolved.
+Everything an employee needs to act on is in the **Inbox**, so start there each day. Treasury's *What to pay first* decides each bill; deciding moves no money. Each item opens the page where it can be resolved.
 
 ### Your daily routine
 
@@ -168,7 +200,7 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 - **Stop all money-out:** **Settings → Pause all money-out**. Any Operator can pause, and only an Owner can resume. Matching keeps running.
 - **"Outcome unknown":** click **Check status**. Do not pay again, because Ledgerline looks the request up before any retry.
 - **Keep cash out of planning:** **Settings → Policy → Set aside from planning**.
-- **Check a past decision:** **Treasury → Plan history → Replay**.
+- **Check a past decision:** **Treasury → Plan history → Replay** runs the planner again on the stored inputs. **Activity → Verify log integrity** detects an edited or removed event; someone with database write access could rewrite the whole chain, so keep the head hash from a downloaded evidence export to rule that out.
 </details>
 
 ### Who can do what
