@@ -172,13 +172,13 @@ const DECISION: Record<Decision["decision"], [string, string]> = {
 
 interface DecisionPlan { decisions: Decision[]; changed: unknown[]; unchanged: number; rates_available: boolean }
 
-interface BillPayment {
+export interface BillPayment {
   id: string; obligation_id: string; payee: string; currency: string; amount_minor: number; destination: string; scope_hash: string; status: string;
   proposed_by: string; decided_by: string | null; provider_id: string | null; needs_reconciliation: number; last_error: string | null; request_id: string;
 }
-const LIVE_PAYMENT = ["proposed", "approved", "processing", "sent"];
+export const LIVE_PAYMENT = ["proposed", "approved", "processing", "sent"];
 
-function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment[]; op: boolean; owner: boolean; localMode: boolean }) {
+export function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment[]; op: boolean; owner: boolean; localMode: boolean }) {
   const { run, busy } = useAction();
   const { me } = useAuth();
   if (rows.length === 0) return null;

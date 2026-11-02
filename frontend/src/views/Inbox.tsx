@@ -97,7 +97,7 @@ export function Inbox() {
                       onClick={() => (w.kind === "deposit" ? go("payments", { deposit: w.id }) : go(w.kind === "approval" ? "approvals" : "approvals"))}
                       onKeyDown={(e) => e.key === "Enter" && (w.kind === "deposit" ? go("payments", { deposit: w.id }) : go("approvals"))}>
                       <td>
-                        <div className="primary-text">{w.kind === "deposit" ? w.payer_name : w.kind === "approval" ? `Refund to ${w.payer_name}` : `Operation ${w.id}`}</div>
+                        <div className="primary-text">{w.kind === "deposit" ? w.payer_name : w.kind === "approval" ? `${w.id.startsWith("PAY-") ? "Bill payment" : "Refund"} to ${w.payer_name}` : `Operation ${w.id}`}</div>
                         <div className="secondary mono">{w.id}{w.reason ? ` · ${w.reason}` : ""}</div>
                       </td>
                       <td><Pill status={w.status} /></td>

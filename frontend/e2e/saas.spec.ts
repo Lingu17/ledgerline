@@ -194,6 +194,10 @@ test("practice company shows all four cash decisions", async ({ page }) => {
   await page.getByRole("dialog").getByRole("button", { name: "Propose payment" }).click();
   await expect(page.getByText("Needs a second person")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled(); // the proposer cannot approve
+  await page.goto("/#/approvals"); // the sidebar count leads here, so the payment has to be here too
+  await expect(page.getByText("Needs a second person")).toBeVisible();
+  await expect(page.getByText("No approvals waiting")).toHaveCount(0);
+  await page.goto("/#/treasury");
   await page.getByRole("button", { name: "Create offer" }).first().click();
   await page.getByRole("button", { name: "Practice: customer pays" }).click();
   await expect(page.getByText("Practice payment received")).toBeVisible();
