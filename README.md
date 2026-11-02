@@ -278,7 +278,7 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 ## ⚠️ Honest limits
 
 - Payer agents are simulations (real MCP and signatures); real customers' agents would be discovered at onboarding.
-- Airwallex hosted payment links are refused for this sandbox account (`configuration_error`, which Airwallex attributes to account-region support); Ledgerline keeps a labelled draft and never invents a URL.
+- Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov; the earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
 - Deposit discovery is owner-triggered, not a scheduled poller; Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery, password reset, SSO/MFA or billing.
 

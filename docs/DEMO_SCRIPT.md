@@ -19,6 +19,6 @@ Use a fresh **Practice company** at https://35-207-220-110.sslip.io. Every figur
 | 4:15 | Airwallex sandbox dashboard → Transfers | The single PAID EUR 1.23 transfer with reference "Ledgerline refund DEP-A5F71B22E4". One transfer, no duplicate. |
 | 4:35 | Architecture page | One Google Cloud VM; Claude and payer agents only supply evidence. End on: "every decision explained, every cent accounted for." |
 
-Honesty line: "Judge organizations use a simulated bank and simulated payer agents over real MCP. The operator's own organization runs against the Airwallex sandbox: signed deposit webhooks, FX and an independently approved refund were verified live. Hosted payment links are refused for this sandbox account (`configuration_error`), so Ledgerline keeps a labelled draft and never invents a link."
+Honesty line: "Judge organizations use a simulated bank and simulated payer agents over real MCP. The operator's own organization runs against the Airwallex sandbox: signed deposit webhooks, FX and an independently approved refund were verified live. Hosted payment links work on a Singapore sandbox account; where an account's region refuses them, Ledgerline keeps a labelled draft and never invents a link."
 
 Figures checked on 29 Oct 2026 against a fresh sample organization (local run of the deployed code, and the README screenshots): DEP-1005 → advance credit; DEP-1004 rejected on the records check (INV-2253 belongs to Brightwave); DEP-1006 refunded after one approval; scorecard 6 / 4 / 1 / 1 / 0, ledger balanced.

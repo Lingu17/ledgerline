@@ -65,7 +65,7 @@ def status(request: Request) -> dict[str, Any]:
         },
         "payer_agents": {
             "transport": "mcp/stdio" if s.payer_mcp_transport == "stdio" else "mcp/in-memory",
-            "label": "Simulated customer agents (local demo), real MCP protocol",
+            "label": "Customer agents hosted on this server, real MCP protocol",
         },
         "security": {
             "bind_host": s.host,
