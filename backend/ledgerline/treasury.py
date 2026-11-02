@@ -233,6 +233,42 @@ def mark_bill_paid(ctx: AppContext, obligation_id: str, actor: str) -> dict[str,
     return refresh_decisions(ctx, f"{obligation_id} paid", actor)
 
 
+def add_practice_squeeze(ctx: AppContext, actor: str) -> dict[str, Any]:
+    """Practice companies only: add GBP bills sized from today's position so all four decisions appear.
+
+    The last bills miss by about GBP 1,000, so paying off an open GBP invoice visibly reopens a decision.
+    """
+    rates = decision_rates(ctx)
+    with ctx.conn() as conn, db.transaction(conn):
+        if db.row(conn, "SELECT 1 FROM obligations WHERE id = 'OBL-SQUEEZE-PAYROLL'"):
+            raise TreasuryError("the cash squeeze example is already in this practice company")
+        now = ctx.clock.now()
+        pos = wallet_position(conn, ctx)
+        surplus = {c: max(0, p["free_after_commitments"]) for c, p in pos.items() if c != "GBP"}
+        for d in rank_bills(conn, ctx, rates):  # conversions already planned use up their source
+            if d["source_currency"] in surplus:
+                back = rates.get((d["currency"], d["source_currency"])) or 1 / rates[(d["source_currency"], d["currency"])]
+                surplus[d["source_currency"]] -= convert_round(d["shortfall_minor"], d["currency"], d["source_currency"], back)
+        in_gbp = {c: convert_round(max(0, v), c, "GBP", rates[(c, "GBP")]) for c, v in surplus.items() if (c, "GBP") in rates}
+        best = max(in_gbp, key=in_gbp.get)
+        have = max(0, pos["GBP"]["projected_after_pending_fx"])
+        payroll = have // 2 or 50_000
+        to_convert = in_gbp[best] // 2
+        left = max(in_gbp[best] - to_convert, *(v for c, v in in_gbp.items() if c != best))
+        bills = [
+            ("OBL-SQUEEZE-PAYROLL", "UK payroll", payroll, 2, "critical", None),
+            ("OBL-SQUEEZE-SUPPLIER", "Harbour Packaging Ltd", have - payroll + to_convert, 3, "normal", None),
+            ("OBL-SQUEEZE-TAX", "HMRC VAT", left + 100_000, 4, "normal", None),
+            ("OBL-SQUEEZE-AGENCY", "Studio Fabrik", left + 100_000, 5, "flexible", 30),
+        ]
+        for oid, payee, amount, due, priority, later in bills:
+            conn.execute("INSERT INTO obligations(id, payee, currency, amount_minor, due_at, description, status, priority, defer_until) VALUES (?,?,?,?,?,?, 'scheduled', ?, ?)",
+                         (oid, payee, "GBP", amount, iso(now + timedelta(days=due)), "Practice cash squeeze", priority,
+                          iso(now + timedelta(days=later)) if later else None))
+        audit.record(conn, iso(now), actor, "practice.cash_squeeze_added", "treasury", "practice", {"bills": [b[0] for b in bills]})
+    return refresh_decisions(ctx, "cash squeeze added", actor)
+
+
 def create_quote(ctx: AppContext, obligation_id: str, actor: str) -> dict[str, Any]:
     with ctx.conn() as conn:
         plan = plan_for_obligation(conn, ctx, obligation_id)

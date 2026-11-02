@@ -185,6 +185,14 @@ test("a real company sees setup steps and short-cash decisions", async ({ page }
   await expect(page.getByRole("heading", { name: "Connect your Airwallex account" })).toBeVisible();
 });
 
+test("practice company shows all four cash decisions", async ({ page }) => {
+  await signUp(page, { org: `Squeeze ${uniq()}`, email: `q-${uniq()}@e2e.test`, sample: true });
+  await page.goto("/#/treasury");
+  await page.getByRole("button", { name: "Add a cash squeeze" }).click();
+  for (const label of ["Fund", "Convert", "Defer", "Escalate"]) await expect(page.locator(".pill", { hasText: label }).first()).toBeVisible();
+  await page.screenshot({ path: "test-results/cash-squeeze.png", fullPage: true });
+});
+
 test("dialogs opened from the sidebar are readable and keep focus while typing", async ({ page }) => {
   await signUp(page, { org: `Dialog ${uniq()}`, email: `d-${uniq()}@e2e.test`, sample: false });
   await page.locator(".org-button").click();

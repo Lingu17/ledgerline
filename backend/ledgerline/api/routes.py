@@ -528,6 +528,13 @@ def treasury_decisions(request: Request) -> dict[str, Any]:
     return treasury.refresh_decisions(ctx_of(request), "position review")
 
 
+@router.post("/treasury/practice-squeeze")
+def practice_squeeze(request: Request, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    _sample_only(ctx)
+    return treasury.add_practice_squeeze(ctx, operator)
+
+
 @router.post("/treasury/obligations/{obligation_id}/defer")
 def defer_bill(request: Request, obligation_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
     return treasury.apply_deferral(ctx_of(request), obligation_id, operator)

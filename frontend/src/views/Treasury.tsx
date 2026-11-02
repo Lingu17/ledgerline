@@ -173,11 +173,14 @@ const DECISION: Record<Decision["decision"], [string, string]> = {
 function BillDecisions({ op }: { op: boolean }) {
   const plan = useLoad(() => get<{ decisions: Decision[]; changed: unknown[]; unchanged: number; rates_available: boolean }>("/treasury/decisions"), []);
   const { run, busy } = useAction();
+  const { me } = useAuth();
   if (plan.error) return <ErrorNote error={plan.error} onRetry={plan.reload} />;
   if (!plan.data) return <div className="card"><Loading rows={3} /></div>;
   const items = plan.data.decisions;
   return (
-    <Card title="What to pay first" pad={false}>
+    <Card title="What to pay first" pad={false} actions={op && me?.organization?.kind === "sample" && !items.some((b) => b.obligation_id === "OBL-SQUEEZE-PAYROLL") && (
+      <button className="btn small" disabled={!!busy} onClick={() => run("squeeze", () => post("/treasury/practice-squeeze"), "Cash squeeze added")}>Add a cash squeeze</button>
+    )}>
       {items.length === 0 ? <Empty title="No bills due in the planning window">Bills due soon are ranked here with a decision for each.</Empty> : (
         <div className="table-wrap">
           <table>

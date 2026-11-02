@@ -142,6 +142,40 @@ def test_missing_rates_escalate_instead_of_guessing(empty):
         assert {d["obligation_id"]: d for d in treasury.rank_bills(conn, empty, {})}[b]["decision"] == "escalate"
 
 
+def test_practice_squeeze_shows_all_four_and_a_payment_reopens_only_what_changes(client, app):
+    from .test_saas import _invite_and_join  # noqa: F401 - same fixtures
+
+    for step in ("deposits", "links", "agents"):
+        client.post("/api/demo/step", json={"step": step})
+    r = client.post("/api/treasury/practice-squeeze")
+    assert r.status_code == 200, r.text
+    d = by_id(r.json())
+    assert {x["decision"] for x in d.values()} >= {"fund", "convert", "defer", "escalate"}
+    assert d["OBL-SQUEEZE-PAYROLL"]["rank"] == 1 and d["OBL-SQUEEZE-PAYROLL"]["decision"] == "fund"
+    assert d["OBL-SQUEEZE-TAX"]["decision"] == "escalate" and d["OBL-SQUEEZE-AGENCY"]["decision"] == "defer"
+    assert client.post("/api/treasury/practice-squeeze").status_code == 409
+
+    open_gbp = next(i for i in client.get("/api/invoices?status=outstanding").json() if i["currency"] == "GBP" and i["remaining_minor"] >= 120_000)
+    amount = f"{open_gbp['remaining_minor'] / 100:.2f}"
+    payer = next(c for c in client.get("/api/customers").json() if c["id"] == open_gbp["customer_id"])["payer_names"][0]
+    pay = client.post("/api/payments", json={"external_ref": "SQUEEZE-1", "currency": "GBP", "amount": amount, "payer_name": payer, "reference": open_gbp["id"]})
+    assert pay.status_code == 200, pay.text
+    after = client.get("/api/treasury/decisions").json()
+    changed = {c["obligation_id"]: c["to"] for c in after["changed"]}
+    assert changed.get("OBL-SQUEEZE-TAX") in ("fund", "convert")
+    assert "OBL-SQUEEZE-PAYROLL" not in changed and "OBL-SQUEEZE-AGENCY" not in changed
+
+
+def test_squeeze_is_refused_for_a_real_company(app):
+    from fastapi.testclient import TestClient
+
+    from .conftest import signup
+
+    c = TestClient(app)
+    signup(c, email="o@real.test", org="Real", start_with="empty")
+    assert c.post("/api/treasury/practice-squeeze").status_code == 409
+
+
 def test_viewer_cannot_defer_or_mark_paid(client, app):
     from .test_saas import _invite_and_join
 
