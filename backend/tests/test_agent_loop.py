@@ -1,6 +1,8 @@
 """The agent asks by itself: nobody clicks, the checks still apply, and an unreachable agent loses nothing."""
 from types import SimpleNamespace
 
+import pytest
+
 from ledgerline import agent_loop, audit, db, demo, ledger, payouts, watcher
 from ledgerline.reconcile import pending_agent_questions
 
@@ -195,4 +197,26 @@ def test_person_approved_refund_over_the_new_limit_can_still_be_sent(ctx):
     assert payouts.auto_execute_ready(ctx) == []  # never sent automatically
     assert one(ctx, "SELECT status FROM approvals WHERE id = ?", (a["id"],))["status"] == "approved"  # and not sent back
     payouts.execute_refund(ctx, a["id"], "operator@test")
+    assert refunds(ctx) == 1
+
+
+def test_pressing_execute_over_a_lowered_limit_returns_it_to_a_second_person(ctx):
+    a = policy_approved_refund_held_by_pause(ctx)
+    set_refund_limit(ctx, "GBP", 100_000)
+    set_paused(ctx, False)
+    with pytest.raises(payouts.StaleApproval, match="second person"):
+        payouts.execute_refund(ctx, a["id"], "operator@test")
+    assert refunds(ctx) == 0
+    now = one(ctx, "SELECT * FROM approvals WHERE id = ?", (a["id"],))
+    assert (now["status"], now["decided_by"], now["decided_at"]) == ("pending", None, None)
+    assert one(ctx, "SELECT COUNT(*) AS n FROM audit_events WHERE action = 'approval.returned_to_person' AND entity_id = ?", (a["id"],))["n"] == 1
+    payouts.decide(ctx, a["id"], approve=True, actor="approver@test", seen_scope_hash=a["scope_hash"])
+    payouts.execute_refund(ctx, a["id"], "operator@test")
+    assert refunds(ctx) == 1
+
+
+def test_pressing_execute_under_the_limit_still_sends(ctx):
+    a = policy_approved_refund_held_by_pause(ctx)
+    set_paused(ctx, False)
+    assert payouts.execute_refund(ctx, a["id"], "operator@test")["operation"]["status"]
     assert refunds(ctx) == 1

@@ -170,6 +170,14 @@ def _event(conn, op_id, frm, to, detail, now):
 
 
 def execute_refund(ctx: AppContext, approval_id: str, actor: str, *, automatic: bool = False) -> dict[str, Any]:
+    """Send an approved refund. One the policy approved, now over a lowered limit, goes back to a second person instead."""
+    result = _send_refund(ctx, approval_id, actor)
+    if result.get("returned_to_person") and not automatic:
+        raise StaleApproval("this refund is now over the auto-approval limit, so it needs a second person to approve it")
+    return result
+
+
+def _send_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any]:
     with ctx.conn() as conn:
         with db.transaction(conn):
             now = iso(ctx.clock.now())
@@ -183,7 +191,7 @@ def execute_refund(ctx: AppContext, approval_id: str, actor: str, *, automatic: 
                 raise PayoutError(f"approval is {a['status']}; it must be approved before execution")
             if ctx.paused(conn):
                 raise Paused("money-out is paused; the approval is kept and can execute after resume")
-            if automatic and a["decided_by"] == "policy:auto_limit":
+            if a["decided_by"] == "policy:auto_limit":
                 # The limit may have been lowered since the policy approved this, for example while money-out was paused.
                 stored = json.loads(a["scope"])
                 limit = ctx.policy(conn)["refund_auto_limit_minor"][stored["currency"]]
