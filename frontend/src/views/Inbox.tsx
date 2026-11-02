@@ -165,7 +165,7 @@ export function Inbox() {
             ) : (
               <dl className="kv">
                 <dt>Deposits received</dt><dd className="num" style={{ textAlign: "left" }}><a href="#/payments">{o.scorecard.deposits}</a></dd>
-                <dt>Settled with no person</dt><dd><a href="#/payments?status=matched">{o.scorecard.settled_without_human}</a></dd>
+                <dt>Decided with no person</dt><dd><a href="#/payments?status=matched">{o.scorecard.settled_without_human}</a></dd>
                 <dt>Decided by a person</dt><dd><a href="#/approvals">{o.scorecard.approvals_by_person}</a></dd>
                 <dt>Waiting for a person</dt><dd><a href="#/payments?status=escalated">{o.scorecard.escalations}</a></dd>
                 <dt>Duplicate payouts</dt><dd><a href="#/ledger">{o.scorecard.double_payments}</a></dd>

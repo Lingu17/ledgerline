@@ -28,7 +28,7 @@
 
 A 12-person company bills customers in the US, Europe and the UK. Money arrives with a missing reference, a bank fee taken off, or in the wrong currency, and sometimes a customer pays twice. One finance person chases each case by email, for days, while bills fall due in another currency.
 
-**Ledgerline does that chasing.** It settles the clear payments by itself. When one is unclear, it asks the customer's own finance agent what the money was for, and it **checks the answer before believing it**. It does this by itself as soon as the payment arrives. Then it settles the invoice, holds a credit, requests the exact balance, or proposes a refund. Small refunds backed by verified evidence go through under your limit; anything larger, and every bill payment, needs a second person.
+**Ledgerline does that chasing.** It settles the clear payments by itself. When one is unclear, it asks the customer's own finance agent what the money was for, and it **checks the answer before believing it**. It does this by itself as soon as the payment arrives. Then it settles the invoice, holds a credit, requests the exact balance, or proposes a refund. Small refunds backed by a verified answer go out under your limit with no person involved; you set that limit, and the pause switch stops it. Anything larger, and every bill payment, needs a second person.
 
 > **The moment that shows it.** A payment looks like a duplicate, so the first plan is to refund it. The customer's agent answers, with a signature, that it was an advance. Ledgerline checks that answer, changes its decision, and **no wrong refund ever leaves the bank**. Another agent gives a signed but false answer: it is rejected, and a person gets the reason.
 
@@ -38,7 +38,7 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 
 | You want | What you get |
 |:--|:--|
-| **Less manual chasing** | In the reference company, 4 of 6 payments settle with no person, including one the agent resolved by asking by itself, and the rest arrive with the reason and the next step |
+| **Less manual chasing** | In the reference company, 4 of 6 payments are decided with no person, and 3 of those are fully closed. A part payment still needs someone to send the balance request. The rest arrive with the reason and the next step |
 | **No costly mistakes** | No double payments, no refund of money that was really an advance, and no money out on one person's say-so |
 | **To know where you stand** | The **CEO view** answers four questions on one screen: are we safe, what happened, what needs me, can I trust these numbers |
 | **Cash in the right place** | Each bill gets one answer: pay it, convert only what is short, delay it, or ask a person. It can also bring cash in early |
@@ -84,7 +84,7 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 ## 🚀 Try it (five minutes)
 
 1. Open **https://35-207-220-110.sslip.io** → **Get started** → any name and email (nothing is emailed) → **Practice company**.
-2. The **Inbox** has a short guide. **Payments → DEP-1005 → Ask payer's agent**: the duplicate turns out to be an advance, and the refund is dropped. A practice company waits for you to press this so you can watch; **Receive an unclear payment** shows a new payment handled with no click, which is how a real company works.
+2. The **Inbox** has a short guide. **Payments → DEP-1005 → Ask payer's agent**: the duplicate turns out to be an advance, and the refund is dropped. A practice company waits for you to press this so you can watch; **Receive an unclear payment** shows a payment handled with no click, which is how a real company works. That payment is built to match the simulated agent's table, and it works once per company.
 3. **Payments → DEP-1004 → Ask payer's agent**: a correctly signed but false answer is rejected.
 4. **Practice steps**: a currency conversion, a refund a person approves, and the bank moving from SENT to PAID.
 5. **CEO view**: the whole company on one screen.
@@ -214,7 +214,7 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 ### What saves the team time
 
 - **One queue:** the Inbox replaces checking the bank, email and spreadsheets separately.
-- **Clean payments need no one:** in the reference company, 4 of 6 payments settled without a person.
+- **Clear cases need no one:** in the reference company, 4 of 6 payments are decided without a person, and 3 are fully closed.
 - **Reasons on screen:** each decision shows why it was made, so a colleague can pick it up without asking.
 - **Bulk import:** bring customers, invoices, bills and payments in by CSV.
 - **Hard to make costly mistakes:** a second approver, a duplicate lock and a pause switch are enforced by the system, not by memory.
@@ -226,9 +226,9 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 
 | What | Result | Where |
 |:--|:--|:--|
-| Reference company (6 payments) | **4** settled with no person · **1** approval · **1** escalation with its reason · **0** double payments · ledger balanced | [EVALUATION](docs/EVALUATION.md) |
+| Reference company (6 payments) | **4** decided with no person, **3** fully closed · **1** approval · **1** escalation with its reason · **0** double payments · ledger balanced | [EVALUATION](docs/EVALUATION.md) |
 | Randomized companies | **50** companies · **2,127** payments · **0** allocations disagreeing with an independent reference model | [EVALUATION](docs/EVALUATION.md) |
-| Accuracy harness | **200** companies and 25 sample walkthroughs · **51,475** checks · **0** mismatches | [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) |
+| Accuracy harness (rules only, automatic asking switched off) | **200** companies and 25 sample walkthroughs · **51,475** checks · **0** mismatches | [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) |
 | Live Airwallex sandbox (Google Cloud host) | signed webhooks booked once · beneficiary validated and created · current FX rates · refund approved by a second member, **one** transfer, SENT → PAID, liability released only at PAID | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
 | Live hosted link (2 Nov) | a test-card payment of EUR 197 on a Singapore sandbox account was reported paid by Airwallex and booked once; the invoice settled and the bill moved from Escalate to Fund | Live app |
 | Live bill payment (2 Nov) | Airwallex accepted a EUR 100 transfer, moved by its sandbox simulation through SENT to PAID; the bill closed and one journal entry reduced cash only at PAID. Proposer and approver were two accounts of the same owner, so this tests the control and the bank call, not independent review | Live app |

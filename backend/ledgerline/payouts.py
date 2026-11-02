@@ -381,9 +381,9 @@ def cancel_pending(ctx: AppContext, op_id: str, actor: str) -> dict[str, Any]:
 
 
 def auto_execute_ready(ctx: AppContext, actor: str = "system") -> list[str]:
-    """Execute approvals already approved (e.g. under the policy auto-limit)."""
+    """Send only what the policy limit approved. A refund a person approved waits for a person to send it."""
     with ctx.conn() as conn:
-        ids = [r["id"] for r in db.rows(conn, "SELECT id FROM approvals WHERE status = 'approved' AND operation_type='refund'")]
+        ids = [r["id"] for r in db.rows(conn, "SELECT id FROM approvals WHERE status = 'approved' AND operation_type='refund' AND decided_by = 'policy:auto_limit'")]
     done = []
     for aid in ids:
         try:

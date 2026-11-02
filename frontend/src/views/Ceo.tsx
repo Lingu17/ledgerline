@@ -85,7 +85,7 @@ export function Ceo() {
         <Card title="What the agent handled">
           <dl className="kv">
             <dt>Payments received</dt><dd><a href="#/payments">{agent.payments}</a></dd>
-            <dt>Settled with no person</dt><dd><a href="#/payments?status=matched">{agent.settled_without_person}</a></dd>
+            <dt>Decided with no person</dt><dd><a href="#/payments?status=matched">{agent.settled_without_person}</a></dd>
             <dt>Wrong refunds avoided</dt><dd><a href="#/evidence">{agent.refunds_avoided}</a></dd>
             <dt>False claims caught</dt><dd><a href="#/evidence">{agent.false_claims_caught}</a></dd>
             <dt>Early-payment offers paid</dt><dd><a href="#/treasury">{agent.early_cash_offers_paid}</a></dd>
