@@ -334,11 +334,12 @@ function PolicyEditor({ policy }: { policy: Policy }) {
   const { can } = useAuth();
   const { run, busy } = useAction();
   const owner = can("owner");
-  const fields = ["fee_tolerance_minor", "refund_auto_limit_minor", "reserve_minor"] as const;
+  const fields = ["fee_tolerance_minor", "refund_auto_limit_minor", "reserve_minor", "ring_fenced_minor"] as const;
   const labels: Record<(typeof fields)[number], string> = {
     fee_tolerance_minor: "Bank-fee tolerance",
     refund_auto_limit_minor: "Refund auto-approval limit",
     reserve_minor: "Minimum reserve",
+    ring_fenced_minor: "Set aside from planning",
   };
   const init = () => Object.fromEntries(fields.map((f) => [f, Object.fromEntries(CCYS.map((c) => [c, majorString(policy[f][c])]))])) as Record<string, Record<Ccy, string>>;
   const [v, setV] = useState(init);

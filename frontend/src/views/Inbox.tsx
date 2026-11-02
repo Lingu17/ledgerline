@@ -124,9 +124,6 @@ export function Inbox() {
                       </td>
                       <td className="num">
                         <Money minor={ob.amount_minor} ccy={ob.currency} />
-                        {tr.data!.plans[ob.id]?.deficit > 0 && (
-                          <div className="secondary neg">short {money(tr.data!.plans[ob.id].deficit, ob.currency)}</div>
-                        )}
                       </td>
                     </tr>
                   ))}

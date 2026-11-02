@@ -166,6 +166,40 @@ def test_practice_squeeze_shows_all_four_and_a_payment_reopens_only_what_changes
     assert "OBL-SQUEEZE-PAYROLL" not in changed and "OBL-SQUEEZE-AGENCY" not in changed
 
 
+def test_convert_decision_buys_only_that_bills_shortfall_once(empty):
+    setup_cash(empty, EUR="2500", USD="20000")  # EUR 500 free, USD 15,000 free
+    first = bill(empty, "First", "EUR", "800", 1, priority="critical")
+    bill(empty, "Too big", "EUR", "90000", 2)
+    d = by_id(treasury.refresh_decisions(empty, "test"))[first]
+    assert d["decision"] == "convert" and d["shortfall_minor"] == 30_000
+    q = treasury.create_quote(empty, first, "op")
+    assert q["quote"]["buy_amount_minor"] == 30_000 and q["quote"]["sell_currency"] == "USD"
+    treasury.execute_conversion(empty, q["quote"]["id"], "op")
+    d = by_id(treasury.refresh_decisions(empty, "test"))[first]
+    assert d["decision"] == "fund"  # pending cover counts; no second conversion is proposed
+    with empty.conn() as conn:
+        assert ledger.conservation(conn)["all_balanced"]
+
+
+def test_ring_fenced_cash_makes_a_funded_wallet_short_and_new_cash_still_counts(empty):
+    setup_cash(empty, EUR="10000000")
+    b = bill(empty, "Supplier", "EUR", "5000", 2)
+    assert by_id(treasury.refresh_decisions(empty, "test"))[b]["decision"] == "fund"
+    with empty.conn() as conn, db.transaction(conn):
+        from ledgerline.context import validate_policy
+
+        db.set_setting(conn, "policy", validate_policy({"ring_fenced_minor": {"USD": 0, "EUR": 999_600_000, "GBP": 0}}))
+    d = by_id(treasury.refresh_decisions(empty, "test"))[b]
+    assert d["decision"] == "escalate" and d["shortfall_minor"] == 300_000  # 4,000 left - 2,000 reserve; bill 5,000
+    with empty.conn() as conn:
+        p = treasury.wallet_position(conn, empty)["EUR"]
+        assert p["cash"] == 1_000_000_000 and p["ring_fenced"] == 999_600_000  # the real balance is still shown
+    cust = workspace.create_customer(empty, {"name": "Orchard", "country": "GB", "payer_names": ["ORCHARD"], "refund_beneficiary": "Orchard"}, "op")
+    inv = workspace.create_invoice(empty, {"customer_id": cust["id"], "currency": "EUR", "amount": "3000", "due_date": day(empty, 5), "description": "x"}, "op")
+    workspace.record_manual_payment(empty, {"external_ref": "R9", "currency": "EUR", "amount": "3000", "payer_name": "ORCHARD", "reference": inv["id"]}, "op")
+    assert by_id(treasury.refresh_decisions(empty, "deposit"))[b]["decision"] == "fund"
+
+
 def test_squeeze_is_refused_for_a_real_company(app):
     from fastapi.testclient import TestClient
 

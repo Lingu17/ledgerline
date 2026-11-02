@@ -41,7 +41,8 @@ def wallet_position(conn: sqlite3.Connection, ctx: AppContext) -> dict[str, dict
         obligations = db.rows(conn, "SELECT * FROM obligations WHERE currency = ? AND status = 'scheduled' ORDER BY due_at", (ccy,))
         due_soon = sum(o["amount_minor"] for o in obligations if parse_iso(o["due_at"]) <= horizon)
         reserve = policy["reserve_minor"][ccy]
-        held = credits + unapplied + refunds_reserved
+        ring_fenced = policy["ring_fenced_minor"][ccy]
+        held = credits + unapplied + refunds_reserved + ring_fenced
         # In-flight conversions (persisted when booked): the sell side is reserved, the buy side counts as pending cover.
         fx_out_reserved = _sum(conn, "SELECT COALESCE(SUM(amount_minor),0) FROM operations WHERE kind='fx_conversion' AND currency = ? AND status IN ('pending','processing')", (ccy,))
         fx_in_pending = _sum(conn, "SELECT COALESCE(SUM(CAST(json_extract(detail,'$.buy_amount_minor') AS BIGINT)),0) FROM operations WHERE kind='fx_conversion' AND json_extract(detail,'$.buy_currency') = ? AND status IN ('pending','processing')", (ccy,))
@@ -49,6 +50,7 @@ def wallet_position(conn: sqlite3.Connection, ctx: AppContext) -> dict[str, dict
             "currency": ccy,
             "cash": cash,
             "reserve": reserve,
+            "ring_fenced": ring_fenced,
             "customer_credits": credits,
             "unapplied_held": unapplied,
             "refunds_reserved": refunds_reserved,
@@ -269,15 +271,29 @@ def add_practice_squeeze(ctx: AppContext, actor: str) -> dict[str, Any]:
     return refresh_decisions(ctx, "cash squeeze added", actor)
 
 
+def _cover_needed(conn: sqlite3.Connection, ctx: AppContext, obligation_id: str,
+                  rates: dict[tuple[str, str], Decimal]) -> tuple[int, str | None, str]:
+    """(amount to buy, source, currency). A 'convert' decision buys this bill's shortfall; otherwise the whole wallet's.
+
+    Ranked live from the connection's own view, never from a stored decision: inside execute_conversion's
+    IMMEDIATE transaction this must see a conversion another request has just booked.
+    """
+    plan = plan_for_obligation(conn, ctx, obligation_id)
+    d = next((x for x in rank_bills(conn, ctx, rates) if x["obligation_id"] == obligation_id), None)
+    if d and d["decision"] == "convert":
+        return d["shortfall_minor"], d["source_currency"], plan["obligation"]["currency"]
+    return plan["deficit"], plan["source_currency"], plan["obligation"]["currency"]
+
+
 def create_quote(ctx: AppContext, obligation_id: str, actor: str) -> dict[str, Any]:
+    rates = decision_rates(ctx)
     with ctx.conn() as conn:
-        plan = plan_for_obligation(conn, ctx, obligation_id)
-    if plan["deficit"] == 0:
+        need, source, currency = _cover_needed(conn, ctx, obligation_id, rates)
+    if need == 0:
         raise TreasuryError("no shortfall: nothing to convert")
-    if not plan["source_currency"]:
+    if not source:
         raise TreasuryError("no currency has enough surplus above its reserve to cover the shortfall")
-    q: Quote = ctx.provider.create_quote(sell_currency=plan["source_currency"], buy_currency=plan["obligation"]["currency"],
-                                         buy_amount_minor=plan["deficit"])
+    q: Quote = ctx.provider.create_quote(sell_currency=source, buy_currency=currency, buy_amount_minor=need)
     with ctx.conn() as conn, db.transaction(conn):
         now = iso(ctx.clock.now())
         qid = "FXQ-" + uuid.uuid4().hex[:8].upper()
@@ -315,6 +331,7 @@ def quote_preview(conn: sqlite3.Connection, ctx: AppContext, quote_id: str) -> d
 def execute_conversion(ctx: AppContext, quote_id: str, actor: str) -> dict[str, Any]:
     """Book a conversion: the quote is consumed and the sell amount reserved in one IMMEDIATE transaction,
     so a second quote for the same shortfall sees the pending cover and cannot book the same money."""
+    rates = decision_rates(ctx)  # a connected account may need a network read, so before the lock
     with ctx.conn() as conn:
         with db.transaction(conn):
             now_dt = ctx.clock.now()
@@ -328,9 +345,9 @@ def execute_conversion(ctx: AppContext, quote_id: str, actor: str) -> dict[str, 
                 raise TreasuryError("quote expired; request a new quote")
             if ctx.paused(conn):
                 raise Paused("money movement is paused")
-            plan = plan_for_obligation(conn, ctx, q["obligation_id"])
-            if plan["deficit"] != q["buy_amount_minor"]:
-                raise TreasuryError(f"shortfall is now {plan['deficit']} (pending conversions included); request a new quote")
+            need = _cover_needed(conn, ctx, q["obligation_id"], rates)[0]
+            if need != q["buy_amount_minor"]:
+                raise TreasuryError(f"shortfall is now {need} (pending conversions included); request a new quote")
             src = wallet_position(conn, ctx)[q["sell_currency"]]
             if src["free_after_commitments"] < q["sell_amount_minor"]:
                 raise TreasuryError(f"selling {q['sell_amount_minor']} {q['sell_currency']} would breach its reserve")

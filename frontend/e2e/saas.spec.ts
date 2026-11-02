@@ -179,7 +179,7 @@ test("a real company sees setup steps and short-cash decisions", async ({ page }
   await dialog.getByLabel("Priority").selectOption("critical");
   await dialog.getByRole("button", { name: "Add bill" }).click();
   await expect(page.getByRole("heading", { name: "What to pay first" })).toBeVisible();
-  await expect(page.locator(".pill", { hasText: "Escalate" })).toBeVisible();
+  await expect(page.locator(".pill", { hasText: "Escalate" }).first()).toBeVisible();
   await page.screenshot({ path: "test-results/treasury-decisions.png", fullPage: true });
   await page.goto("/#/settings");
   await expect(page.getByRole("heading", { name: "Connect your Airwallex account" })).toBeVisible();

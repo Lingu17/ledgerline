@@ -263,6 +263,7 @@ export interface Policy {
   fee_tolerance_bps: number;
   refund_auto_limit_minor: Record<Ccy, number>;
   reserve_minor: Record<Ccy, number>;
+  ring_fenced_minor: Record<Ccy, number>;
   obligation_lookahead_days: number;
   evidence_max_ttl_seconds: number;
   evidence_clock_skew_seconds: number;

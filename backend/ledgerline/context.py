@@ -21,6 +21,8 @@ DEFAULT_POLICY: dict[str, Any] = {
     "refund_auto_limit_minor": {"USD": 100_000, "EUR": 100_000, "GBP": 100_000},
     # Treasury never draws a wallet below its reserve.
     "reserve_minor": {"USD": 500_000, "EUR": 200_000, "GBP": 150_000},
+    # Cash set aside from planning, e.g. a pre-funded sandbox wallet where only a budget is the operating book.
+    "ring_fenced_minor": {"USD": 0, "EUR": 0, "GBP": 0},
     "obligation_lookahead_days": 14,
     "evidence_max_ttl_seconds": 900,
     "evidence_clock_skew_seconds": 60,
@@ -30,7 +32,7 @@ DEFAULT_POLICY: dict[str, Any] = {
 
 def validate_policy(policy: dict[str, Any]) -> dict[str, Any]:
     out = dict(DEFAULT_POLICY)
-    for key in ("fee_tolerance_minor", "refund_auto_limit_minor", "reserve_minor"):
+    for key in ("fee_tolerance_minor", "refund_auto_limit_minor", "reserve_minor", "ring_fenced_minor"):
         if key in policy:
             value = policy[key]
             if not isinstance(value, dict) or set(value) != set(CURRENCY_EXPONENT):

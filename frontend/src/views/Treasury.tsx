@@ -19,6 +19,7 @@ interface TreasuryData { wallets: Wallet[]; obligations: Obligation[]; plans: Re
 export function Treasury({ localMode }: { localMode: boolean }) {
   const t = useLoad(() => get<TreasuryData>("/treasury"), []);
   const rates = useLoad(() => get<Rates>("/treasury/rates"), []);
+  const decisions = useLoad(() => get<DecisionPlan>("/treasury/decisions"), []);
   const { run, busy } = useAction();
   const { can } = useAuth();
   const op = can("operator");
@@ -67,37 +68,30 @@ export function Treasury({ localMode }: { localMode: boolean }) {
         <div className="card-body small muted">
           Free (settled) is what can be spent or sold. Pending FX in is forecast cover from conversions that have not settled; it is never spendable.
           No cross-currency total is shown.
+          {d.wallets.some((w) => (w as Wallet & { ring_fenced?: number }).ring_fenced) && " Free and Forecast exclude cash set aside from planning under Settings → Policy."}
         </div>
       </Card>
 
-      <BillDecisions op={op} />
+      <BillDecisions plan={decisions} op={op} />
 
       <div className="split">
         <Card title="Bills" pad={false} actions={op && <><button className="btn small" onClick={() => setModal("import")}>Import CSV</button><button className="btn small primary" onClick={() => setModal("obligation")}>Add bill</button></>}>
           {d.obligations.length === 0 && <Empty title="No upcoming bills">Add supplier bills and payroll so Ledgerline can keep each currency covered.</Empty>}
           <div className="table-wrap">
           <table>
-            <thead><tr><th>Payee</th><th>Due</th><th className="num">Amount</th><th>Coverage</th><th /></tr></thead>
+            <thead><tr><th>Payee</th><th>Due</th><th className="num">Amount</th><th>Status</th></tr></thead>
             <tbody>
               {d.obligations.map((o) => {
-                const p = d.plans[o.id];
+                const decision = decisions.data?.decisions.find((x) => x.obligation_id === o.id);
                 return (
                   <tr key={o.id}>
                     <td><div className="primary-text">{o.payee}</div><div className="secondary">{o.description}</div></td>
                     <td className="nowrap">{day(o.due_at)}</td>
                     <td className="num"><Money minor={o.amount_minor} ccy={o.currency} /></td>
                     <td className="small">
-                      {p.deficit > 0 ? <><Pill status="escalated" label={`Short ${money(p.deficit, o.currency)}`} /><div className="secondary">{p.explanation}</div></>
-                        : <Pill status="matched" label="Covered" />}
-                    </td>
-                    <td>
-                      {op && p.deficit > 0 && p.source_currency && (
-                        <button className="btn small" disabled={!!busy}
-                          onClick={() => run("quote", () => post(`/treasury/obligations/${o.id}/quote`), "Quote received")}>
-                          Quote {p.source_currency}→{o.currency}
-                        </button>
-                      )}
-                      {p.deficit > 0 && !p.source_currency && <span className="small neg">No currency has surplus above reserve</span>}
+                      {o.status === "paid" ? <Pill status="matched" label="Paid" />
+                        : decision ? <Pill status={DECISION[decision.decision][0]} label={DECISION[decision.decision][1]} />
+                        : <Pill status="muted" label="Due later" />}
                     </td>
                   </tr>
                 );
@@ -170,8 +164,9 @@ const DECISION: Record<Decision["decision"], [string, string]> = {
   fund: ["matched", "Fund"], convert: ["info", "Convert"], defer: ["pending", "Defer"], escalate: ["escalated", "Escalate"],
 };
 
-function BillDecisions({ op }: { op: boolean }) {
-  const plan = useLoad(() => get<{ decisions: Decision[]; changed: unknown[]; unchanged: number; rates_available: boolean }>("/treasury/decisions"), []);
+interface DecisionPlan { decisions: Decision[]; changed: unknown[]; unchanged: number; rates_available: boolean }
+
+function BillDecisions({ plan, op }: { plan: { data: DecisionPlan | null; error: string | null; reload: () => void }; op: boolean }) {
   const { run, busy } = useAction();
   const { me } = useAuth();
   if (plan.error) return <ErrorNote error={plan.error} onRetry={plan.reload} />;
@@ -198,6 +193,7 @@ function BillDecisions({ op }: { op: boolean }) {
                     {b.version > 1 && <div className="secondary">Revised (version {b.version}) after: {b.trigger}</div>}
                   </td>
                   <td className="num nowrap">
+                    {op && b.decision === "convert" && <button className="btn small" disabled={!!busy} onClick={() => run("quote", () => post(`/treasury/obligations/${b.obligation_id}/quote`), "Quote received")}>Quote {b.source_currency}→{b.currency}</button>}
                     {op && b.decision === "defer" && <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("defer", () => post(`/treasury/obligations/${b.obligation_id}/defer`), "Bill deferred")) plan.reload(); }}>Accept deferral</button>}
                     {op && <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("paid", () => post(`/treasury/obligations/${b.obligation_id}/mark-paid`), "Bill marked paid")) plan.reload(); }}>Mark paid</button>}
                   </td>
