@@ -194,7 +194,12 @@ test("practice company shows all four cash decisions", async ({ page }) => {
   await page.getByRole("dialog").getByRole("button", { name: "Propose payment" }).click();
   await expect(page.getByText("Needs a second person")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled(); // the proposer cannot approve
+  await page.getByRole("button", { name: "Replay", exact: true }).first().click();
+  await expect(page.getByText("Replay identical")).toBeVisible();
   await page.screenshot({ path: "test-results/cash-squeeze.png", fullPage: true });
+  await page.goto("/#/activity");
+  await page.getByRole("button", { name: "Verify log integrity" }).click();
+  await expect(page.getByText("Log intact.")).toBeVisible();
 });
 
 test("dialogs opened from the sidebar are readable and keep focus while typing", async ({ page }) => {

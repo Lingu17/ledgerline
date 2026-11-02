@@ -15,7 +15,7 @@ from .clock import iso
 from .payer_agents.keys import public_registry
 
 DEMO_TABLES = (
-    "bill_payments", "treasury_decisions", "operation_events", "operations", "approvals", "evidence", "plans", "payment_links", "credits",
+    "plan_runs", "bill_payments", "treasury_decisions", "operation_events", "operations", "approvals", "evidence", "plans", "payment_links", "credits",
     "writeoffs", "allocations", "fx_quotes", "deposits", "invoices", "obligations", "customers",
     "wallet_opening", "deposit_hints", "journal_lines", "journal_entries", "webhook_events", "audit_events",
 )

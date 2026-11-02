@@ -76,6 +76,7 @@ export function Treasury({ localMode }: { localMode: boolean }) {
 
       <BillDecisions plan={decisions} op={op} payments={payments.data ?? []} onPay={setPaying} />
       <BillPayments rows={payments.data ?? []} op={op} owner={owner} localMode={localMode} />
+      <PlanHistory />
       {paying && <PayBill bill={paying} localMode={localMode} onClose={() => setPaying(null)} />}
 
       <div className="split">
@@ -218,6 +219,45 @@ function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment[]; op:
           </tbody>
         </table>
       </div>
+    </Card>
+  );
+}
+
+interface PlanRun { id: string; at: string; trigger: string; bills: number; counts: Record<string, number> }
+interface Replay { id: string; ok: boolean; identical: boolean; inputs_untampered: boolean; output_untampered: boolean; recomputed_hash: string; stored_hash: string }
+
+function PlanHistory() {
+  const runs = useLoad(() => get<PlanRun[]>("/treasury/plan-runs"), []);
+  const { run, busy } = useAction();
+  const [results, setResults] = useState<Record<string, Replay>>({});
+  if (!runs.data?.length) return null;
+  return (
+    <Card title="Plan history" pad={false}>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>What changed the plan</th><th>Decisions</th><th /></tr></thead>
+          <tbody>
+            {runs.data.map((r) => {
+              const res = results[r.id];
+              return (
+                <tr key={r.id}>
+                  <td className="nowrap small muted">{when(r.at)}<div className="mono">{r.id}</div></td>
+                  <td className="small">{r.trigger}</td>
+                  <td className="small">{r.counts.fund} fund · {r.counts.convert} convert · {r.counts.defer} defer · {r.counts.escalate} escalate</td>
+                  <td className="num small">
+                    {res ? <Pill status={res.ok ? "matched" : "escalated"} label={res.ok ? "Replay identical" : !res.identical ? "Replay differs" : "Record altered"} />
+                      : <button className="btn small" disabled={!!busy} onClick={async () => {
+                          const x = await run("replay" + r.id, () => get<Replay>(`/treasury/plan-runs/${r.id}/replay`));
+                          if (x) setResults((s) => ({ ...s, [r.id]: x }));
+                        }}>Replay</button>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="card-body small muted">Replay runs the same planning code again on the inputs stored with that decision and compares the result, without touching the bank.</div>
     </Card>
   );
 }

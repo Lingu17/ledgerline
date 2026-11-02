@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
 from ..payer_agents.keys import key_location
-from .. import bill_payments, claude_reader, db, demo, ledger, payouts, treasury, webhooks, workspace
+from .. import audit, bill_payments, claude_reader, db, demo, ledger, payouts, treasury, webhooks, workspace
 from ..clock import iso
 from ..context import AppContext, validate_policy
 from ..payer_agents.client import explain_payments
@@ -630,6 +630,22 @@ def audit_view(request: Request, response: Response, limit: int = Query(300, ge=
         return [_loads(a, "detail") for a in db.rows(conn, sql + " ORDER BY id DESC LIMIT ? OFFSET ?", (*params, limit, offset))]
 
 
+@router.get("/audit/verify", dependencies=read)
+def audit_verify(request: Request) -> dict[str, Any]:
+    with ctx_of(request).conn() as conn:
+        return audit.verify_chain(conn)
+
+
+@router.get("/treasury/plan-runs", dependencies=read)
+def plan_runs(request: Request) -> list[dict[str, Any]]:
+    return treasury.list_plan_runs(ctx_of(request))
+
+
+@router.get("/treasury/plan-runs/{run_id}/replay", dependencies=read)
+def plan_run_replay(request: Request, run_id: str) -> dict[str, Any]:
+    return treasury.replay_plan_run(ctx_of(request), run_id)
+
+
 @router.get("/audit/export", dependencies=read)
 def audit_export(request: Request) -> Response:
     ctx = ctx_of(request)
@@ -647,6 +663,8 @@ def audit_export(request: Request) -> Response:
             "operations": [_loads(o, "detail") for o in db.rows(conn, "SELECT * FROM operations ORDER BY created_at")],
             "operation_events": db.rows(conn, "SELECT * FROM operation_events ORDER BY id"),
             "bill_payments": db.rows(conn, "SELECT * FROM bill_payments ORDER BY created_at"),
+            "audit_chain": audit.verify_chain(conn),
+            "plan_runs": [_loads(r, "inputs", "output") for r in db.rows(conn, "SELECT * FROM plan_runs ORDER BY at")],
             "conservation": ledger.conservation(conn),
             "audit_events": [_loads(a, "detail") for a in db.rows(conn, "SELECT * FROM audit_events ORDER BY id")],
             "scorecard": demo.scorecard(ctx),

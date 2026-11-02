@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useState } from "react";
-import { download, getPage, type AuditEvent } from "../api";
+import { download, get, getPage, type AuditEvent } from "../api";
 import { Pager } from "../components/Pager";
 import { Card, Empty, ErrorNote, Loading, useLoad, useToast } from "../components/ui";
 import { when } from "../format";
 import { describe } from "./Inbox";
+
+interface ChainCheck { ok: boolean; events: number; head: string; problem: string | null }
 
 export function Activity() {
   const [q, setQ] = useState("");
@@ -18,6 +20,8 @@ export function Activity() {
   const [open, setOpen] = useState<number | null>(null);
   const toast = useToast();
   const rows = a.data ?? [];
+  const [chain, setChain] = useState<ChainCheck | null>(null);
+  const [checking, setChecking] = useState(false);
   return (
     <div className="stack">
       <div className="toolbar">
@@ -25,10 +29,21 @@ export function Activity() {
           <label htmlFor="act-q">Filter</label>
           <input id="act-q" type="search" placeholder="Action, entity, actor or operation id" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <button className="btn" disabled={checking} onClick={async () => {
+          setChecking(true);
+          try { setChain(await get<ChainCheck>("/audit/verify")); } catch (e) { toast((e as Error).message, "error"); } finally { setChecking(false); }
+        }}>{checking ? "Checking…" : "Verify log integrity"}</button>
         <button className="btn" onClick={() => download("/audit/export", "ledgerline-evidence-export.json").catch((e) => toast(e.message, "error"))}>
           Download evidence JSON
         </button>
       </div>
+      {chain && (
+        <div className={`notice small ${chain.ok ? "" : "risk"}`} role="status">
+          {chain.ok ? <><b>Log intact.</b> All {chain.events} events match their hash chain.</> : <><b>Log integrity failed.</b> {chain.problem}</>}
+          <div className="mono" style={{ overflowWrap: "anywhere" }}>Head {chain.head}</div>
+          <div className="muted">Rewriting the whole log would need database access; compare this head with a saved copy to rule that out.</div>
+        </div>
+      )}
       <Card pad={false}>
         {a.error ? <div className="card-body"><ErrorNote error={a.error} onRetry={a.reload} /></div> : !a.data ? <Loading rows={8} /> : rows.length === 0 ? (
           <Empty title={q ? "Nothing matches that filter" : "No activity yet"} />

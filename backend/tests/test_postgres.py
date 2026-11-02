@@ -82,7 +82,7 @@ def test_postgres_concurrent_schema_hardening_uses_transaction_lock():
             assert not conn._in_tx
             return db.row(conn, 'SELECT COUNT(*) AS n FROM schema_migrations')['n']
     with ThreadPoolExecutor(max_workers=4) as executor:
-        assert list(executor.map(harden, range(4))) == [5] * 4
+        assert list(executor.map(harden, range(4))) == [6] * 4
 
 
 def _pg_app(prefix=None, **extra):

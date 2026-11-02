@@ -143,6 +143,30 @@ CREATE TABLE IF NOT EXISTS invoice_adjustments (
         conn.execute("ALTER TABLE invoices ADD COLUMN voided_at TEXT")
 
 
+def _tenant_v6(conn: sqlite3.Connection) -> None:
+    """Hash chain over the audit log, including events written before this version, plus stored plan runs."""
+    from .audit import GENESIS, event_hash
+
+    conn.execute("ALTER TABLE audit_events ADD COLUMN prev_hash TEXT")
+    conn.execute("ALTER TABLE audit_events ADD COLUMN hash TEXT")
+    prev = GENESIS
+    rows = conn.execute("SELECT id, at, actor, action, entity_type, entity_id, operation_id, detail FROM audit_events ORDER BY id").fetchall()
+    for r in rows:
+        digest = event_hash(prev, r[1], r[2], r[3], r[4], r[5], r[6], r[7])
+        conn.execute("UPDATE audit_events SET prev_hash = ?, hash = ? WHERE id = ?", (prev, digest, r[0]))
+        prev = digest
+    conn.execute("""
+CREATE TABLE IF NOT EXISTS plan_runs (
+  id TEXT PRIMARY KEY,
+  at TEXT NOT NULL,
+  trigger TEXT NOT NULL,
+  inputs TEXT NOT NULL,
+  output TEXT NOT NULL,
+  inputs_hash TEXT NOT NULL,
+  output_hash TEXT NOT NULL
+)""")
+
+
 TENANT: list[Migration] = [
     (1, "ledger schema", TENANT_V1),
     (2, "invoice adjustments, approval author, edit timestamps", _tenant_v2),
@@ -185,6 +209,7 @@ CREATE TABLE IF NOT EXISTS bill_payments (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_live_payment_per_bill
   ON bill_payments(obligation_id) WHERE status NOT IN ('rejected','invalidated','failed','cancelled')"""),
+    (6, "hash-chained audit log and replayable plan runs", _tenant_v6),
 ]
 
 

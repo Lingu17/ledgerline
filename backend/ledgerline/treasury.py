@@ -9,7 +9,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
-from . import audit, db
+from . import audit, crypto, db
 from .clock import iso, parse_iso
 from .context import AppContext
 from .money import CURRENCY_EXPONENT, convert_round, fmt
@@ -129,13 +129,31 @@ def rank_bills(conn: sqlite3.Connection, ctx: AppContext, rates: dict[tuple[str,
     Most important first, then earliest due. Each decision uses up cash, so a surplus is never promised twice.
     A source currency only offers what is left after its own reserve, held funds and bills in the window.
     """
+    return plan_bills(plan_inputs(conn, ctx, rates))
+
+
+def plan_inputs(conn: sqlite3.Connection, ctx: AppContext, rates: dict[tuple[str, str], Decimal]) -> dict[str, Any]:
+    """Everything the plan depends on, as plain JSON values, so a stored run can be replayed exactly."""
     pos = wallet_position(conn, ctx)
     now = ctx.clock.now()
     horizon = now + timedelta(days=ctx.policy(conn)["obligation_lookahead_days"])
-    available = {c: p["projected_after_pending_fx"] + p["obligations_due_in_window"] for c, p in pos.items()}
-    surplus = {c: max(0, p["free_after_commitments"]) for c, p in pos.items()}
-    bills = [b for b in db.rows(conn, "SELECT * FROM obligations WHERE status = 'scheduled'") if parse_iso(b["due_at"]) <= horizon]
-    bills.sort(key=lambda b: (PRIORITY_ORDER.get(b["priority"], 1), b["due_at"], b["id"]))
+    fields = ("id", "payee", "currency", "amount_minor", "due_at", "priority", "defer_until")
+    return {
+        "now": iso(now),
+        "available": {c: p["projected_after_pending_fx"] + p["obligations_due_in_window"] for c, p in pos.items()},
+        "surplus": {c: max(0, p["free_after_commitments"]) for c, p in pos.items()},
+        "rates": {f"{a}/{b}": str(r) for (a, b), r in sorted(rates.items())},
+        "bills": [{k: b[k] for k in fields} for b in db.rows(conn, "SELECT * FROM obligations WHERE status = 'scheduled' ORDER BY id")
+                  if parse_iso(b["due_at"]) <= horizon],
+    }
+
+
+def plan_bills(inputs: dict[str, Any]) -> list[dict[str, Any]]:
+    """The decision itself: pure, with no database, clock or network, so the same inputs always give the same plan."""
+    now = parse_iso(inputs["now"])
+    available, surplus = dict(inputs["available"]), dict(inputs["surplus"])
+    rates = {tuple(k.split("/")): Decimal(v) for k, v in inputs["rates"].items()}
+    bills = sorted(inputs["bills"], key=lambda b: (PRIORITY_ORDER.get(b["priority"], 1), b["due_at"], b["id"]))
     out = []
     for rank, bill in enumerate(bills, start=1):
         ccy, amount = bill["currency"], bill["amount_minor"]
@@ -176,8 +194,9 @@ def refresh_decisions(ctx: AppContext, trigger: str, actor: str = "system") -> d
     rates = decision_rates(ctx)
     with ctx.conn() as conn, db.transaction(conn):
         now = iso(ctx.clock.now())
-        ranked = rank_bills(conn, ctx, rates)
-        stored = {d["obligation_id"]: d for d in db.rows(conn, "SELECT * FROM treasury_decisions")}
+        inputs = plan_inputs(conn, ctx, rates)
+        ranked = plan_bills(inputs)
+        stored ={d["obligation_id"]: d for d in db.rows(conn, "SELECT * FROM treasury_decisions")}
         changed, unchanged = [], 0
         live = set()
         for d in ranked:
@@ -200,10 +219,45 @@ def refresh_decisions(ctx: AppContext, trigger: str, actor: str = "system") -> d
             changed.append({"obligation_id": d["obligation_id"], "from": old["decision"] if old else None, "to": d["decision"]})
         for gone in set(stored) - live:  # paid, or moved out of the window by an applied deferral
             conn.execute("DELETE FROM treasury_decisions WHERE obligation_id = ?", (gone,))
+        if changed:
+            run_id = "RUN-" + uuid.uuid4().hex[:10].upper()
+            inputs_text, output_text = crypto.canonical_json(inputs).decode(), crypto.canonical_json(ranked).decode()
+            inputs_hash, output_hash = crypto.scope_hash(inputs), crypto.scope_hash(ranked)
+            conn.execute("INSERT INTO plan_runs(id, at, trigger, inputs, output, inputs_hash, output_hash) VALUES (?,?,?,?,?,?,?)",
+                         (run_id, now, trigger, inputs_text, output_text, inputs_hash, output_hash))
+            audit.record(conn, now, actor, "treasury.plan_run", "plan_run", run_id,
+                         {"trigger": trigger, "inputs_hash": inputs_hash, "output_hash": output_hash, "changed": len(changed)})
         kept = {d["obligation_id"]: d for d in db.rows(conn, "SELECT * FROM treasury_decisions")}
     return {"decisions": [{**d, "version": kept[d["obligation_id"]]["version"], "decided_at": kept[d["obligation_id"]]["decided_at"],
                            "trigger": kept[d["obligation_id"]]["trigger"]} for d in ranked],
             "changed": changed, "unchanged": unchanged, "rates_available": len(rates) == len(DEMO_RATES)}
+
+
+def list_plan_runs(ctx: AppContext, limit: int = 20) -> list[dict[str, Any]]:
+    with ctx.conn() as conn:
+        out = []
+        for r in db.rows(conn, "SELECT id, at, trigger, output, output_hash FROM plan_runs ORDER BY at DESC, id LIMIT ?", (limit,)):
+            decisions = json.loads(r.pop("output"))
+            out.append({**r, "bills": len(decisions), "counts": {k: sum(d["decision"] == k for d in decisions) for k in ("fund", "convert", "defer", "escalate")}})
+        return out
+
+
+def replay_plan_run(ctx: AppContext, run_id: str) -> dict[str, Any]:
+    """Run the pure planner again on a stored run's inputs and compare. Also checks the audit log's record of it."""
+    with ctx.conn() as conn:
+        r = db.row(conn, "SELECT * FROM plan_runs WHERE id = ?", (run_id,))
+        if r is None:
+            raise TreasuryError("unknown plan run")
+        logged = db.row(conn, "SELECT detail FROM audit_events WHERE action = 'treasury.plan_run' AND entity_id = ?", (run_id,))
+    inputs, stored = json.loads(r["inputs"]), json.loads(r["output"])
+    recomputed = plan_bills(inputs)
+    logged_detail = json.loads(logged["detail"]) if logged else {}
+    inputs_ok = crypto.scope_hash(inputs) == r["inputs_hash"] == logged_detail.get("inputs_hash")
+    output_ok = crypto.scope_hash(stored) == r["output_hash"] == logged_detail.get("output_hash")
+    same = crypto.canonical_json(recomputed) == crypto.canonical_json(stored)
+    return {"id": run_id, "at": r["at"], "trigger": r["trigger"], "identical": same, "inputs_untampered": inputs_ok,
+            "output_untampered": output_ok, "ok": same and inputs_ok and output_ok, "recomputed_hash": crypto.scope_hash(recomputed),
+            "stored_hash": r["output_hash"], "decisions": recomputed}
 
 
 def _live_payment(conn: sqlite3.Connection, obligation_id: str) -> bool:
