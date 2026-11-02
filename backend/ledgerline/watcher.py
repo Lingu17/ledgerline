@@ -44,7 +44,7 @@ def sweep(orgs: Any, control: Any, *, deposits: bool = False) -> int:
         try:
             ctx = orgs.get(org_id)
             _check_links(ctx)
-            if deposits:
+            if deposits and ctx.settings.airwallex_global_account_ids:
                 sandbox_receipts.discover(ctx, ACTOR, since=org["created_at"])
             checked += 1
         except Exception as exc:  # noqa: BLE001 - a provider or configuration problem in one organization must not stop the rest

@@ -141,6 +141,7 @@ function balanceEmail(l: { invoice_id: string; amount_minor: number; url: string
 
 function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const d = useLoad(() => get<DepositDetail>(`/deposits/${id}`), [id]);
+  const bank = useLoad(() => get<{ bank: { mode: string } }>("/status"), []);
   const { run, busy } = useAction();
   const { can } = useAuth();
   const x = d.data;
@@ -212,7 +213,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                         <button className="btn small" onClick={() => navigator.clipboard?.writeText(balanceEmail(l, x.currency, x.payer_name).body)}>Copy message</button>
                       </div>}
                       {can("operator") && l.status === "sandbox_created" && <> <button className="btn small" disabled={!!busy} onClick={() => run(`check-${l.id}`, () => post(`/integrations/sandbox/payment-links/${l.id}/check`), (r: any) => r.status === "paid" ? "Paid and booked" : "Not paid yet")}>Check payment</button></>}
-                      {can("owner") && x.source.startsWith("airwallex_sandbox") && l.status === "local_draft" && <button className="btn small" disabled={!!busy} onClick={() => run(`link-${l.id}`, () => post(`/integrations/sandbox/payment-links/${l.id}/publish`), (r: any) => r.status === "sandbox_created" ? "Sandbox link created; nothing emailed" : r.note)}>Create payment link</button>}
+                      {can("owner") && bank.data?.bank.mode === "airwallex_sandbox" && l.status === "local_draft" &&<button className="btn small" disabled={!!busy} onClick={() => run(`link-${l.id}`, () => post(`/integrations/sandbox/payment-links/${l.id}/publish`), (r: any) => r.status === "sandbox_created" ? "Sandbox link created; nothing emailed" : r.note)}>Create payment link</button>}
                     </td><td className="num"><Money minor={l.amount_minor} ccy={x.currency} /></td></tr>
                   ))}
                 </tbody>
