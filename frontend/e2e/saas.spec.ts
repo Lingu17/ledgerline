@@ -70,7 +70,8 @@ test("settings lists sign-in methods", async ({ page }) => {
   await page.goto("/#/settings");
   const card = page.locator(".card", { hasText: "Sign-in methods" });
   await expect(card.getByText("Email and password")).toBeVisible();
-  await expect(card.getByText("Not set up on this server")).toHaveCount(2);
+  await expect(card.getByText("Not set up on this server")).toHaveCount(1);
+  await expect(card.getByText("Apple")).toHaveCount(0); // not offered, so no row that looks unfinished
   await card.screenshot({ path: "test-results/signin-methods.png" });
 });
 
