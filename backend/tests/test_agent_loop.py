@@ -1,7 +1,7 @@
 """The agent asks by itself: nobody clicks, the checks still apply, and an unreachable agent loses nothing."""
 from types import SimpleNamespace
 
-from ledgerline import agent_loop, db, demo, ledger, payouts, watcher
+from ledgerline import agent_loop, audit, db, demo, ledger, payouts, watcher
 from ledgerline.reconcile import pending_agent_questions
 
 from .conftest import one, run_to
@@ -105,7 +105,7 @@ def test_refund_a_person_approved_but_held_back_stays_held_when_another_payment_
     payouts.decide(ctx, a["id"], approve=True, actor="approver@test", seen_scope_hash=a["scope_hash"])
     new_unclear_payment(ctx, "NEW-1")
     assert agent_loop.ask_pending(ctx)["asked"] == 1
-    assert refunds(ctx) == 0  # only the person who approved it may send it
+    assert refunds(ctx) == 0  # a person must press send; nothing sends it automatically
     assert one(ctx, "SELECT status FROM approvals WHERE id = ?", (a["id"],))["status"] == "approved"
 
 
@@ -136,3 +136,63 @@ def test_real_webhook_on_a_real_company_reaches_the_agent_with_no_click(client, 
     assert r.status_code == 200, r.text
     d = client.get(f"/api/deposits/{r.json()['deposit_id']}").json()
     assert d["status"] == "credited" and d["evidence"][0]["verdict"] == "verified"
+
+
+def set_paused(ctx, paused):
+    with ctx.conn() as conn, db.transaction(conn):
+        db.set_setting(conn, "money_out_paused", paused)
+
+
+def policy_approved_refund_held_by_pause(ctx):
+    run_to(ctx, "links")
+    set_refund_limit(ctx, "GBP", 500_000)
+    set_paused(ctx, True)
+    agent_loop.on_arrival(real_company(ctx))
+    a = one(ctx, "SELECT * FROM approvals WHERE deposit_id = 'DEP-1006'")
+    assert a["decided_by"] == "policy:auto_limit" and refunds(ctx) == 0
+    return a
+
+
+def test_limit_lowered_while_paused_moves_the_refund_to_a_second_person(ctx):
+    a = policy_approved_refund_held_by_pause(ctx)
+    set_refund_limit(ctx, "GBP", 100_000)
+    set_paused(ctx, False)
+    assert payouts.auto_execute_ready(ctx) == []
+    assert refunds(ctx) == 0
+    now = one(ctx, "SELECT * FROM approvals WHERE id = ?", (a["id"],))
+    assert (now["status"], now["decided_by"], now["decided_at"]) == ("pending", None, None)
+    event = one(ctx, "SELECT * FROM audit_events WHERE action = 'approval.returned_to_person' AND entity_id = ?", (a["id"],))
+    assert "limit" in event["detail"]
+    with ctx.conn() as conn:
+        assert audit.verify_chain(conn)["ok"]
+    # The normal path takes over: a second person approves, a person sends, under the same scope.
+    payouts.decide(ctx, a["id"], approve=True, actor="approver@test", seen_scope_hash=a["scope_hash"])
+    payouts.execute_refund(ctx, a["id"], "operator@test")
+    assert refunds(ctx) == 1
+
+
+def test_refund_still_under_the_limit_sends_automatically_after_resume(ctx):
+    a = policy_approved_refund_held_by_pause(ctx)
+    set_refund_limit(ctx, "GBP", 480_000)  # exactly the refund: still within the limit
+    set_paused(ctx, False)
+    assert payouts.auto_execute_ready(ctx) == [a["id"]]
+    assert refunds(ctx) == 1
+
+
+def test_nothing_changes_or_sends_while_the_pause_is_active(ctx):
+    a = policy_approved_refund_held_by_pause(ctx)
+    set_refund_limit(ctx, "GBP", 100_000)
+    assert payouts.auto_execute_ready(ctx) == []
+    assert refunds(ctx) == 0
+    assert one(ctx, "SELECT status FROM approvals WHERE id = ?", (a["id"],))["status"] == "approved"
+
+
+def test_person_approved_refund_over_the_new_limit_can_still_be_sent(ctx):
+    run_to(ctx, "agents")
+    a = one(ctx, "SELECT * FROM approvals WHERE deposit_id = 'DEP-1006'")
+    payouts.decide(ctx, a["id"], approve=True, actor="approver@test", seen_scope_hash=a["scope_hash"])
+    set_refund_limit(ctx, "GBP", 100)
+    assert payouts.auto_execute_ready(ctx) == []  # never sent automatically
+    assert one(ctx, "SELECT status FROM approvals WHERE id = ?", (a["id"],))["status"] == "approved"  # and not sent back
+    payouts.execute_refund(ctx, a["id"], "operator@test")
+    assert refunds(ctx) == 1

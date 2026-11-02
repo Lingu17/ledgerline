@@ -169,7 +169,7 @@ def _event(conn, op_id, frm, to, detail, now):
                  (op_id, frm, to, detail, now))
 
 
-def execute_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any]:
+def execute_refund(ctx: AppContext, approval_id: str, actor: str, *, automatic: bool = False) -> dict[str, Any]:
     with ctx.conn() as conn:
         with db.transaction(conn):
             now = iso(ctx.clock.now())
@@ -183,6 +183,16 @@ def execute_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, A
                 raise PayoutError(f"approval is {a['status']}; it must be approved before execution")
             if ctx.paused(conn):
                 raise Paused("money-out is paused; the approval is kept and can execute after resume")
+            if automatic and a["decided_by"] == "policy:auto_limit":
+                # The limit may have been lowered since the policy approved this, for example while money-out was paused.
+                stored = json.loads(a["scope"])
+                limit = ctx.policy(conn)["refund_auto_limit_minor"][stored["currency"]]
+                if stored["amount_minor"] > limit:
+                    conn.execute("UPDATE approvals SET status='pending', decided_by=NULL, decided_at=NULL WHERE id = ?", (approval_id,))
+                    audit.record(conn, now, "system", "approval.returned_to_person", "approval", approval_id,
+                                 {"reason": "the amount is now over the refund auto-approval limit", "amount_minor": stored["amount_minor"],
+                                  "limit_minor": limit, "currency": stored["currency"]})
+                    return {"operation": None, "returned_to_person": True}
             check = _recheck(conn, a, now)
             if not check["ok"]:
                 stale_reason = "; ".join(check["problems"])
@@ -387,8 +397,8 @@ def auto_execute_ready(ctx: AppContext, actor: str = "system") -> list[str]:
     done = []
     for aid in ids:
         try:
-            execute_refund(ctx, aid, actor)
-            done.append(aid)
+            if not execute_refund(ctx, aid, actor, automatic=True).get("returned_to_person"):
+                done.append(aid)
         except (Paused, StaleApproval, PayoutError, ReconcileError):
             continue
     return done

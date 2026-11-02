@@ -259,6 +259,24 @@ test("first-visit guide leads to the agent's decision, and can be hidden", async
   await expect(page.getByRole("heading", { name: "See what it does in three minutes" })).toHaveCount(0);
 });
 
+test("refund held by the pause returns to a second person when the limit is lowered", async ({ page }) => {
+  await signUp(page, { org: `Limit ${uniq()}`, email: `limit-${uniq()}@e2e.test`, sample: true });
+  const r = await page.evaluate(async () => {
+    const me = await (await fetch("/api/auth/me")).json();
+    const send = (method: string, url: string, body: unknown) => fetch(url, { method, headers: { "Content-Type": "application/json", "X-CSRF-Token": me.csrf_token }, body: JSON.stringify(body) });
+    const policy = (await (await fetch("/api/status")).json()).policy;
+    const limit = (gbp: number) => send("PUT", "/api/settings/policy", { ...policy, refund_auto_limit_minor: { ...policy.refund_auto_limit_minor, GBP: gbp } });
+    const steps = [await limit(500_000), await send("POST", "/api/settings/pause", { paused: true, reason: "e2e check" }),
+      await send("POST", "/api/deposits/DEP-1006/ask-agent", {}), await limit(100_000), await send("POST", "/api/settings/pause", { paused: false, reason: "e2e check" }),
+      await send("POST", "/api/demo/practice-unclear-payment", {})];
+    return steps.map((s) => s.status);
+  });
+  expect(r).toEqual([200, 200, 200, 200, 200, 200]);
+  await page.goto("/#/approvals");
+  await expect(page.getByRole("button", { name: "Approve…" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Execute refund" })).toHaveCount(0);
+});
+
 test("phone width: bill payments read as cards with nothing to scroll sideways", async ({ browser }) => {
   const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
   const page = await ctx.newPage();
