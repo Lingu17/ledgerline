@@ -250,7 +250,7 @@ test("first-visit guide leads to the agent's decision, and can be hidden", async
   await page.goto("/#/inbox");
   await page.getByRole("link", { name: "Open this payment" }).click();
   await expect(page.getByText("Next:", { exact: true })).toBeVisible();
-  await expect(page.getByText("Ask the payer's agent, or read their remittance.")).toBeVisible();
+  await expect(page.getByText("In a real company the agent asks by itself.")).toBeVisible();
   await page.goto("/#/inbox");
   await page.getByRole("button", { name: "Hide this guide" }).click();
   await expect(page.getByRole("heading", { name: "See what it does in three minutes" })).toHaveCount(0);

@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
 from ..payer_agents.keys import key_location
-from .. import audit, bill_payments, ceo, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace, wrong_currency
+from .. import agent_loop, audit, bill_payments, ceo, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace, wrong_currency
 from ..clock import iso
 from ..context import AppContext, validate_policy
 from ..payer_agents.client import explain_payments
@@ -240,8 +240,10 @@ def resolve(request: Request, deposit_id: str, body: dict[str, Any], operator: s
 
 
 @router.post("/payments")
-def record_payment(request: Request, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
-    return workspace.record_manual_payment(ctx_of(request), body, operator)
+def record_payment(request: Request, body: dict[str, Any], background: BackgroundTasks, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    result = workspace.record_manual_payment(ctx_of(request), body, operator)
+    background.add_task(agent_loop.on_arrival, ctx_of(request))
+    return result
 
 
 # Typed request bodies: a field of the wrong JSON type is refused with 422 before anything reaches the database
@@ -312,8 +314,10 @@ class CsvBody(BaseModel):
 
 
 @router.post("/payments/import")
-def import_payments(request: Request, body: CsvBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
-    return workspace.import_payments_csv(ctx_of(request), body.csv, operator)
+def import_payments(request: Request, body: CsvBody, background: BackgroundTasks, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    result = workspace.import_payments_csv(ctx_of(request), body.csv, operator)
+    background.add_task(agent_loop.on_arrival, ctx_of(request))
+    return result
 
 
 @router.post("/customers/import")
@@ -774,6 +778,23 @@ def _sample_only(ctx: AppContext) -> None:
         raise HTTPException(409, "the walkthrough runs only in sample organizations; create one from the organization menu")
 
 
+@router.post("/demo/practice-unclear-payment")
+def practice_unclear_payment(request: Request, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    """Practice companies only: a new payment with no reference arrives, and the agent handles it with no further click."""
+    from ..reconcile import ingest_deposit
+
+    ctx = ctx_of(request)
+    _sample_only(ctx)
+    with ctx.conn() as conn, db.transaction(conn):
+        deposit_id, created = ingest_deposit(conn, ctx, {"provider_ref": "PRACTICE-AUTO-1", "currency": "USD", "amount_minor": 120_000, "payer_name": "DUNMORE ANALYTICS LLC",
+                                                         "reference": "", "received_at": iso(ctx.clock.now())}, source="practice_payment")
+        if created:
+            audit.record(conn, iso(ctx.clock.now()), operator, "practice.unclear_payment_added", "deposit", deposit_id, {})
+    if created:
+        agent_loop.ask_pending(ctx, only=deposit_id)
+    return {"deposit_id": deposit_id, "created": created}
+
+
 @router.post("/demo/practice-wrong-currency")
 def practice_wrong_currency(request: Request, operator: str = Depends(require_operator)) -> dict[str, Any]:
     """Practice companies only: a USD payment against a EUR invoice, added on request so the six reference payments stay as they are."""
@@ -836,4 +857,5 @@ async def airwallex_webhook(request: Request, org_id: str, background: Backgroun
     )
     # New cash may change a bill decision. Done after the response, so a rate lookup cannot delay the receipt.
     background.add_task(treasury.refresh_decisions, ctx, "deposit received")
+    background.add_task(agent_loop.on_arrival, ctx)
     return result

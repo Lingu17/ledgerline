@@ -141,6 +141,11 @@ test("full journey as two people", async ({ page, browser }) => {
     await page.getByRole("button", { name: "Replay", exact: true }).first().click();
     await expect(page.getByText("Replay identical")).toBeVisible();
   });
+  await step("a new unclear payment is handled with no further click", async () => {
+    await page.goto("/#/payments");
+    await page.getByRole("button", { name: "Receive an unclear payment" }).click();
+    await expect(page.getByText(/agent handled it with no click/)).toBeVisible({ timeout: 25_000 });
+  });
   await step("wrong-currency payment converted", async () => {
     await page.goto("/#/payments");
     await page.getByRole("button", { name: "Add a wrong-currency payment" }).click();
@@ -224,5 +229,5 @@ test("full journey as two people", async ({ page, browser }) => {
   });
   await opCtx.close();
   expect(problems).toEqual([]);
-  expect(done.length).toBeGreaterThanOrEqual(23);
+  expect(done.length).toBeGreaterThanOrEqual(24);
 });

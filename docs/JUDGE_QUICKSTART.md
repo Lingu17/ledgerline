@@ -5,7 +5,7 @@
 ## Five-minute path
 
 1. Open the link and click **Get started**.
-2. Enter any name, organization and email (nothing is emailed) and a password of 12+ characters with upper- and lower-case letters and a digit. Choose **Practice company**. You get your own isolated organization; other judges cannot see it.
+2. Enter any name, organization and email (nothing is emailed) and a password of 12+ characters with upper- and lower-case letters and a digit. Choose **Practice company**. It waits for you to press **Ask payer's agent** so you can watch; **Payments → Receive an unclear payment** shows the agent acting with no click, as it does in a real company. You get your own isolated organization; other judges cannot see it.
 3. **Inbox**: cash by currency and the payments that need a decision.
 4. **Payments → DEP-1005** (Dunmore, looks like a duplicate) → **Ask payer's agent**. The payer's agent answers over MCP with an Ed25519-signed claim; all three checks pass (signature, bound to this deposit and fresh, our records agree) and the plan is revised: the money becomes **advance credit** instead of a refund. No money moved.
 5. **Payments → DEP-1004** (Fjord) → **Ask payer's agent**. The agent claims another customer's invoice; the signature verifies but the records check fails, so the claim is **rejected** and the case goes to a person with the reason.

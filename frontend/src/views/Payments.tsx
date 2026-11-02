@@ -51,6 +51,7 @@ export function Payments({ route }: { route: Route }) {
             <option value="">All</option><option>USD</option><option>EUR</option><option>GBP</option>
           </select>
         </div>
+        {op && orgStatus.data?.org?.kind === "sample" && <button className="btn" disabled={!!busy} onClick={() => run("practice-auto", () => post<{ deposit_id: string }>("/demo/practice-unclear-payment"), (r) => `${r.deposit_id} arrived, and the agent handled it with no click`)}>Receive an unclear payment</button>}
         {op && orgStatus.data?.org?.kind === "sample" && <button className="btn" disabled={!!busy} onClick={() => run("practice-fx", () => post<{ deposit_id: string }>("/demo/practice-wrong-currency"), (r) => `Added ${r.deposit_id}: USD paid against a EUR invoice`)}>Add a wrong-currency payment</button>}
         {op && <button className="btn" onClick={() => setImporting(true)}>Import CSV</button>}
         {op && <button className="btn primary" onClick={() => setRecording(true)}>Record payment</button>}
@@ -134,10 +135,10 @@ function WrongCurrency({ id, canAct, run, busy }: { id: string; canAct: boolean;
   );
 }
 
-function nextStep(x: DepositDetail): string {
+function nextStep(x: DepositDetail, practice: boolean): string {
   const linkWaiting = x.payment_links.some((l) => l.status === "sandbox_created");
   switch (x.status) {
-    case "awaiting_evidence": return "Ask the payer's agent, or read their remittance.";
+    case "awaiting_evidence": return practice ? "Press Ask payer's agent to watch it happen. In a real company the agent asks by itself." : "The agent asks by itself and retries. You can also ask now or read their remittance.";
     case "escalated": return x.category === "wrong_currency" ? "Convert only what the invoice needs, or leave it held." : "A person decides, using the reason below.";
     case "refund_awaiting_approval": return "A second person approves or rejects the refund under Approvals.";
     case "refund_in_flight": return "Nothing for you to do. The refund stays open until the bank reports it paid.";
@@ -158,7 +159,7 @@ function balanceEmail(l: { invoice_id: string; amount_minor: number; url: string
 
 function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const d = useLoad(() => get<DepositDetail>(`/deposits/${id}`), [id]);
-  const bank = useLoad(() => get<{ bank: { mode: string } }>("/status"), []);
+  const bank = useLoad(() => get<{ bank: { mode: string }; org: { kind: string } | null }>("/status"), []);
   const { run, busy } = useAction();
   const { can } = useAuth();
   const x = d.data;
@@ -175,7 +176,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
             <div className="row"><Pill status={x.status} /><span className="small">{CATEGORY_LABEL[x.category ?? ""] ?? x.category}</span></div>
             <span className="muted small">Reference: <span className="mono">{x.reference || "none"}</span></span>
           </div>
-          <div className="notice small"><b>Next:</b> {nextStep(x)}</div>
+          <div className="notice small"><b>Next:</b> {nextStep(x, bank.data?.org?.kind === "sample")}</div>
           {x.source === "manual_import" && <div className="notice warn">Manually recorded by an operator. Not verified against a bank statement feed.</div>}
           {x.escalation_reason && x.status === "escalated" && <div className="notice risk"><b>Why this needs review:</b> {x.escalation_reason}</div>}
 
@@ -398,7 +399,7 @@ function DepositActions({ x, run, busy }: { x: DepositDetail; run: ReturnType<ty
   if (x.status === "awaiting_evidence") {
     return (
       <div className="notice warn row" style={{ justifyContent: "space-between" }}>
-        <span>Waiting on the payer's explanation. Ledgerline asks their agent over MCP and verifies the signed answer.</span>
+        <span>Waiting on the payer's explanation. The agent asks over MCP and verifies the signed answer.</span>
         <button className="btn primary" disabled={!!busy} onClick={() => run("ask", () => post(`/deposits/${x.id}/ask-agent`), (r: any) => `Payer answer ${r.verification.verdict}`)}>
           {busy === "ask" ? "Asking…" : "Ask payer's agent"}
         </button>

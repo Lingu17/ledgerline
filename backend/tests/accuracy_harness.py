@@ -180,6 +180,9 @@ class Scenario:
         self.expect(r.status_code == 200, f"signup: {r.status_code} {r.text}")
         self.c.headers["X-CSRF-Token"] = r.json()["csrf_token"]
         self.org_id = r.json()["organization"]["id"]
+        # This harness checks the rules against an independent model, so it predicts the state before any agent answer.
+        # Asking by itself is covered in test_agent_loop.py.
+        self.c.app.state.orgs.get(self.org_id).org["agent_auto_ask"] = False
 
     # -- helpers
     def expect(self, ok: bool, what: str) -> None:

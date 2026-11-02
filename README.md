@@ -28,7 +28,7 @@
 
 A 12-person company bills customers in the US, Europe and the UK. Money arrives with a missing reference, a bank fee taken off, or in the wrong currency, and sometimes a customer pays twice. One finance person chases each case by email, for days, while bills fall due in another currency.
 
-**Ledgerline does that chasing.** It settles the clear payments by itself. When one is unclear, it asks the customer's own finance agent what the money was for, and it **checks the answer before believing it**. Then it settles the invoice, holds a credit, requests the exact balance, or proposes a refund that a second person must approve.
+**Ledgerline does that chasing.** It settles the clear payments by itself. When one is unclear, it asks the customer's own finance agent what the money was for, and it **checks the answer before believing it**. It does this by itself as soon as the payment arrives. Then it settles the invoice, holds a credit, requests the exact balance, or proposes a refund. Small refunds backed by verified evidence go through under your limit; anything larger, and every bill payment, needs a second person.
 
 > **The moment that shows it.** A payment looks like a duplicate, so the first plan is to refund it. The customer's agent answers, with a signature, that it was an advance. Ledgerline checks that answer, changes its decision, and **no wrong refund ever leaves the bank**. Another agent gives a signed but false answer: it is rejected, and a person gets the reason.
 
@@ -38,7 +38,7 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 
 | You want | What you get |
 |:--|:--|
-| **Less manual chasing** | Clear payments settle with no person (4 of 6 in the reference company), and the rest arrive with the reason and the next step |
+| **Less manual chasing** | In the reference company, 4 of 6 payments settle with no person, including one the agent resolved by asking by itself, and the rest arrive with the reason and the next step |
 | **No costly mistakes** | No double payments, no refund of money that was really an advance, and no money out on one person's say-so |
 | **To know where you stand** | The **CEO view** answers four questions on one screen: are we safe, what happened, what needs me, can I trust these numbers |
 | **Cash in the right place** | Each bill gets one answer: pay it, convert only what is short, delay it, or ask a person. It can also bring cash in early |
@@ -62,9 +62,9 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 | Feature | What it does | Status |
 |:--|:--|:--:|
 | **Payment matching** | Clean matches, bank fees written off, part payments, duplicates and missing references | Live |
-| **Ask the payer's agent** | A signed answer must pass three checks: who signed it, that it is about this payment and still fresh, and that your records agree | Tested, simulated agents |
+| **The agent asks by itself** | An unclear payment gets its question asked on arrival, with no click. A signed answer must pass three checks: who signed it, that it is about this payment and still fresh, and that your records agree | Tested, simulated agents |
 | **AI document reader** | Claude reads remittance emails and PDFs and suggests; a person decides | Live |
-| **Second-person approval** | The approver sees the exact amount and destination; if anything changes, the approval is void | Live |
+| **Second-person approval** | Every bill payment, and refunds above your limit. The approver sees the exact amount and destination; if anything changes, the approval is void | Live |
 | **Refunds and bill payments** | One transfer under a duplicate lock. SENT is not final; only PAID closes it | Live |
 | **What to pay first** | Ranks bills and decides: fund, convert, defer or escalate. A bill that releases more cash than it costs goes first | Tested |
 | **Convert only the shortfall** | Keeps a reserve per currency and buys only what a bill needs | Live |
@@ -84,14 +84,14 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 ## 🚀 Try it (five minutes)
 
 1. Open **https://35-207-220-110.sslip.io** → **Get started** → any name and email (nothing is emailed) → **Practice company**.
-2. The **Inbox** has a short guide. **Payments → DEP-1005 → Ask payer's agent**: the duplicate turns out to be an advance, and the refund is dropped.
+2. The **Inbox** has a short guide. **Payments → DEP-1005 → Ask payer's agent**: the duplicate turns out to be an advance, and the refund is dropped. A practice company waits for you to press this so you can watch; **Receive an unclear payment** shows a new payment handled with no click, which is how a real company works.
 3. **Payments → DEP-1004 → Ask payer's agent**: a correctly signed but false answer is rejected.
 4. **Practice steps**: a currency conversion, a refund a person approves, and the bank moving from SENT to PAID.
 5. **CEO view**: the whole company on one screen.
 
 Each company's data is isolated. A practice company uses made-up data and a simulated bank. For your own company, choose **My company** and connect your Airwallex sandbox keys under Settings.
 
-**What it does not do yet:** handle live money, send email from the server (balance requests open as a draft in your own mail), or connect a customer's own hosted agent (payer agents run on this server). Time saved has not been measured with a real customer.
+**What it does not do yet:** handle live money, send email from the server (balance requests open as a draft in your own mail), or connect a customer's own hosted agent. **The payer agents are simulations:** they use real MCP and real signatures, but answer from a fixed table with keys held on this server, so today the signature proves the mechanism, not that an outside party said anything. Without an agent, a person or the document reader handles the case, so it is useful today. Time saved has not been measured with a real customer.
 
 ---
 
@@ -419,7 +419,7 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 
 ## ⚠️ Honest limits
 
-- Payer agents are simulations (real MCP and signatures); real customers' agents would be discovered at onboarding.
+- Payer agents are simulations: real MCP and signatures, but answers come from a fixed table and keys sit on this server. Real customers' agents would register their own keys at onboarding. Check 3 tests plausibility against your records; it cannot tell a real advance from a false one that fits.
 - Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov and it was paid with a test card; Ledgerline asks Airwallex every two minutes rather than using link webhooks, and settlement timing is not tracked. The earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
 - Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery, password reset, SSO/MFA or billing.

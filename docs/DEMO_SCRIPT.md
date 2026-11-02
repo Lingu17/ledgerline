@@ -12,6 +12,7 @@ Prepare two windows: a fresh **Practice company** at https://35-207-220-110.ssli
 | 0:20 | **Ask payer's agent** | **New information:** a signed answer over MCP, "advance for the March invoice". Show the three checks: signature ✓, bound to this deposit and fresh ✓, our records ✓. **Revised decision:** hold as credit; the refund is dropped before any money moved. |
 | 0:50 | Home screen or a sentence over Inbox | "Goal: reconcile every incoming payment for a 12-person company billing in three currencies, never pay twice, and keep a person in control of money that leaves." Six payments; rules in code settled the clean ones. |
 | 1:05 | Payments → DEP-1004 → **Ask payer's agent** | The same agent mechanism, but it lies: correctly signed, claiming another customer's invoice. Signature ✓, records ✗. Rejected and escalated with the reason. "A signature proves who said it, not that it's true." |
+| 1:25 | Payments → **Receive an unclear payment** | "In a real company nobody presses that button: here a new payment arrives and the agent asks by itself." Open it: first plan, agent's answer, revised decision, no click. |
 | 1:35 | Payments → DEP-1003 | GBP 2,400 against 3,600 is more than a bank fee: partial, 1,200 still due, and a balance request for exactly that amount. |
 | 1:50 | DEP-1003 → **Open email draft** | The ready-to-send message with the exact balance. Five seconds; do not dwell. |
 | 1:55 | Practice steps, or Approvals | DEP-1006 really was paid twice and is over the auto-limit. A second person approves the exact amount, destination and evidence hash. SENT keeps the liability; only PAID releases it. |
@@ -25,7 +26,7 @@ Prepare two windows: a fresh **Practice company** at https://35-207-220-110.ssli
 
 **Say these limits on camera:**
 
-- "Payer agents here are simulations using real MCP and real signatures; I run them myself, and one lies on purpose."
+- "Payer agents here are simulations using real MCP and real signatures; I run them myself, and one lies on purpose. Customers mostly don't have agents yet, so today rules, the document reader and a person handle those cases, and the same checks are ready when they do."
 - "PAID on the sandbox comes from Airwallex's simulation call. No real money moves."
 - For the EUR 100 payment, if both accounts are yours: "Both accounts here are mine, so this shows the control, not independent review." Drop this line if a real second person approved it.
 

@@ -2,6 +2,7 @@
 
 - Open payment links are asked whether they were paid; a paid one is booked by the same code as the button.
 - Every few rounds, deposits are listed as the fallback for missed webhooks.
+- A payment still waiting on a payer's agent is asked about again.
 
 Both are idempotent on the provider's id. Nothing here sends money, creates a link or retries a submission.
 One organization's failure never stops the others.
@@ -13,7 +14,7 @@ import threading
 from datetime import timedelta
 from typing import Any
 
-from . import db, early_pay, payment_links, sandbox_receipts
+from . import agent_loop, db, early_pay, payment_links, sandbox_receipts
 from .clock import iso
 
 log = logging.getLogger("ledgerline.watcher")
@@ -47,6 +48,7 @@ def sweep(orgs: Any, control: Any, *, deposits: bool = False) -> int:
         try:
             ctx = orgs.get(org_id)
             _check_links(ctx)
+            agent_loop.ask_pending(ctx)
             if deposits and ctx.settings.airwallex_global_account_ids:
                 sandbox_receipts.discover(ctx, ACTOR, since=org["created_at"])
             checked += 1
