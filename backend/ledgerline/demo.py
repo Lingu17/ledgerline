@@ -46,6 +46,8 @@ def state(ctx: AppContext) -> dict[str, Any]:
                 blocked = "no refund approval is waiting"
             elif a["status"] == "pending":
                 blocked = f"waiting for a person to approve {a['id']} on the Approvals page"
+            elif payouts.sender_must_differ(a):
+                blocked = f"{a['decided_by']} approved {a['id']}, so a different team member must send it on the Approvals page (invite one under Team)"
         return {
             "steps": [{"id": i, "title": t, "description": d, "done": i in done} for i, t, d in STEPS],
             "next": nxt,

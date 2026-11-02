@@ -448,6 +448,7 @@ def list_approvals(request: Request) -> list[dict[str, Any]]:
             ev = db.row(conn, "SELECT id, verdict, reason, checks, source FROM evidence WHERE id = ?", (a["scope"].get("evidence_id"),)) if a["scope"].get("evidence_id") else None
             a["evidence"] = _loads(ev, "checks") if ev else None
             a["operation"] = db.row(conn, "SELECT * FROM operations WHERE approval_id = ?", (a["id"],))
+            a["sender_must_differ"] = payouts.sender_must_differ(a)
             out.append(a)
         return out
 

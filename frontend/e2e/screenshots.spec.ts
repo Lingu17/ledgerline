@@ -53,8 +53,22 @@ test("capture README screenshots", async ({ page }) => {
   await shot(page, "07-approval");
   await page.getByRole("button", { name: "Approve…" }).click();
   await page.getByRole("button", { name: "Approve this scope" }).click();
-  await page.getByRole("button", { name: "Execute refund" }).click();
-  await page.waitForTimeout(1000);
+  await page.goto("/#/team");
+  await page.getByRole("button", { name: "Invite member" }).click();
+  await page.getByLabel("Email", { exact: true }).fill(`second-${randomBytes(4).toString("hex")}@shots.test`);
+  await page.getByLabel("Role", { exact: true }).selectOption("operator");
+  await page.getByRole("button", { name: "Create invitation" }).click();
+  const link = await page.getByLabel("Invitation link").inputValue();
+  const second = await (await page.context().browser()!.newContext()).newPage();
+  await second.goto(link);
+  await second.getByLabel("Your name", { exact: true }).fill("Second Member");
+  await second.getByLabel(/password/i).fill(PASSWORD);
+  await second.getByRole("button", { name: "Join organization" }).click();
+  await expect(second.getByLabel("Main navigation")).toBeVisible();
+  await second.goto("/#/approvals");
+  await second.getByRole("button", { name: "Execute refund" }).click();
+  await second.waitForTimeout(1000);
+  await page.keyboard.press("Escape");
   await page.goto("/#/walkthrough");
   await runNext(page); // record approval step
   await runNext(page); // SENT

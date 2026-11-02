@@ -16,7 +16,7 @@ def _pending_approval(ctx):
 
 def _approve(ctx):
     a = _pending_approval(ctx)
-    payouts.decide(ctx, a["id"], approve=True, actor="op", seen_scope_hash=a["scope_hash"])
+    payouts.decide(ctx, a["id"], approve=True, actor="approver", seen_scope_hash=a["scope_hash"])
     return a["id"]
 
 
@@ -207,7 +207,7 @@ def test_rejected_by_provider_releases_reservation(ready):
 
 def test_full_demo_scorecard(ctx):
     run_to(ctx, "treasury")
-    _approve(ctx)
+    payouts.execute_refund(ctx, _approve(ctx), "op")
     for step in ("approve", "bank_sent", "bank_paid"):
         run_step(ctx, step, "op")
     from ledgerline.demo import scorecard

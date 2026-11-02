@@ -51,7 +51,9 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
                 <b>{money(a.scope.amount_minor, a.scope.currency)}</b> to {a.scope.destination}
                 <div className="muted small">{a.id} · approved by {a.decided_by} {when(a.decided_at)}</div>
               </div>
-              {op && <button className="btn primary" disabled={!!busy}
+              {a.sender_must_differ && a.decided_by === me?.user.email ? (
+                <div className="small muted" style={{ maxWidth: 320 }}>You approved this and nobody on the team proposed it, so you can't also send it. Any other Operator or Owner can. <a href="#/team">Invite one under Team</a>.</div>
+              ) : op && <button className="btn primary" disabled={!!busy}
                 onClick={() => run("exec" + a.id, () => post(`/approvals/${a.id}/execute`), (r: any) => `Refund ${r.operation.id} is ${r.operation.status}`)}>
                 {busy === "exec" + a.id ? "Sending…" : "Execute refund"}
               </button>}

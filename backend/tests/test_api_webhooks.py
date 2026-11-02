@@ -148,7 +148,9 @@ def test_webhook_secret_is_per_organization(client, app):
     assert client.post("/api/webhooks/airwallex/org_000000000000", content=body).status_code == 404
 
 
-def test_guided_demo_over_api_with_stale_view_protection(client):
+def test_guided_demo_over_api_with_stale_view_protection(client, app):
+    from .test_saas import _invite_and_join
+
     for step in ["seed", "deposits", "links", "agents", "treasury"]:
         r = client.post("/api/demo/step", json={"step": step}, headers=OP)
         assert r.status_code == 200, r.text
@@ -161,6 +163,10 @@ def test_guided_demo_over_api_with_stale_view_protection(client):
     assert r.status_code == 409
     r = client.post(f"/api/approvals/{ap['id']}/approve", json={"scope_hash": ap["scope_hash"]}, headers=OP)
     assert r.json()["status"] == "approved"
+    assert "different team member" in client.get("/api/demo").json()["blocked"]
+    assert client.post("/api/demo/step", json={"step": "approve"}, headers=OP).status_code == 409
+    second = _invite_and_join(client, app, "second@northbeam.test", "operator")
+    assert second.post(f"/api/approvals/{ap['id']}/execute").status_code == 200
     for step in ["approve", "bank_sent", "bank_paid"]:
         assert client.post("/api/demo/step", json={"step": step}, headers=OP).status_code == 200
     ledger = client.get("/api/ledger").json()

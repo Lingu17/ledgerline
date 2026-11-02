@@ -102,16 +102,20 @@ test("full journey as two people", async ({ page, browser }) => {
     await expect(op.getByLabel("Main navigation")).toBeVisible();
   });
 
-  await step("refund: second person approves, executes, SENT, PAID", async () => {
+  await step("refund: one person approves, cannot also send, another sends, SENT, PAID", async () => {
     await op.goto("/#/approvals");
     await op.getByRole("button", { name: "Approve…" }).click();
     await op.getByRole("button", { name: "Approve this scope" }).click();
-    await op.getByRole("button", { name: "Execute refund" }).click();
-    await op.waitForLoadState("networkidle");
-    await op.getByRole("button", { name: /: sent$/ }).first().click();
-    await op.waitForLoadState("networkidle");
-    await op.getByRole("button", { name: /: paid$/ }).first().click();
-    await expect(op.getByText("paid", { exact: false }).first()).toBeVisible();
+    await expect(op.getByText(/so you can't also send it/)).toBeVisible();
+    await expect(op.getByRole("button", { name: "Execute refund" })).toHaveCount(0);
+    await page.goto("/#/approvals");
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.getByRole("button", { name: "Execute refund" }).click();
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /: sent$/ }).first().click();
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /: paid$/ }).first().click();
+    await expect(page.getByText("paid", { exact: false }).first()).toBeVisible();
   });
 
   await step("cash squeeze, bill payment by two people to PAID", async () => {

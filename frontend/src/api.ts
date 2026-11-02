@@ -177,6 +177,7 @@ export interface Deposit {
 
 export interface Approval {
   id: string;
+  sender_must_differ: boolean;
   operation_type: string;
   deposit_id: string;
   scope: {

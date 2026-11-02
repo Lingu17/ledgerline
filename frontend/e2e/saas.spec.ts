@@ -259,6 +259,18 @@ test("first-visit guide leads to the agent's decision, and can be hidden", async
   await expect(page.getByRole("heading", { name: "See what it does in three minutes" })).toHaveCount(0);
 });
 
+test("the approver of an agent-proposed refund is told why they cannot send it", async ({ page }) => {
+  await signUp(page, { org: `Sender ${uniq()}`, email: `sender-${uniq()}@e2e.test`, sample: true });
+  await page.goto("/#/payments?deposit=DEP-1006");
+  await page.getByRole("button", { name: /Ask payer's agent/ }).first().click();
+  await expect(page.locator(".drawer").getByText("Refund for approval").first()).toBeVisible({ timeout: 25_000 });
+  await page.goto("/#/approvals");
+  await page.getByRole("button", { name: "Approve…" }).click();
+  await page.getByRole("button", { name: "Approve this scope" }).click();
+  await expect(page.getByText(/so you can't also send it/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Execute refund" })).toHaveCount(0);
+});
+
 test("refund held by the pause returns to a second person when the limit is lowered", async ({ page }) => {
   await signUp(page, { org: `Limit ${uniq()}`, email: `limit-${uniq()}@e2e.test`, sample: true });
   const r = await page.evaluate(async () => {

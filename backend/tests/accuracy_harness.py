@@ -539,6 +539,15 @@ def run_sample_walkthrough(app, n: int) -> dict[str, Any]:
                 if a["status"] == "pending":
                     ok = c.post(f"/api/approvals/{a['id']}/approve", json={"scope_hash": a["scope_hash"]})
                     assert ok.status_code == 200, f"walkthrough {n} approve: {ok.status_code} {ok.text}"
+                    # The agent proposed this refund, so a second member sends it.
+                    inv = c.post("/api/team/invitations", json={"email": f"second-{n}-{random.randrange(10**8)}@accuracy.test", "role": "operator"})
+                    assert inv.status_code == 200, inv.text
+                    second = TestClient(app)
+                    me = second.post(f"/api/invitations/{inv.json()['invite_path'].split('token=')[1]}/accept", json={"name": "Second", "password": PASSWORD})
+                    assert me.status_code == 200, me.text
+                    second.headers["X-CSRF-Token"] = me.json()["csrf_token"]
+                    sent = second.post(f"/api/approvals/{a['id']}/execute")
+                    assert sent.status_code == 200, f"walkthrough {n} send: {sent.status_code} {sent.text}"
         s = c.post("/api/demo/step", json={"step": step})
         assert s.status_code == 200, f"walkthrough {n} step {step}: {s.status_code} {s.text}"
     score = c.get("/api/overview").json()["scorecard"]

@@ -28,7 +28,7 @@
 
 A 12-person company bills customers in the US, Europe and the UK. Money arrives with a missing reference, a bank fee taken off, or in the wrong currency, and sometimes a customer pays twice. One finance person chases each case by email, for days, while bills fall due in another currency.
 
-**Ledgerline does that chasing.** It settles the clear payments by itself. When one is unclear, it asks the customer's own finance agent what the money was for, and it **checks the answer before believing it**. It does this by itself as soon as the payment arrives. Then it settles the invoice, holds a credit, requests the exact balance, or proposes a refund. Small refunds backed by a verified answer go out under your limit with no person involved; you set that limit, and the pause switch stops it. Anything larger, and every bill payment, needs a second person.
+**Ledgerline does that chasing.** It settles the clear payments by itself. When one is unclear, it asks the customer's own finance agent what the money was for, and it **checks the answer before believing it**. It does this by itself as soon as the payment arrives. Then it settles the invoice, holds a credit, requests the exact balance, or proposes a refund. Small refunds backed by a verified answer go out under your limit with no person involved; you set that limit, and the pause switch stops it. Anything larger, and every bill payment, needs two people: if the agent proposed a refund, the person who approves it cannot also send it.
 
 > **The moment that shows it.** A payment looks like a duplicate, so the first plan is to refund it. The customer's agent answers, with a signature, that it was an advance. Ledgerline checks that answer, changes its decision, and **no wrong refund ever leaves the bank**. Another agent gives a signed but false answer: it is rejected, and a person gets the reason.
 
@@ -64,7 +64,7 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 | **Payment matching** | Clean matches, bank fees written off, part payments, duplicates and missing references | Live |
 | **The agent asks by itself** | An unclear payment gets its question asked on arrival, with no click. A signed answer must pass three checks: who signed it, that it is about this payment and still fresh, and that your records agree | Tested, simulated agents |
 | **AI document reader** | Claude reads remittance emails and PDFs and suggests; a person decides | Live |
-| **Second-person approval** | Every bill payment, and refunds above your limit. The approver sees the exact amount and destination; if anything changes, the approval is void | Live |
+| **Two people for money out** | Every bill payment, and refunds above your limit. A person proposes and another approves; if the agent proposed it, one person approves and another sends. The approver sees the exact amount and destination; if anything changes, the approval is void | Live |
 | **Refunds and bill payments** | One transfer under a duplicate lock. SENT is not final; only PAID closes it | Live |
 | **What to pay first** | Ranks bills and decides: fund, convert, defer or escalate. A bill that releases more cash than it costs goes first | Tested |
 | **Convert only the shortfall** | Keeps a reserve per currency and buys only what a bill needs | Live |
@@ -290,7 +290,7 @@ scripts/            smoke_deploy.py, evaluate.py, accuracy_run.py
 | Reference + identified payer + currency, never amount alone | allocating money to the wrong customer |
 | A signed answer is a claim: registered key of the *asked* customer, bound to this deposit and amount, fresh, records agree | forged, replayed or false agent answers |
 | Approvals bind deposit version, amount, currency, destination and evidence hash; any change invalidates | approving one thing and paying another |
-| Proposer ≠ approver | one person moving money alone |
+| Proposer ≠ approver, and when the agent proposed a refund, approver ≠ sender | one person moving money alone |
 | One live refund per deposit, stable request ids, lookup before any retry | paying twice after a timeout |
 | SENT keeps the liability; only PAID releases it | treating an unsettled transfer as done |
 | Pause stops every money-out action; matching continues | runaway actions during an incident |
@@ -303,7 +303,7 @@ scripts/            smoke_deploy.py, evaluate.py, accuracy_run.py
 |:--|:--:|:--:|:--:|
 | Read everything, export evidence | ✓ | ✓ | ✓ |
 | Record/import payments, customers, invoices, resolve, ask agents, read remittances, propose returns | | ✓ | ✓ |
-| Approve/reject (not own proposals), execute, quotes, conversions, pause | | ✓ | ✓ |
+| Approve/reject (not own proposals), send (not an agent-proposed refund you approved), quotes, conversions, pause | | ✓ | ✓ |
 | Resume, policy, team, settings, sandbox tools, opening balances | | | ✓ |
 
 Every rule is enforced by the API; the UI only hides what you cannot do.

@@ -75,6 +75,14 @@ def current_scope(conn: sqlite3.Connection, deposit_id: str, amount_minor: int, 
     }
 
 
+def sender_must_differ(a: dict[str, Any]) -> bool:
+    """Two people must be involved. If a person proposed it, the approver is the second; if not, the sender has to be.
+    created_by is empty on older rows, "system" for the agent's proposals, and an email for a team member."""
+    proposer = a.get("created_by") or ""
+    by_person = bool(proposer) and proposer not in ("system", "rules", "agent") and ":" not in proposer
+    return not by_person and a.get("decided_by") != "policy:auto_limit"
+
+
 def create_refund_approval(conn: sqlite3.Connection, ctx: AppContext, deposit_id: str, *, amount_minor: int,
                            evidence_id: str | None, reason: str, actor: str = "system") -> dict[str, Any]:
     now = iso(ctx.clock.now())
@@ -201,6 +209,8 @@ def _send_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any
                                  {"reason": "the amount is now over the refund auto-approval limit", "amount_minor": stored["amount_minor"],
                                   "limit_minor": limit, "currency": stored["currency"]})
                     return {"operation": None, "returned_to_person": True}
+            if sender_must_differ(a) and actor.casefold() == (a["decided_by"] or "").casefold():
+                raise SelfApproval("you approved this refund and nobody on the team proposed it, so a different team member must send it")
             check = _recheck(conn, a, now)
             if not check["ok"]:
                 stale_reason = "; ".join(check["problems"])

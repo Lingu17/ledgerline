@@ -105,7 +105,7 @@ def test_concurrent_conversions_book_once(ctx):
 def test_immediate_failed_refund_does_not_lose_cash(ctx, status, monkeypatch):
     run_to(ctx, "treasury")
     a = one(ctx, "SELECT * FROM approvals WHERE status='pending'")
-    payouts.decide(ctx, a["id"], approve=True, actor="op", seen_scope_hash=a["scope_hash"])
+    payouts.decide(ctx, a["id"], approve=True, actor="approver", seen_scope_hash=a["scope_hash"])
     gbp_before = _cash(ctx, "GBP")["wallet_cash"]
     monkeypatch.setattr(ctx.local_bank, "create_transfer",
                         lambda **kw: TransferResult("tr_x", kw["request_id"], status, status.upper()))
