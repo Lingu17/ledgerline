@@ -461,6 +461,16 @@ def sandbox_payment_link(request: Request, link_id: str, p: Principal = Depends(
         raise HTTPException(409, str(exc)) from exc
 
 
+@router.post('/integrations/sandbox/payment-links/{link_id}/check')
+def sandbox_payment_link_check(request: Request, link_id: str, p: Principal = Depends(require_role('operator'))):
+    from ..payment_links import check
+    ctx = _sandbox_context(request, p)
+    try:
+        return check(ctx, link_id, p.actor)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 def auth_error_handler(_request: Request, exc: AuthError):
     from fastapi.responses import JSONResponse
 

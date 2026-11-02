@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS payment_links (
   deposit_id TEXT REFERENCES deposits(id),
   currency TEXT NOT NULL,
   amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
-  status TEXT NOT NULL,                 -- local_draft | sandbox_created | draft_fallback
+  status TEXT NOT NULL,                 -- local_draft | sandbox_created | paid | draft_fallback
   url TEXT,
   provider_id TEXT,
   note TEXT NOT NULL,

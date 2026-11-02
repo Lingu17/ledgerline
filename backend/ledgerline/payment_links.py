@@ -2,13 +2,15 @@
 
 Claim before network dispatch; ambiguous results never trigger an automatic retry.
 This creates a collection link, never an outbound payment or an emailed request.
+A paid link becomes a deposit on the normal path, idempotently on the link id, so ordinary matching settles the balance.
 """
+import json
 from urllib.parse import urlsplit
 
-from . import audit, db
+from . import audit, db, treasury
 from .clock import iso
 from .providers.base import ProviderError, ProviderUnsupported
-from .reconcile import invoice_views
+from .reconcile import ingest_deposit, invoice_views
 
 
 def publish(ctx, link_id: str, actor: str):
@@ -43,3 +45,31 @@ def publish(ctx, link_id: str, actor: str):
         audit.record(conn, iso(ctx.clock.now()), actor, f'payment_link.{status}', 'invoice', link['invoice_id'],
                      {'link_id': link_id, 'amount_minor': link['amount_minor'], 'note': note})
         return db.row(conn, 'SELECT * FROM payment_links WHERE id=?', (link_id,))
+
+
+def check(ctx, link_id: str, actor: str):
+    """Ask the bank whether a created link was paid, and book it once if so. Safe to call repeatedly and concurrently."""
+    with ctx.conn() as conn:
+        link = db.row(conn, 'SELECT * FROM payment_links WHERE id = ?', (link_id,))
+    if not link:
+        raise ValueError('unknown payment link')
+    if link['status'] != 'sandbox_created' or not link['provider_id'] or ctx.sandbox is None:
+        return link
+    if not ctx.sandbox.payment_link_paid(link['provider_id']):
+        return link
+    with ctx.conn() as conn, db.transaction(conn):
+        link = db.row(conn, 'SELECT * FROM payment_links WHERE id = ?', (link_id,))
+        if link['status'] != 'sandbox_created':
+            return link
+        now = iso(ctx.clock.now())
+        customer = db.row(conn, 'SELECT c.name, c.payer_names FROM invoices i JOIN customers c ON c.id = i.customer_id WHERE i.id = ?', (link['invoice_id'],))
+        payer = (json.loads(customer['payer_names']) or [customer['name']])[0]
+        deposit_id, _ = ingest_deposit(conn, ctx, {
+            'provider_ref': f"LINK:{link['provider_id']}", 'currency': link['currency'], 'amount_minor': link['amount_minor'],
+            'payer_name': payer, 'reference': link['invoice_id'], 'received_at': now}, source='airwallex_payment_link')
+        conn.execute("UPDATE payment_links SET status='paid', note=? WHERE id=?", (f'Airwallex reports this link paid; booked as {deposit_id}.', link_id))
+        audit.record(conn, now, actor, 'payment_link.paid', 'invoice', link['invoice_id'],
+                     {'link_id': link_id, 'deposit_id': deposit_id, 'amount_minor': link['amount_minor']})
+    treasury.refresh_decisions(ctx, f"balance payment for {link['invoice_id']} received", actor)
+    with ctx.conn() as conn:
+        return db.row(conn, 'SELECT * FROM payment_links WHERE id = ?', (link_id,))

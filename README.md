@@ -33,7 +33,7 @@ A finance team receives money in USD, EUR and GBP. Some payments match an invoic
 | 🎯 **For** | small multi-currency companies on Airwallex Global Accounts |
 | 🧠 **Agentic part** | agent-to-agent evidence over MCP, verified before trust; Claude as a typed, advisory reader |
 | 🛡️ **Safety** | money rules in code · four-eyes · duplicate lock · stable request ids · pause switch · SENT ≠ PAID |
-| ✅ **Proof** | 362 backend tests · 15 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
+| ✅ **Proof** | 368 backend tests · 15 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
 
 ---
 
@@ -80,7 +80,7 @@ Your organization is isolated from every other one. A practice company uses made
 
 **When cash is short:** Treasury → *What to pay first* ranks bills due soon by priority, then due date, and decides each one: fund, convert only the shortfall, defer to a date you allowed, or escalate. New cash reopens only the decisions it changes, and each change is audited. Deciding moves no money. A funded bill can then be paid through the bank: a second person approves the exact amount and destination, the plan is rechecked before sending, and the bill closes only on PAID. **Add a cash squeeze** shows all four decisions in a practice company, and **Set aside from planning** (Settings → Policy) creates a real shortfall on a pre-funded sandbox wallet.
 
-**Bring cash in early:** when bills are short, Treasury prices a discount on invoices not yet due (capped by policy, 2% by default) and creates a hosted Airwallex link. Nothing is emailed. **Check payment** books the discount and cash once Airwallex reports the link paid, then re-plans the bills. Status is read on request; link payment webhooks are not used yet.
+**Bring cash in early:** when bills are short, Treasury prices a discount on invoices not yet due (capped by policy, 2% by default) and creates a hosted Airwallex link. Nothing is emailed. Once Airwallex reports the link paid, the discount and cash are booked and the bills re-planned, within about two minutes or at once with **Check payment**. Link payment webhooks are not used yet.
 
 **Proof you can check:** Treasury → *Plan history* → **Replay** runs the planner again on a decision's stored inputs and compares the result. Activity → **Verify log integrity** recomputes the audit hash chain, which detects an edited or removed event. Someone with database write access could rewrite the whole chain, so keep the head hash from a downloaded evidence export to rule that out.
 
@@ -126,10 +126,11 @@ CSV columns:
 <details>
 <summary><b>Handle an incoming payment</b></summary>
 
-1. Connected accounts receive payments by signed webhook. **Settings → Find missed deposits** catches any that were missed. Otherwise use **Payments → Record payment** or **Import CSV**.
+1. Connected accounts receive payments by signed webhook, and missed ones are found automatically about every ten minutes (**Settings → Find missed deposits** does it at once). Otherwise use **Payments → Record payment** or **Import CSV**.
 2. Clean matches settle on their own, and a bank fee within tolerance is written off.
 3. For anything else, open the payment and use **Ask payer's agent** or **Read remittance…** (paste an email or upload a PDF). The AI reader only suggests, and a person decides.
 4. The result is one of: invoice settled, exact balance requested, credit held, refund proposed, or escalated with the reason.
+5. For a part payment, open the balance request and create the link, then share it with the customer. When it is paid, the balance settles the same way, within about two minutes.
 </details>
 
 <details>
@@ -147,7 +148,7 @@ CSV columns:
 
 1. When a bill shows **Defer** or **Escalate**, **Treasury → Bring cash in early** lists invoices not yet due, with the discount cost and the cash each one brings in.
 2. **Create offer** makes a hosted Airwallex link. Send it to the customer yourself.
-3. After they pay, click **Check payment**. Ledgerline books the discount and the cash, then re-plans the bills.
+3. After they pay, Ledgerline books the discount and the cash and re-plans the bills within about two minutes. **Check payment** does it at once.
 
 In a practice company, **Practice: customer pays** runs the same path without a card.
 </details>
@@ -342,6 +343,7 @@ backend\.venv\Scripts\python scripts\evaluate.py --seeds 50
 | `ANTHROPIC_API_KEY` | Claude reader (`claude-opus-5-5`, daily budgets per organization and server) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Sign in with Google |
 | `LEDGERLINE_PUBLIC_URL`, `LEDGERLINE_ALLOWED_ORIGINS`, `LEDGERLINE_COOKIE_SECURE`, `LEDGERLINE_TRUSTED_PROXY_HOPS` | public origin, CSRF allow-list, secure cookie, proxy hops |
+| `LEDGERLINE_WATCH_SECONDS` | how often connected accounts are checked for paid links (default 120, 0 turns it off) |
 | `LEDGERLINE_DATA_DIR`, `LEDGERLINE_REQUIRE_PERSISTENT_MOUNT` | data location and a guard against ephemeral storage |
 
 Without keys the app runs fully on the simulated bank and labelled offline rules.
@@ -376,8 +378,8 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 ## ⚠️ Honest limits
 
 - Payer agents are simulations (real MCP and signatures); real customers' agents would be discovered at onboarding.
-- Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov and it was paid with a test card; someone has to click **Check payment**, because link webhooks are not used yet, and settlement timing is not tracked. The earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
-- Deposit discovery is owner-triggered, not a scheduled poller; Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
+- Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov and it was paid with a test card; Ledgerline asks Airwallex every two minutes rather than using link webhooks, and settlement timing is not tracked. The earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
+- Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery, password reset, SSO/MFA or billing.
 
 <p align="center"><sub>Built for the Airwallex Agentic Banking Hackathon · sandbox and synthetic data only · no real money</sub></p>

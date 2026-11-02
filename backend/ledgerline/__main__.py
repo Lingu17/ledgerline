@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 import sys
 
 import uvicorn
 
+from . import watcher
 from .api.app import create_app
 from .config import load_settings
 
@@ -25,7 +27,9 @@ def main() -> None:
         sys.exit("Refusing to bind a non-loopback host without LEDGERLINE_COOKIE_SECURE=1 behind HTTPS. See README > Deployment.")
     print(f"Ledgerline API on http://{settings.host}:{settings.port}  bank={settings.provider}  "
           f"claude={'api' if settings.claude_configured else 'offline-fixture'}  data={settings.data_dir}")
-    uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_level=settings.log_level.lower(),
+    app = create_app(settings)
+    watcher.start(app, int(os.environ.get("LEDGERLINE_WATCH_SECONDS", "120")))
+    uvicorn.run(app, host=settings.host, port=settings.port, log_level=settings.log_level.lower(),
                 proxy_headers=False, access_log=False)
 
 
