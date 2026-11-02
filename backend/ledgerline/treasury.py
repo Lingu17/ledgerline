@@ -206,6 +206,10 @@ def refresh_decisions(ctx: AppContext, trigger: str, actor: str = "system") -> d
             "changed": changed, "unchanged": unchanged, "rates_available": len(rates) == len(DEMO_RATES)}
 
 
+def _live_payment(conn: sqlite3.Connection, obligation_id: str) -> bool:
+    return bool(db.row(conn, "SELECT 1 FROM bill_payments WHERE obligation_id = ? AND status NOT IN ('rejected','invalidated','failed','cancelled')", (obligation_id,)))
+
+
 def apply_deferral(ctx: AppContext, obligation_id: str, actor: str) -> dict[str, Any]:
     """A person accepts a deferral: the due date moves to the bill's permitted date, with the old date audited."""
     with ctx.conn() as conn, db.transaction(conn):
@@ -215,6 +219,8 @@ def apply_deferral(ctx: AppContext, obligation_id: str, actor: str) -> dict[str,
         d = db.row(conn, "SELECT * FROM treasury_decisions WHERE obligation_id = ?", (obligation_id,))
         if d is None or d["decision"] != "defer":
             raise TreasuryError("the current decision for this bill is not to defer it")
+        if _live_payment(conn, obligation_id):
+            raise TreasuryError("a payment for this bill is in progress")
         now = iso(ctx.clock.now())
         conn.execute("UPDATE obligations SET due_at = ?, defer_until = NULL WHERE id = ?", (bill["defer_until"], obligation_id))
         audit.record(conn, now, actor, "obligation.deferred", "obligation", obligation_id, {"from": bill["due_at"], "to": bill["defer_until"]})
@@ -227,6 +233,8 @@ def mark_bill_paid(ctx: AppContext, obligation_id: str, actor: str) -> dict[str,
         bill = db.row(conn, "SELECT * FROM obligations WHERE id = ?", (obligation_id,))
         if bill is None or bill["status"] != "scheduled":
             raise TreasuryError("only a scheduled bill can be marked paid")
+        if _live_payment(conn, obligation_id):
+            raise TreasuryError("a payment for this bill is in progress; it will close when the bank reports it paid")
         now = iso(ctx.clock.now())
         conn.execute("UPDATE obligations SET status = 'paid' WHERE id = ?", (obligation_id,))
         audit.post(conn, now, f"Bill {obligation_id} paid: {bill['payee']}", "obligation", obligation_id,

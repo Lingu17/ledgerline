@@ -78,7 +78,7 @@ Every payment shows this as a **decision path**: received → first plan → evi
 
 Your organization is isolated from every other one. A practice company uses made-up data and a simulated bank. To use your own company instead, choose **My company**, then connect your Airwallex sandbox keys under Settings: they are checked with Airwallex first, stored encrypted per organization, and can only reach the Airwallex test environment.
 
-**When cash is short:** Treasury → *What to pay first* ranks bills due soon by priority, then due date, and decides each one: fund, convert only the shortfall, defer to a date you allowed, or escalate. New cash reopens only the decisions it changes, and each change is audited. Deciding moves no money.
+**When cash is short:** Treasury → *What to pay first* ranks bills due soon by priority, then due date, and decides each one: fund, convert only the shortfall, defer to a date you allowed, or escalate. New cash reopens only the decisions it changes, and each change is audited. Deciding moves no money. A funded bill can then be paid through the bank: a second person approves the exact amount and destination, the plan is rechecked before sending, and the bill closes only on PAID. **Add a cash squeeze** shows all four decisions in a practice company, and **Set aside from planning** (Settings → Policy) creates a real shortfall on a pre-funded sandbox wallet.
 
 **Not done yet:** live-money Airwallex access, and connecting a customer's own hosted payer agent (payer agents currently run on this server).
 

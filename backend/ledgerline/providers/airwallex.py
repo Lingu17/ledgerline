@@ -236,7 +236,7 @@ class AirwallexSandbox:
     def _transfer(self, t: dict[str, Any]) -> TransferResult:
         return TransferResult(t["id"], t.get("request_id", ""), normalise_transfer_status(t.get("status", "")), t.get("status", ""))
 
-    def create_transfer(self, *, request_id, amount_minor, currency, destination, reference) -> TransferResult:
+    def create_transfer(self, *, request_id, amount_minor, currency, destination, reference, reason="refund") -> TransferResult:
         t = self._request("POST", "/transfers/create", money_out=True, body={
             "request_id": request_id,
             "beneficiary_id": destination,
@@ -244,7 +244,7 @@ class AirwallexSandbox:
             "transfer_currency": currency,
             "source_currency": currency,
             "transfer_method": "LOCAL",
-            "reason": "refund",
+            "reason": reason,
             "reference": reference[:140],
         })
         return self._transfer(t)

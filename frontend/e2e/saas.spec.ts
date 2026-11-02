@@ -190,6 +190,10 @@ test("practice company shows all four cash decisions", async ({ page }) => {
   await page.goto("/#/treasury");
   await page.getByRole("button", { name: "Add a cash squeeze" }).click();
   for (const label of ["Fund", "Convert", "Defer", "Escalate"]) await expect(page.locator(".pill", { hasText: label }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Pay", exact: true }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Propose payment" }).click();
+  await expect(page.getByText("Needs a second person")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled(); // the proposer cannot approve
   await page.screenshot({ path: "test-results/cash-squeeze.png", fullPage: true });
 });
 

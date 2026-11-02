@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
 from ..payer_agents.keys import key_location
-from .. import claude_reader, db, demo, ledger, payouts, treasury, webhooks, workspace
+from .. import bill_payments, claude_reader, db, demo, ledger, payouts, treasury, webhooks, workspace
 from ..clock import iso
 from ..context import AppContext, validate_policy
 from ..payer_agents.client import explain_payments
@@ -98,6 +98,9 @@ def overview(request: Request) -> dict[str, Any]:
             scope = json.loads(a["scope"])
             queue.append({"kind": "approval", "id": a["id"], "status": "pending", "currency": scope["currency"],
                           "amount_minor": scope["amount_minor"], "payer_name": scope["destination"], "reason": a["reason"]})
+        for p in db.rows(conn, "SELECT * FROM bill_payments WHERE status = 'proposed'"):
+            queue.append({"kind": "approval", "id": p["id"], "status": "pending", "currency": p["currency"],
+                          "amount_minor": p["amount_minor"], "payer_name": p["destination"], "reason": "bill payment waiting for a second person"})
         for o in db.rows(conn, "SELECT * FROM operations WHERE needs_reconciliation = 1"):
             queue.append({"kind": "operation", "id": o["id"], "status": o["status"], "currency": o["currency"],
                           "amount_minor": o["amount_minor"], "payer_name": o["destination"], "reason": o["last_error"]})
@@ -540,6 +543,56 @@ def defer_bill(request: Request, obligation_id: str, operator: str = Depends(req
     return treasury.apply_deferral(ctx_of(request), obligation_id, operator)
 
 
+class PayBillBody(BaseModel):
+    destination: str = Field(max_length=120)
+
+
+class PaymentDecision(BaseModel):
+    scope_hash: str = Field(max_length=128)
+
+
+class PaymentSim(BaseModel):
+    next_status: Literal["SENT", "PAID", "FAILED"]
+
+
+@router.get("/treasury/bill-payments", dependencies=read)
+def list_bill_payments(request: Request) -> list[dict[str, Any]]:
+    return bill_payments.list_payments(ctx_of(request))
+
+
+@router.post("/treasury/obligations/{obligation_id}/pay")
+def propose_bill_payment(request: Request, obligation_id: str, body: PayBillBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return bill_payments.propose(ctx_of(request), obligation_id, body.destination, operator)
+
+
+@router.post("/treasury/bill-payments/{payment_id}/approve")
+def approve_bill_payment(request: Request, payment_id: str, body: PaymentDecision, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return bill_payments.decide(ctx_of(request), payment_id, approve=True, actor=operator, seen_scope_hash=body.scope_hash)
+
+
+@router.post("/treasury/bill-payments/{payment_id}/reject")
+def reject_bill_payment(request: Request, payment_id: str, body: PaymentDecision, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return bill_payments.decide(ctx_of(request), payment_id, approve=False, actor=operator, seen_scope_hash=body.scope_hash)
+
+
+@router.post("/treasury/bill-payments/{payment_id}/execute")
+def execute_bill_payment(request: Request, payment_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return bill_payments.execute(ctx_of(request), payment_id, operator)
+
+
+@router.post("/treasury/bill-payments/{payment_id}/sync")
+def sync_bill_payment(request: Request, payment_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return bill_payments.sync(ctx_of(request), payment_id, operator)
+
+
+@router.post("/treasury/bill-payments/{payment_id}/simulate-bank")
+def simulate_bill_payment(request: Request, payment_id: str, body: PaymentSim, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    if ctx.provider.name == "airwallex_sandbox" and request.state.principal.role != "owner":
+        raise HTTPException(403, "only an owner can simulate a transfer status on a connected account")
+    return bill_payments.simulate(ctx, payment_id, body.next_status, operator)
+
+
 @router.post("/treasury/obligations/{obligation_id}/mark-paid")
 def bill_paid(request: Request, obligation_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
     return treasury.mark_bill_paid(ctx_of(request), obligation_id, operator)
@@ -593,6 +646,7 @@ def audit_export(request: Request) -> Response:
             "approvals": [_loads(a, "scope") for a in db.rows(conn, "SELECT * FROM approvals ORDER BY created_at")],
             "operations": [_loads(o, "detail") for o in db.rows(conn, "SELECT * FROM operations ORDER BY created_at")],
             "operation_events": db.rows(conn, "SELECT * FROM operation_events ORDER BY id"),
+            "bill_payments": db.rows(conn, "SELECT * FROM bill_payments ORDER BY created_at"),
             "conservation": ledger.conservation(conn),
             "audit_events": [_loads(a, "detail") for a in db.rows(conn, "SELECT * FROM audit_events ORDER BY id")],
             "scorecard": demo.scorecard(ctx),

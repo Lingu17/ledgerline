@@ -162,6 +162,29 @@ CREATE TABLE IF NOT EXISTS treasury_decisions (
   decided_at TEXT NOT NULL,
   trigger TEXT NOT NULL
 )"""),
+    (5, "bill payments through the bank", """
+CREATE TABLE IF NOT EXISTS bill_payments (
+  id TEXT PRIMARY KEY,
+  obligation_id TEXT NOT NULL REFERENCES obligations(id),
+  request_id TEXT NOT NULL UNIQUE,
+  currency TEXT NOT NULL,
+  amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+  destination TEXT NOT NULL,
+  scope_hash TEXT NOT NULL,
+  status TEXT NOT NULL,
+  proposed_by TEXT NOT NULL,
+  decided_by TEXT,
+  decided_at TEXT,
+  provider_id TEXT,
+  needs_reconciliation INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  lease_until TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS one_live_payment_per_bill
+  ON bill_payments(obligation_id) WHERE status NOT IN ('rejected','invalidated','failed','cancelled')"""),
 ]
 
 

@@ -62,7 +62,7 @@ class BankProvider(Protocol):
     label: str
 
     def create_transfer(
-        self, *, request_id: str, amount_minor: int, currency: str, destination: str, reference: str
+        self, *, request_id: str, amount_minor: int, currency: str, destination: str, reference: str, reason: str = "refund"
     ) -> TransferResult: ...
 
     def find_transfer(self, request_id: str) -> TransferResult | None: ...

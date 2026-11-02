@@ -91,7 +91,7 @@ class LocalBank:
         return TransferResult(r["id"], r["request_id"], r["status"].lower(), r["status"])
 
     # Transfers -----------------------------------------------------------
-    def create_transfer(self, *, request_id, amount_minor, currency, destination, reference) -> TransferResult:
+    def create_transfer(self, *, request_id, amount_minor, currency, destination, reference, reason="refund") -> TransferResult:
         fault, self.next_transfer_fault = self.next_transfer_fault, None
         if self.on_create:
             self.on_create()

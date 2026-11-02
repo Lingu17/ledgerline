@@ -20,6 +20,8 @@ export function Treasury({ localMode }: { localMode: boolean }) {
   const t = useLoad(() => get<TreasuryData>("/treasury"), []);
   const rates = useLoad(() => get<Rates>("/treasury/rates"), []);
   const decisions = useLoad(() => get<DecisionPlan>("/treasury/decisions"), []);
+  const payments = useLoad(() => get<BillPayment[]>("/treasury/bill-payments"), []);
+  const [paying, setPaying] = useState<Decision | null>(null);
   const { run, busy } = useAction();
   const { can } = useAuth();
   const op = can("operator");
@@ -72,7 +74,9 @@ export function Treasury({ localMode }: { localMode: boolean }) {
         </div>
       </Card>
 
-      <BillDecisions plan={decisions} op={op} />
+      <BillDecisions plan={decisions} op={op} payments={payments.data ?? []} onPay={setPaying} />
+      <BillPayments rows={payments.data ?? []} op={op} owner={owner} localMode={localMode} />
+      {paying && <PayBill bill={paying} localMode={localMode} onClose={() => setPaying(null)} />}
 
       <div className="split">
         <Card title="Bills" pad={false} actions={op && <><button className="btn small" onClick={() => setModal("import")}>Import CSV</button><button className="btn small primary" onClick={() => setModal("obligation")}>Add bill</button></>}>
@@ -166,7 +170,88 @@ const DECISION: Record<Decision["decision"], [string, string]> = {
 
 interface DecisionPlan { decisions: Decision[]; changed: unknown[]; unchanged: number; rates_available: boolean }
 
-function BillDecisions({ plan, op }: { plan: { data: DecisionPlan | null; error: string | null; reload: () => void }; op: boolean }) {
+interface BillPayment {
+  id: string; obligation_id: string; payee: string; currency: string; amount_minor: number; destination: string; scope_hash: string; status: string;
+  proposed_by: string; decided_by: string | null; provider_id: string | null; needs_reconciliation: number; last_error: string | null; request_id: string;
+}
+const LIVE_PAYMENT = ["proposed", "approved", "processing", "sent"];
+
+function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment[]; op: boolean; owner: boolean; localMode: boolean }) {
+  const { run, busy } = useAction();
+  const { me } = useAuth();
+  if (rows.length === 0) return null;
+  const act = (p: BillPayment, path: string, body: unknown, done: string) => run(path + p.id, () => post(`/treasury/bill-payments/${p.id}/${path}`, body), done);
+  const canSimulate = localMode ? op : owner;
+  return (
+    <Card title="Bill payments" pad={false}>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Bill</th><th>Paid to</th><th className="num">Amount</th><th>Status</th><th /></tr></thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.id}>
+                <td style={{ minWidth: 140 }}><div className="primary-text">{p.payee}</div><div className="secondary mono">{p.id} · request {p.request_id.slice(0, 8)}…</div></td>
+                <td className="small" style={{ overflowWrap: "anywhere" }}>{p.destination}</td>
+                <td className="num"><Money minor={p.amount_minor} ccy={p.currency} /></td>
+                <td className="small" style={{ minWidth: 160 }}>
+                  <Pill status={p.status === "proposed" ? "pending" : p.status} label={p.status === "proposed" ? "Needs a second person" : undefined} />
+                  {p.status === "sent" && <div className="secondary">Not final until paid</div>}
+                  {p.needs_reconciliation === 1 && <div className="secondary neg">Outcome unknown. Check status before anything is retried.</div>}
+                  {p.last_error && p.needs_reconciliation !== 1 && <div className="secondary neg">{p.last_error}</div>}
+                  <div className="secondary">Proposed by {p.proposed_by}{p.decided_by ? `, decided by ${p.decided_by}` : ""}</div>
+                </td>
+                <td className="num">
+                  {op && <div className="row" style={{ justifyContent: "flex-end" }}>
+                    {p.status === "proposed" && <>
+                      <button className="btn small primary" disabled={!!busy || p.proposed_by === me?.user.email} title={p.proposed_by === me?.user.email ? "You proposed this; another team member must approve" : undefined}
+                        onClick={() => act(p, "approve", { scope_hash: p.scope_hash }, "Payment approved")}>Approve</button>
+                      <button className="btn small danger" disabled={!!busy} onClick={() => act(p, "reject", { scope_hash: p.scope_hash }, "Payment rejected")}>Reject</button>
+                    </>}
+                    {p.status === "approved" && <button className="btn small primary" disabled={!!busy} onClick={() => act(p, "execute", undefined, "Sent to the bank")}>Send payment</button>}
+                    {["processing", "sent"].includes(p.status) && <button className="btn small" disabled={!!busy} onClick={() => act(p, "sync", undefined, "Checked with the bank")}>Check status</button>}
+                    {canSimulate && p.provider_id && p.status === "processing" && <button className="btn small" disabled={!!busy} onClick={() => act(p, "simulate-bank", { next_status: "SENT" }, "Test bank: SENT")}>Test bank: sent</button>}
+                    {canSimulate && p.provider_id && p.status === "sent" && <button className="btn small" disabled={!!busy} onClick={() => act(p, "simulate-bank", { next_status: "PAID" }, "Test bank: PAID")}>Test bank: paid</button>}
+                  </div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function PayBill({ bill, localMode, onClose }: { bill: Decision; localMode: boolean; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const options = useLoad(() => localMode ? Promise.resolve({ items: [] as { id: string; name: string; currency: string; account: string }[] })
+    : get<{ items: { id: string; name: string; currency: string; account: string }[] }>("/integrations/sandbox/beneficiaries"), []);
+  const [destination, setDestination] = useState(localMode ? bill.payee : "");
+  const matching = options.data?.items.filter((o) => o.currency === bill.currency) ?? [];
+  return (
+    <Modal title="Pay this bill" onClose={onClose}>
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        if (await run("pay", () => post(`/treasury/obligations/${bill.obligation_id}/pay`, { destination }), "Payment proposed; a second person must approve it")) onClose();
+      }}>
+        <p style={{ marginTop: 0 }}><b>{money(bill.amount_minor, bill.currency)}</b> to {bill.payee}. A different team member must approve the exact amount and destination before it is sent.</p>
+        {localMode ? (
+          <Field id="pay-dest" label="Paid to"><input id="pay-dest" type="text" value={destination} onChange={(e) => setDestination(e.target.value)} /></Field>
+        ) : (
+          <Field id="pay-dest" label="Beneficiary" error={options.error} hint={matching.length ? undefined : `No ${bill.currency} beneficiary yet. An owner can add one under Settings.`}>
+            <select id="pay-dest" value={destination} onChange={(e) => setDestination(e.target.value)}>
+              <option value="">Choose…</option>
+              {matching.map((o) => <option key={o.id} value={o.id}>{o.name} {o.account}</option>)}
+            </select>
+          </Field>
+        )}
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy || destination.trim().length < 2}>Propose payment</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function BillDecisions({ plan, op, payments, onPay }: { plan: { data: DecisionPlan | null; error: string | null; reload: () => void }; op: boolean; payments: BillPayment[]; onPay: (b: Decision) => void }) {
   const { run, busy } = useAction();
   const { me } = useAuth();
   if (plan.error) return <ErrorNote error={plan.error} onRetry={plan.reload} />;
@@ -195,7 +280,8 @@ function BillDecisions({ plan, op }: { plan: { data: DecisionPlan | null; error:
                   <td className="num nowrap">
                     {op && b.decision === "convert" && <button className="btn small" disabled={!!busy} onClick={() => run("quote", () => post(`/treasury/obligations/${b.obligation_id}/quote`), "Quote received")}>Quote {b.source_currency}→{b.currency}</button>}
                     {op && b.decision === "defer" && <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("defer", () => post(`/treasury/obligations/${b.obligation_id}/defer`), "Bill deferred")) plan.reload(); }}>Accept deferral</button>}
-                    {op && <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("paid", () => post(`/treasury/obligations/${b.obligation_id}/mark-paid`), "Bill marked paid")) plan.reload(); }}>Mark paid</button>}
+                    {op && b.decision === "fund" && !payments.some((p) => p.obligation_id === b.obligation_id && LIVE_PAYMENT.includes(p.status)) && <button className="btn small primary" disabled={!!busy} onClick={() => onPay(b)}>Pay</button>}
+                    {op && !payments.some((p) => p.obligation_id === b.obligation_id && LIVE_PAYMENT.includes(p.status)) && <button className="btn small" disabled={!!busy} title="Already paid outside Ledgerline" onClick={async () => { if (await run("paid", () => post(`/treasury/obligations/${b.obligation_id}/mark-paid`), "Bill marked paid")) plan.reload(); }}>Mark paid</button>}
                   </td>
                 </tr>
               ))}
