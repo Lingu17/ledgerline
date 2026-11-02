@@ -209,6 +209,25 @@ test("practice company shows all four cash decisions", async ({ page }) => {
   await expect(page.getByText("Log intact.")).toBeVisible();
 });
 
+test("wrong-currency payment converts only what the invoice needs; balance request has an email draft", async ({ page }) => {
+  await signUp(page, { org: `Fx ${uniq()}`, email: `fx-${uniq()}@e2e.test`, sample: true });
+  const recorded = await page.evaluate(async () => {
+    const me = await (await fetch("/api/auth/me")).json();
+    const r = await fetch("/api/payments", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": me.csrf_token },
+      body: JSON.stringify({ currency: "USD", amount: "5000", payer_name: "BRIGHTWAVE GMBH", reference: "INV-2253", external_ref: "FX-E2E" }) });
+    return { ok: r.ok, body: await r.json() };
+  });
+  expect(recorded.ok, JSON.stringify(recorded.body)).toBeTruthy();
+  await page.goto(`/#/payments?deposit=${recorded.body.deposit_id}`);
+  await expect(page.getByRole("heading", { name: "Paid in the wrong currency" })).toBeVisible();
+  await expect(page.getByText("Recommended: convert only what the invoice needs.")).toBeVisible();
+  await page.getByRole("button", { name: "Convert and apply" }).click();
+  await expect(page.getByText(/Converted and applied|Conversion booked/).first()).toBeVisible();
+
+  await page.goto("/#/payments?deposit=DEP-1003");
+  await expect(page.getByRole("link", { name: "Open email draft" })).toHaveAttribute("href", /^mailto:\?subject=Balance%20due%20on%20INV-2260/);
+});
+
 test("dialogs opened from the sidebar are readable and keep focus while typing", async ({ page }) => {
   await signUp(page, { org: `Dialog ${uniq()}`, email: `d-${uniq()}@e2e.test`, sample: false });
   await page.locator(".org-button").click();

@@ -80,6 +80,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   verified_advance_credit: "Verified advance → credit",
   verified_duplicate: "Verified duplicate",
   operator_resolution: "Resolved by operator",
+  converted_settlement: "Converted to settle an invoice",
 };
 
 export const SOURCE_LABEL: Record<string, string> = {

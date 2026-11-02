@@ -32,7 +32,8 @@ def conservation(conn: sqlite3.Connection) -> dict[str, Any]:
         refunds_paid = _s(conn, "SELECT COALESCE(SUM(amount_minor),0) FROM operations WHERE kind='refund' AND currency=? AND status='paid'", (ccy,))
         refunds_pending = _s(conn, "SELECT COALESCE(SUM(amount_minor),0) FROM operations WHERE kind='refund' AND currency=? AND status IN ('pending','processing','sent')", (ccy,))
         unapplied = -_bal(conn, "unapplied_cash", ccy)
-        rhs = allocated + credits + refunds_paid + refunds_pending + unapplied
+        converted = _s(conn, "SELECT COALESCE(SUM(sell_minor),0) FROM deposit_conversions WHERE sell_currency = ? AND status = 'settled'", (ccy,))
+        rhs = allocated + credits + refunds_paid + refunds_pending + unapplied + converted
         trial = _s(conn, "SELECT COALESCE(SUM(debit_minor - credit_minor),0) FROM journal_lines WHERE currency = ?", (ccy,))
         refund_payable = -_bal(conn, "refund_payable", ccy)
         opening = _s(conn, "SELECT COALESCE(SUM(amount_minor),0) FROM wallet_opening WHERE currency = ?", (ccy,))
@@ -65,6 +66,7 @@ def conservation(conn: sqlite3.Connection) -> dict[str, Any]:
             "refunds_paid": refunds_paid,
             "refunds_pending": refunds_pending,
             "unapplied": unapplied,
+            "converted": converted,
             "opening_balance": opening,
             "fx_in": fx_in,
             "fx_out": fx_out,

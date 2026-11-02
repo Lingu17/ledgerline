@@ -454,6 +454,23 @@ def _fx_event(conn, op_id, frm, to, detail, now):
                  (op_id, frm, to, detail, now))
 
 
+def _settle_deposit_conversion(conn, ctx: AppContext, op: dict[str, Any], detail: dict[str, Any], now: str) -> None:
+    """The bank settled a wrong-currency conversion: the sold money leaves the payment and the bought money settles the invoice."""
+    from .reconcile import ESCALATED, MATCHED, _store_and_apply, deposit_buckets
+
+    sell_ccy, sell, buy_ccy, buy = op["currency"], op["amount_minor"], detail["buy_currency"], detail["buy_amount_minor"]
+    conn.execute("UPDATE deposit_conversions SET status='settled' WHERE id = ?", (detail["deposit_conversion"],))
+    audit.post(conn, now, f"Payment {op['deposit_id']} converted", "deposit", op["deposit_id"], audit.move("unapplied_cash", "deposit_converted", sell_ccy, sell))
+    audit.post(conn, now, f"Converted payment applied to {detail['invoice_id']}", "invoice", detail["invoice_id"], audit.move("deposit_converted", "accounts_receivable", buy_ccy, buy))
+    deposit = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (op["deposit_id"],))
+    summary = f"Converted {fmt(sell, sell_ccy)} into {fmt(buy, buy_ccy)} and applied it to {detail['invoice_id']}."
+    _store_and_apply(conn, ctx, deposit, {"category": "converted_settlement", "summary": summary, "actions": []}, kind="operator", evidence_id=None)
+    left = deposit_buckets(conn, op["deposit_id"])["unapplied"]
+    conn.execute("UPDATE deposits SET status = ?, escalation_reason = ? WHERE id = ?",
+                 (ESCALATED, f"{fmt(left, sell_ccy)} is left after the conversion; place it with a person's decision", op["deposit_id"]) if left > 0
+                 else (MATCHED, None, op["deposit_id"]))
+
+
 def _record_fx_outcome(ctx: AppContext, op_id: str, status: str, provider_id: str | None, error: str | None) -> dict[str, Any]:
     """Apply a provider answer. Cash moves only on a verified SETTLED status; anything else keeps the reservation."""
     with ctx.conn() as conn, db.transaction(conn):
@@ -478,7 +495,11 @@ def _record_fx_outcome(ctx: AppContext, op_id: str, status: str, provider_id: st
                        audit.move("fx_clearing", f"cash:{op['currency']}", op["currency"], op["amount_minor"]))
             audit.post(conn, now, f"FX {op_id}: buy {detail['buy_currency']}", "operation", op_id,
                        audit.move(f"cash:{detail['buy_currency']}", "fx_clearing", detail["buy_currency"], detail["buy_amount_minor"]))
+            if detail.get("deposit_conversion"):
+                _settle_deposit_conversion(conn, ctx, op, detail, now)
         else:  # failed or cancelled: release the reservation, no cash moved
+            if detail.get("deposit_conversion"):
+                conn.execute("UPDATE deposit_conversions SET status='failed' WHERE id = ?", (detail["deposit_conversion"],))
             conn.execute("UPDATE operations SET status='failed', needs_reconciliation=0, last_error=?, updated_at=? WHERE id = ?",
                          (error or "provider reports CANCELLED", now, op_id))
             _fx_event(conn, op_id, op["status"], "failed", (error or "provider reports CANCELLED") + "; reservation released", now)

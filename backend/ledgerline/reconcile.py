@@ -52,7 +52,8 @@ def invoice_views(conn: sqlite3.Connection) -> dict[str, InvoiceView]:
         """SELECT i.*,
              COALESCE((SELECT SUM(amount_minor) FROM allocations a WHERE a.invoice_id = i.id), 0) AS allocated,
              COALESCE((SELECT SUM(amount_minor) FROM writeoffs w WHERE w.invoice_id = i.id), 0) AS written_off,
-             COALESCE((SELECT SUM(delta_minor) FROM invoice_adjustments x WHERE x.invoice_id = i.id), 0) AS adjusted
+             COALESCE((SELECT SUM(delta_minor) FROM invoice_adjustments x WHERE x.invoice_id = i.id), 0) AS adjusted,
+             COALESCE((SELECT SUM(buy_minor) FROM deposit_conversions v WHERE v.invoice_id = i.id AND v.status IN ('processing','settled')), 0) AS converted
            FROM invoices i""",
     )
     return {
@@ -61,7 +62,7 @@ def invoice_views(conn: sqlite3.Connection) -> dict[str, InvoiceView]:
             customer_id=r["customer_id"],
             currency=r["currency"],
             amount_minor=r["amount_minor"] + r["adjusted"],
-            remaining_minor=r["amount_minor"] + r["adjusted"] - r["prior_paid_minor"] - r["allocated"] - r["written_off"],
+            remaining_minor=r["amount_minor"] + r["adjusted"] - r["prior_paid_minor"] - r["allocated"] - r["written_off"] - r["converted"],
             # A voided invoice (adjusted to zero) can never be matched or paid again.
             status="void" if r["voided_at"] else r["status"],
             due_at=r["due_at"],
@@ -82,10 +83,12 @@ def deposit_buckets(conn: sqlite3.Connection, deposit_id: str) -> dict[str, int]
         "SELECT COALESCE(SUM(amount_minor),0) FROM operations WHERE kind='refund' AND deposit_id = ? "
         "AND status NOT IN ('paid','failed','cancelled')"
     )
-    unapplied = d["amount_minor"] - allocated - credited - refund_paid - refund_pending
+    converted = q("SELECT COALESCE(SUM(sell_minor),0) FROM deposit_conversions WHERE deposit_id = ? AND status IN ('processing','settled')")
+    unapplied = d["amount_minor"] - allocated - credited - refund_paid - refund_pending - converted
     return {
         "amount": d["amount_minor"],
         "allocated": allocated,
+        "converted": converted,
         "credited": credited,
         "refund_paid": refund_paid,
         "refund_pending": refund_pending,

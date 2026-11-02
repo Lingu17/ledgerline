@@ -108,6 +108,37 @@ interface DepositDetail extends Deposit {
   has_remittance_doc: boolean;
 }
 
+interface WrongCurrencyOptions {
+  applies: boolean; currency: string; unapplied_minor: number; advice: "convert" | "hold"; why: string; live: { id: string } | null;
+  invoices: { invoice_id: string; currency: string; remaining_minor: number; buy_minor: number; estimated_sell_minor: number; covers_invoice: boolean }[];
+}
+
+function WrongCurrency({ id, canAct, run, busy }: { id: string; canAct: boolean; run: ReturnType<typeof useAction>["run"]; busy: string | null }) {
+  const o = useLoad(() => get<WrongCurrencyOptions>(`/deposits/${id}/wrong-currency`), [id]);
+  if (!o.data?.applies) return null;
+  const { currency, advice, why, invoices, live } = o.data;
+  return (
+    <Card title="Paid in the wrong currency">
+      <p className="small" style={{ marginTop: 0 }}><b>{advice === "convert" ? "Recommended: convert only what the invoice needs." : "Recommended: hold this payment."}</b> {why}</p>
+      {live ? <p className="small muted">A conversion is under way. Its status is under Approvals → Money-out operations.</p> : invoices.map((i) => (
+        <div className="row" key={i.invoice_id} style={{ justifyContent: "space-between" }}>
+          <span className="small"><span className="mono">{i.invoice_id}</span>: buy {money(i.buy_minor, i.currency)}{i.covers_invoice ? ", which settles it" : ` of the ${money(i.remaining_minor, i.currency)} due`}, selling about {money(i.estimated_sell_minor, currency)}. The bank's quote sets the final figure.</span>
+          {canAct && <button className={`btn small ${advice === "convert" ? "primary" : ""}`} disabled={!!busy}
+            onClick={() => run(`convert-${i.invoice_id}`, () => post(`/deposits/${id}/wrong-currency/convert`, { invoice_id: i.invoice_id }), (r: any) => r.status === "settled" ? "Converted and applied" : "Conversion booked; applied once the bank settles it")}>Convert and apply</button>}
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+function balanceEmail(l: { invoice_id: string; amount_minor: number; url: string | null }, ccy: string, payer: string) {
+  const subject = `Balance due on ${l.invoice_id}`;
+  const body = `Hello ${payer},\n\nThank you for your recent payment. ${money(l.amount_minor, ccy)} is still due on ${l.invoice_id}.\n\n`
+    + (l.url ? `You can pay the exact balance here:\n${l.url}\n\n` : "Please let us know when you expect to pay this balance.\n\n")
+    + "If you believe this is wrong, please reply and we will look into it.\n\nKind regards";
+  return { subject, body, mailto: `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}` };
+}
+
 function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const d = useLoad(() => get<DepositDetail>(`/deposits/${id}`), [id]);
   const { run, busy } = useAction();
@@ -136,8 +167,11 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
             <div><span>Customer credit</span><b>{money(x.buckets.credited, x.currency)}</b></div>
             <div><span>Refund pending</span><b>{money(x.buckets.refund_pending, x.currency)}</b></div>
             <div><span>Refunded</span><b>{money(x.buckets.refund_paid, x.currency)}</b></div>
+            {x.buckets.converted > 0 && <div><span>Converted for an invoice</span><b>{money(x.buckets.converted, x.currency)}</b></div>}
             <div><span>Unapplied</span><b className={x.buckets.unapplied ? "" : "muted"}>{money(x.buckets.unapplied, x.currency)}</b></div>
           </div>
+
+          {x.category === "wrong_currency" && x.status === "escalated" && <WrongCurrency id={x.id} canAct={can("operator")} run={run} busy={busy} />}
 
           <DepositActions x={x} run={run} busy={busy} />
 
@@ -173,6 +207,10 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   {x.payment_links.map((l) => (
                     <tr key={l.id}><td>Balance request for {l.invoice_id} <Pill status={l.status === "paid" ? "paid" : l.status === "sandbox_created" ? "matched" : "pending"} label={l.status === "paid" ? "Paid" : l.status === "sandbox_created" ? "Link created" : "Draft, not sent"} /><div className="secondary">{l.note}</div>
                       {l.url?.startsWith("https://") && l.status !== "paid" && <a href={l.url} target="_blank" rel="noopener noreferrer">Open Airwallex payment link</a>}
+                      {l.status !== "paid" && <div className="row" style={{ marginTop: 4 }}>
+                        <a className="btn small" href={balanceEmail(l, x.currency, x.payer_name).mailto}>Open email draft</a>
+                        <button className="btn small" onClick={() => navigator.clipboard?.writeText(balanceEmail(l, x.currency, x.payer_name).body)}>Copy message</button>
+                      </div>}
                       {can("operator") && l.status === "sandbox_created" && <> <button className="btn small" disabled={!!busy} onClick={() => run(`check-${l.id}`, () => post(`/integrations/sandbox/payment-links/${l.id}/check`), (r: any) => r.status === "paid" ? "Paid and booked" : "Not paid yet")}>Check payment</button></>}
                       {can("owner") && x.source.startsWith("airwallex_sandbox") && l.status === "local_draft" && <button className="btn small" disabled={!!busy} onClick={() => run(`link-${l.id}`, () => post(`/integrations/sandbox/payment-links/${l.id}/publish`), (r: any) => r.status === "sandbox_created" ? "Sandbox link created; nothing emailed" : r.note)}>Create payment link</button>}
                     </td><td className="num"><Money minor={l.amount_minor} ccy={x.currency} /></td></tr>

@@ -1,7 +1,7 @@
 """Evidence reader for messy remittance text.
 
 With ANTHROPIC_API_KEY set, Claude reads the text and must answer by calling
-one of four strictly-typed proposal tools. Without a key, a deterministic
+one of five strictly-typed proposal tools. Without a key, a deterministic
 regex fixture produces the same shape and is labelled as such. Either way the
 output is ADVISORY: it is stored as evidence for a human, it is never signed,
 and it cannot pass the signature check, so it can never move money.
@@ -43,6 +43,13 @@ TOOLS = [
                          "required": ["rationale"], "additionalProperties": False},
     },
     {
+        "name": "propose_conversion",
+        "description": "The text says the payment was sent in a different currency from the invoice and should settle it after converting.",
+        "strict": True,
+        "input_schema": {"type": "object", "properties": {"for_invoice_id": _STR, "rationale": _STR},
+                         "required": ["for_invoice_id", "rationale"], "additionalProperties": False},
+    },
+    {
         "name": "escalate",
         "description": "The text does not clearly explain the payment.",
         "strict": True,
@@ -67,6 +74,8 @@ def _fixture_read(text: str) -> dict[str, Any]:
         return {"tool": "propose_customer_credit", "input": {"for_invoice_id": "", "rationale": "mentions prepayment/advance"}}
     if re.search(r"twice|in error|duplicate", lower):
         return {"tool": "propose_refund", "input": {"rationale": "mentions duplicate or error"}}
+    if m and re.search(r"wrong currency|please convert|convert it|exchange it", lower):
+        return {"tool": "propose_conversion", "input": {"for_invoice_id": f"INV-{m.group(1)}", "rationale": "mentions converting the payment"}}
     if m:
         behalf = ""
         b = re.search(r"for (?:the )?([A-Z][A-Za-z]+)(?: support)? invoice", text)
@@ -131,6 +140,8 @@ def typed_proposal(raw: dict[str, Any]) -> dict[str, Any]:
     elif tool == "propose_invoice_match" and not _INV.match(args["invoice_id"]):
         reason = f"model proposed a malformed invoice id {args['invoice_id'][:40]!r}"
     elif tool == "propose_customer_credit" and args["for_invoice_id"] and not _INV.match(args["for_invoice_id"]):
+        reason = f"model proposed a malformed invoice id {args['for_invoice_id'][:40]!r}"
+    elif tool == "propose_conversion" and not _INV.match(args["for_invoice_id"]):
         reason = f"model proposed a malformed invoice id {args['for_invoice_id'][:40]!r}"
     if reason:
         # Keep which tool the model tried (name only, never its unvalidated arguments) so a person can see what happened.

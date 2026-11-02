@@ -231,6 +231,22 @@ CREATE TABLE IF NOT EXISTS early_pay_offers (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_live_offer_per_invoice
   ON early_pay_offers(invoice_id) WHERE status IN ('creating','open','unknown')"""),
+    (8, "wrong-currency payments converted to settle an invoice", """
+CREATE TABLE IF NOT EXISTS deposit_conversions (
+  id TEXT PRIMARY KEY,
+  deposit_id TEXT NOT NULL REFERENCES deposits(id),
+  invoice_id TEXT NOT NULL REFERENCES invoices(id),
+  operation_id TEXT NOT NULL,
+  sell_currency TEXT NOT NULL,
+  sell_minor INTEGER NOT NULL CHECK (sell_minor > 0),
+  buy_currency TEXT NOT NULL,
+  buy_minor INTEGER NOT NULL CHECK (buy_minor > 0),
+  status TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS one_live_conversion_per_deposit
+  ON deposit_conversions(deposit_id) WHERE status = 'processing'"""),
 ]
 
 

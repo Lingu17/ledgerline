@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
 from ..payer_agents.keys import key_location
-from .. import audit, bill_payments, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace
+from .. import audit, bill_payments, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace, wrong_currency
 from ..clock import iso
 from ..context import AppContext, validate_policy
 from ..payer_agents.client import explain_payments
@@ -168,6 +168,16 @@ def get_deposit(request: Request, deposit_id: str) -> dict[str, Any]:
             "audit": [_loads(a, "detail") for a in db.rows(conn, "SELECT * FROM audit_events WHERE entity_id = ? OR detail LIKE ? ORDER BY id", (deposit_id, f'%"{deposit_id}"%'))],
             "has_remittance_doc": d["provider_ref"] in claude_reader.REMITTANCE_DOCS,
         }
+
+
+@router.get("/deposits/{deposit_id}/wrong-currency", dependencies=read)
+def wrong_currency_options(request: Request, deposit_id: str) -> dict[str, Any]:
+    return wrong_currency.options(ctx_of(request), deposit_id)
+
+
+@router.post("/deposits/{deposit_id}/wrong-currency/convert")
+def wrong_currency_convert(request: Request, deposit_id: str, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return wrong_currency.convert(ctx_of(request), deposit_id, body.get("invoice_id"), operator)
 
 
 @router.post("/deposits/{deposit_id}/ask-agent")

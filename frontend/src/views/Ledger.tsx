@@ -4,7 +4,7 @@ import { Card, ErrorNote, Loading, Pill, useLoad } from "../components/ui";
 import { amountOnly, money, when } from "../format";
 
 interface Cons {
-  currency: string; deposits: number; allocated: number; customer_credits: number; refunds_paid: number; refunds_pending: number; unapplied: number;
+  currency: string; deposits: number; allocated: number; customer_credits: number; refunds_paid: number; refunds_pending: number; unapplied: number; converted: number;
   opening_balance: number; fx_in: number; fx_out: number; refunds_cash_out: number; cash_in_transit: number; wallet_cash: number; bank_fee_writeoffs: number;
   balanced: boolean; checks: { name: string; passed: boolean; detail: string }[];
 }
@@ -41,6 +41,7 @@ export function Ledger() {
             <span className="term"><span>Refunds paid</span>{amountOnly(c.refunds_paid)}</span><span className="op">+</span>
             <span className="term"><span>Refunds pending</span>{amountOnly(c.refunds_pending)}</span><span className="op">+</span>
             <span className="term"><span>Unapplied (journal)</span>{amountOnly(c.unapplied)}</span>
+            {c.converted > 0 && <><span className="op">+</span><span className="term"><span>Converted for invoices</span>{amountOnly(c.converted)}</span></>}
           </div>
           <div className="grid-2" style={{ marginTop: 14 }}>
             <dl className="kv small">

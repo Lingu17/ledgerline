@@ -106,6 +106,7 @@ export interface Buckets {
   credited: number;
   refund_paid: number;
   refund_pending: number;
+  converted: number;
   unapplied: number;
 }
 

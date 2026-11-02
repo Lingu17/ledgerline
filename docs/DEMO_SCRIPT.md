@@ -13,6 +13,7 @@ Prepare two windows: a fresh **Practice company** at https://35-207-220-110.ssli
 | 0:50 | Home screen or a sentence over Inbox | "Goal: reconcile every incoming payment for a 12-person company billing in three currencies, never pay twice, and keep a person in control of money that leaves." Six payments; rules in code settled the clean ones. |
 | 1:05 | Payments → DEP-1004 → **Ask payer's agent** | The same agent mechanism, but it lies: correctly signed, claiming another customer's invoice. Signature ✓, records ✗. Rejected and escalated with the reason. "A signature proves who said it, not that it's true." |
 | 1:35 | Payments → DEP-1003 | GBP 2,400 against 3,600 is more than a bank fee: partial, 1,200 still due, and a balance request for exactly that amount. |
+| 1:50 | DEP-1003 → **Open email draft** | The ready-to-send message with the exact balance. Five seconds; do not dwell. |
 | 1:55 | Practice steps, or Approvals | DEP-1006 really was paid twice and is over the auto-limit. A second person approves the exact amount, destination and evidence hash. SENT keeps the liability; only PAID releases it. |
 | 2:30 | Ledger and scorecard | Deposits = applied + credits + refunds + unapplied, per currency, to the cent. 6 deposits, 4 settled without a person, 1 approval, 1 escalation with a reason, 0 double payments. |
 | 2:50 | Treasury → Add a cash squeeze | Cash runs short: fund, convert only the shortfall, defer, escalate, each with a reason. New cash reopens only the decisions it changes. Keep this to 20 seconds. |

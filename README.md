@@ -33,7 +33,7 @@ A finance team receives money in USD, EUR and GBP. Some payments match an invoic
 | 🎯 **For** | small multi-currency companies on Airwallex Global Accounts |
 | 🧠 **Agentic part** | agent-to-agent evidence over MCP, verified before trust; Claude as a typed, advisory reader |
 | 🛡️ **Safety** | money rules in code · four-eyes · duplicate lock · stable request ids · pause switch · SENT ≠ PAID |
-| ✅ **Proof** | 368 backend tests · 15 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
+| ✅ **Proof** | 379 backend tests · 16 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
 
 ---
 
@@ -84,7 +84,9 @@ Your organization is isolated from every other one. A practice company uses made
 
 **Proof you can check:** Treasury → *Plan history* → **Replay** runs the planner again on a decision's stored inputs and compares the result. Activity → **Verify log integrity** recomputes the audit hash chain, which detects an edited or removed event. Someone with database write access could rewrite the whole chain, so keep the head hash from a downloaded evidence export to rule that out.
 
-**Not done yet:** live-money Airwallex access, and connecting a customer's own hosted payer agent (payer agents currently run on this server).
+**Paid in the wrong currency:** the payment is held and Ledgerline recommends converting only what the invoice needs, or holding it if a bill in that currency is short. A person clicks **Convert and apply**; the invoice settles when the bank reports the conversion settled.
+
+**Not done yet:** live-money Airwallex access, sending email from the server (balance requests open as a draft in your own mail), and connecting a customer's own hosted payer agent (payer agents currently run on this server).
 
 ---
 
@@ -130,7 +132,9 @@ CSV columns:
 2. Clean matches settle on their own, and a bank fee within tolerance is written off.
 3. For anything else, open the payment and use **Ask payer's agent** or **Read remittance…** (paste an email or upload a PDF). The AI reader only suggests, and a person decides.
 4. The result is one of: invoice settled, exact balance requested, credit held, refund proposed, or escalated with the reason.
-5. For a part payment, open the balance request and create the link, then share it with the customer. When it is paid, the balance settles the same way, within about two minutes.
+5. For a part payment, open the balance request, create the link, and use **Open email draft** or **Copy message** to send it to the customer.
+6. For a payment in the wrong currency, read the recommendation and click **Convert and apply**, or leave it held.
+7. When a balance link is paid, the balance settles the same way, within about two minutes.
 </details>
 
 <details>
