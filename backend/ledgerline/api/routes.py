@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
 from ..payer_agents.keys import key_location
-from .. import audit, bill_payments, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace, wrong_currency
+from .. import audit, bill_payments, ceo, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace, wrong_currency
 from ..clock import iso
 from ..context import AppContext, validate_policy
 from ..payer_agents.client import explain_payments
@@ -84,26 +84,39 @@ def status(request: Request) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- overview
+def _work_queue(conn) -> list[dict[str, Any]]:
+    queue = []
+    for d in db.rows(conn, "SELECT * FROM deposits WHERE status IN ('awaiting_evidence','escalated','refund_awaiting_approval','refund_in_flight') ORDER BY received_at"):
+        queue.append({"kind": "deposit", "id": d["id"], "status": d["status"], "currency": d["currency"],
+                      "amount_minor": d["amount_minor"], "payer_name": d["payer_name"], "reason": d["escalation_reason"]})
+    for a in db.rows(conn, "SELECT * FROM approvals WHERE status = 'pending'"):
+        scope = json.loads(a["scope"])
+        queue.append({"kind": "approval", "id": a["id"], "status": "pending", "currency": scope["currency"],
+                      "amount_minor": scope["amount_minor"], "payer_name": scope["destination"], "reason": a["reason"]})
+    for p in db.rows(conn, "SELECT * FROM bill_payments WHERE status = 'proposed'"):
+        queue.append({"kind": "approval", "id": p["id"], "status": "pending", "currency": p["currency"],
+                      "amount_minor": p["amount_minor"], "payer_name": p["destination"], "reason": "bill payment waiting for a second person"})
+    for o in db.rows(conn, "SELECT * FROM operations WHERE needs_reconciliation = 1"):
+        queue.append({"kind": "operation", "id": o["id"], "status": o["status"], "currency": o["currency"],
+                      "amount_minor": o["amount_minor"], "payer_name": o["destination"], "reason": o["last_error"]})
+    return queue
+
+
+@router.get("/ceo", dependencies=read)
+def ceo_view(request: Request) -> dict[str, Any]:
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        queue = _work_queue(conn)
+    return ceo.summary(ctx, queue)
+
+
 @router.get("/overview", dependencies=read)
 def overview(request: Request) -> dict[str, Any]:
     ctx = ctx_of(request)
     with ctx.conn() as conn:
         pos = treasury.wallet_position(conn, ctx)
         counts = {r["status"]: r["n"] for r in db.rows(conn, "SELECT status, COUNT(*) AS n FROM deposits GROUP BY status")}
-        queue = []
-        for d in db.rows(conn, "SELECT * FROM deposits WHERE status IN ('awaiting_evidence','escalated','refund_awaiting_approval','refund_in_flight') ORDER BY received_at"):
-            queue.append({"kind": "deposit", "id": d["id"], "status": d["status"], "currency": d["currency"],
-                          "amount_minor": d["amount_minor"], "payer_name": d["payer_name"], "reason": d["escalation_reason"]})
-        for a in db.rows(conn, "SELECT * FROM approvals WHERE status = 'pending'"):
-            scope = json.loads(a["scope"])
-            queue.append({"kind": "approval", "id": a["id"], "status": "pending", "currency": scope["currency"],
-                          "amount_minor": scope["amount_minor"], "payer_name": scope["destination"], "reason": a["reason"]})
-        for p in db.rows(conn, "SELECT * FROM bill_payments WHERE status = 'proposed'"):
-            queue.append({"kind": "approval", "id": p["id"], "status": "pending", "currency": p["currency"],
-                          "amount_minor": p["amount_minor"], "payer_name": p["destination"], "reason": "bill payment waiting for a second person"})
-        for o in db.rows(conn, "SELECT * FROM operations WHERE needs_reconciliation = 1"):
-            queue.append({"kind": "operation", "id": o["id"], "status": o["status"], "currency": o["currency"],
-                          "amount_minor": o["amount_minor"], "payer_name": o["destination"], "reason": o["last_error"]})
+        queue = _work_queue(conn)
         cons = ledger.conservation(conn)
         paused = ctx.paused(conn)
     return {
@@ -753,6 +766,21 @@ def put_policy(request: Request, body: dict[str, Any], operator: str = Depends(r
 def _sample_only(ctx: AppContext) -> None:
     if not ctx.org or ctx.org.get("kind") != "sample":
         raise HTTPException(409, "the walkthrough runs only in sample organizations; create one from the organization menu")
+
+
+@router.post("/demo/practice-wrong-currency")
+def practice_wrong_currency(request: Request, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    """Practice companies only: a USD payment against a EUR invoice, added on request so the six reference payments stay as they are."""
+    from ..reconcile import ingest_deposit
+
+    ctx = ctx_of(request)
+    _sample_only(ctx)
+    with ctx.conn() as conn, db.transaction(conn):
+        deposit_id, created = ingest_deposit(conn, ctx, {"provider_ref": "PRACTICE-FX-1", "currency": "USD", "amount_minor": 300_000, "payer_name": "BRIGHTWAVE GMBH",
+                                                         "reference": "INV-2253", "received_at": iso(ctx.clock.now())}, source="practice_payment")
+        if created:
+            audit.record(conn, iso(ctx.clock.now()), operator, "practice.wrong_currency_added", "deposit", deposit_id, {})
+    return {"deposit_id": deposit_id, "created": created}
 
 
 @router.get("/demo", dependencies=read)

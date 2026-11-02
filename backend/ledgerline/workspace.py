@@ -468,10 +468,15 @@ def create_obligation(ctx: AppContext, body: dict[str, Any], actor: str) -> dict
         if priority == "critical":
             raise InputError("a critical bill cannot be deferred")
         defer_until = iso(datetime.combine(later, time(12), tzinfo=timezone.utc))
+    unlocks = body.get("unlocks_invoice_id") or None
     with ctx.conn() as conn, db.transaction(conn):
+        if unlocks is not None:
+            inv = invoice_views(conn).get(unlocks) if isinstance(unlocks, str) else None
+            if inv is None or inv.status != "open" or inv.remaining_minor <= 0:
+                raise InputError("the invoice this bill releases must be an open invoice with a balance")
         ob_id = "OBL-" + uuid.uuid4().hex[:8].upper()
-        conn.execute("INSERT INTO obligations(id, payee, currency, amount_minor, due_at, description, status, priority, defer_until) VALUES (?,?,?,?,?,?, 'scheduled', ?, ?)",
-                     (ob_id, payee, ccy, amount, iso(datetime.combine(due, time(12), tzinfo=timezone.utc)), description, priority, defer_until))
+        conn.execute("INSERT INTO obligations(id, payee, currency, amount_minor, due_at, description, status, priority, defer_until, unlocks_invoice_id) VALUES (?,?,?,?,?,?, 'scheduled', ?, ?, ?)",
+                     (ob_id, payee, ccy, amount, iso(datetime.combine(due, time(12), tzinfo=timezone.utc)), description, priority, defer_until, unlocks))
         audit.record(conn, iso(ctx.clock.now()), actor, "obligation.created", "obligation", ob_id,
                      {"payee": payee, "currency": ccy, "amount_minor": amount, "priority": priority, "defer_until": defer_until})
         return db.row(conn, "SELECT * FROM obligations WHERE id = ?", (ob_id,))

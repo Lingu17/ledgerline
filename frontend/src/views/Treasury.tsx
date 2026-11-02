@@ -190,7 +190,7 @@ export function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment
   return (
     <Card title="Bill payments" pad={false}>
       <div className="table-wrap">
-        <table>
+        <table className="stack-sm">
           <thead><tr><th>Bill</th><th>Paid to</th><th className="num">Amount</th><th>Status</th><th /></tr></thead>
           <tbody>
             {rows.map((p) => {
@@ -412,7 +412,7 @@ function BillDecisions({ plan, op, payments, onPay }: { plan: { data: DecisionPl
 
 function ObligationForm({ onClose }: { onClose: () => void }) {
   const { run, busy } = useAction();
-  const [f, setF] = useState({ payee: "", currency: "EUR", amount: "", due_date: "", description: "", priority: "normal", defer_until: "" });
+  const [f, setF] = useState({ payee: "", currency: "EUR", amount: "", due_date: "", description: "", priority: "normal", defer_until: "", unlocks_invoice_id: "" });
   const [err, setErr] = useState<string | null>(null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   return (
@@ -423,7 +423,7 @@ function ObligationForm({ onClose }: { onClose: () => void }) {
         if ((parseMajor(f.amount) ?? 0) <= 0) return setErr("Enter an amount greater than zero, like 9000.00.");
         if (!f.due_date) return setErr("Choose a due date.");
         setErr(null);
-        if (await run("ob", () => post("/treasury/obligations", { ...f, amount: plainAmount(f.amount), defer_until: f.priority === "critical" ? null : f.defer_until || null }), "Bill added")) onClose();
+        if (await run("ob", () => post("/treasury/obligations", { ...f, amount: plainAmount(f.amount), defer_until: f.priority === "critical" ? null : f.defer_until || null, unlocks_invoice_id: f.unlocks_invoice_id.trim() || null }), "Bill added")) onClose();
       }}>
         <div className="form-grid">
           <Field id="ob-payee" label="Payee" wide><input id="ob-payee" type="text" value={f.payee} onChange={set("payee")} /></Field>
@@ -433,6 +433,7 @@ function ObligationForm({ onClose }: { onClose: () => void }) {
           <Field id="ob-desc" label="Description"><input id="ob-desc" type="text" value={f.description} onChange={set("description")} /></Field>
           <Field id="ob-pri" label="Priority"><select id="ob-pri" value={f.priority} onChange={set("priority")}><option value="critical">Critical (payroll, tax)</option><option value="normal">Normal</option><option value="flexible">Flexible</option></select></Field>
           {f.priority !== "critical" && <Field id="ob-defer" label="Can wait until" hint="Leave empty if it cannot be paid late"><input id="ob-defer" type="date" value={f.defer_until} onChange={set("defer_until")} /></Field>}
+          <Field id="ob-unlocks" label="Paying this releases invoice" hint="Optional: an invoice the customer will only pay after this bill, such as INV-2301"><input id="ob-unlocks" type="text" value={f.unlocks_invoice_id} onChange={set("unlocks_invoice_id")} /></Field>
         </div>
         {err && <div className="notice risk small" role="alert" style={{ marginTop: 12 }}>{err}</div>}
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy}>Add bill</button></div>

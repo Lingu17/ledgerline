@@ -216,3 +216,48 @@ def test_viewer_cannot_defer_or_mark_paid(client, app):
     v = _invite_and_join(client, app, "view@northbeam.test", "viewer")
     assert v.post("/api/treasury/obligations/OBL-EUR-HOSTING/mark-paid").status_code == 403
     assert v.post("/api/treasury/obligations/OBL-EUR-HOSTING/defer").status_code == 403
+
+
+
+def released_setup(empty, **cash):
+    setup_cash(empty, **cash)
+    cust = workspace.create_customer(empty, {"name": "Orchard Tea", "country": "GB", "payer_names": ["ORCHARD TEA"], "refund_beneficiary": "Orchard"}, "op")
+    return workspace.create_invoice(empty, {"customer_id": cust["id"], "currency": "EUR", "amount": "10000", "due_date": day(empty, 20), "description": "Tea"}, "op")["id"]
+
+
+def test_bill_that_releases_more_cash_than_it_costs_goes_first(empty):
+    inv = released_setup(empty, EUR="5000")
+    early = bill(empty, "Hosting", "EUR", "3000", 1)
+    supplier = bill(empty, "Supplier", "EUR", "3000", 5, unlocks_invoice_id=inv)
+    d = by_id(treasury.refresh_decisions(empty, "t"))
+    assert d[supplier]["rank"] == 1 and d[supplier]["decision"] == "fund" and inv in d[supplier]["reason"]
+    assert d[early]["rank"] == 2 and d[early]["decision"] == "escalate"
+
+
+def test_critical_bill_still_beats_one_that_releases_cash(empty):
+    inv = released_setup(empty, EUR="5000")
+    supplier = bill(empty, "Supplier", "EUR", "3000", 1, unlocks_invoice_id=inv)
+    payroll = bill(empty, "Payroll", "EUR", "3000", 5, priority="critical")
+    d = by_id(treasury.refresh_decisions(empty, "t"))
+    assert d[payroll]["rank"] == 1 and d[supplier]["rank"] == 2
+
+
+def test_releasing_less_than_the_bill_costs_does_not_change_the_order(empty):
+    inv = released_setup(empty, EUR="50000")
+    early = bill(empty, "Hosting", "EUR", "3000", 1)
+    big = bill(empty, "Machine", "EUR", "20000", 5, unlocks_invoice_id=inv)
+    d = by_id(treasury.refresh_decisions(empty, "t"))
+    assert d[early]["rank"] == 1 and d[big]["rank"] == 2
+
+
+def test_unknown_released_invoice_is_refused(empty):
+    with pytest.raises(workspace.InputError):
+        bill(empty, "Supplier", "EUR", "100", 2, unlocks_invoice_id="INV-9999")
+
+
+def test_plan_with_released_invoice_replays_identically(empty):
+    inv = released_setup(empty, EUR="5000")
+    bill(empty, "Supplier", "EUR", "3000", 5, unlocks_invoice_id=inv)
+    treasury.refresh_decisions(empty, "t")
+    run = treasury.list_plan_runs(empty)[0]
+    assert treasury.replay_plan_run(empty, run["id"])["identical"]

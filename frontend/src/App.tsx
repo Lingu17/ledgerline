@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { get, post, type Me, type Status } from "./api";
 import { AuthProvider, ROLE_LABEL, useAuth } from "./auth";
 import { Field, Modal, RefreshProvider, ToastProvider, useLoad, useToast } from "./components/ui";
+import { Ceo } from "./views/Ceo";
 import { Inbox } from "./views/Inbox";
 import { Payments } from "./views/Payments";
 import { EvidenceView } from "./views/Evidence";
@@ -48,7 +49,8 @@ function useRoute() {
 }
 
 const NAV: { id: string; label: string; section?: string; sampleOnly?: boolean }[] = [
-  { id: "inbox", label: "Inbox", section: "Operations" },
+  { id: "ceo", label: "CEO view", section: "Operations" },
+  { id: "inbox", label: "Inbox" },
   { id: "payments", label: "Payments" },
   { id: "approvals", label: "Approvals" },
   { id: "evidence", label: "Evidence" },
@@ -62,6 +64,7 @@ const NAV: { id: string; label: string; section?: string; sampleOnly?: boolean }
 ];
 
 const TITLES: Record<string, [string, string]> = {
+  ceo: ["CEO view", "Are we safe, what happened, and what needs you"],
   inbox: ["Inbox", "Cash position and work that needs a decision"],
   payments: ["Payments", "Received funds, how each was matched, and what is left"],
   approvals: ["Approvals", "Money-out decisions bound to an exact scope"],
@@ -213,6 +216,7 @@ function Shell({ me }: { me: Me }) {
           </div>
         </header>
         <main className="content" id="main" tabIndex={-1}>
+          {page === "ceo" && <Ceo />}
           {page === "inbox" && <Inbox />}
           {page === "payments" && <Payments route={route} />}
           {page === "approvals" && <Approvals localMode={localMode} sandboxMode={s?.bank.mode === "airwallex_sandbox"} />}

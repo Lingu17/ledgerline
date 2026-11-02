@@ -228,6 +228,38 @@ test("wrong-currency payment converts only what the invoice needs; balance reque
   await expect(page.getByRole("link", { name: "Open email draft" })).toHaveAttribute("href", /^mailto:\?subject=Balance%20due%20on%20INV-2260/);
 });
 
+test("CEO view answers the four questions and its numbers lead to the detail", async ({ page }) => {
+  await signUp(page, { org: `Ceo ${uniq()}`, email: `ceo-${uniq()}@e2e.test`, sample: true });
+  await nav(page, "CEO view");
+  await expect(page.getByText("item(s) need a person")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Are we safe/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What needs you" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What the agent handled" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Can I trust these numbers?" })).toBeVisible();
+  await expect(page.getByText("Not measured.")).toBeVisible();
+  await page.screenshot({ path: "test-results/ceo-view.png", fullPage: true });
+  await page.getByRole("link", { name: "6", exact: true }).click();
+  await expect(page.getByText("DEP-1001").first()).toBeVisible();
+  await page.getByRole("button", { name: "Add a wrong-currency payment" }).click();
+  await expect(page.getByText(/USD paid against a EUR invoice/)).toBeVisible();
+});
+
+test("phone width: bill payments read as cards with nothing to scroll sideways", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await ctx.newPage();
+  await signUp(page, { org: `Cards ${uniq()}`, email: `cards-${uniq()}@e2e.test`, sample: true });
+  await page.goto("/#/treasury");
+  await page.getByRole("button", { name: "Add a cash squeeze" }).click();
+  await page.getByRole("button", { name: "Pay", exact: true }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Propose payment" }).click();
+  await page.goto("/#/approvals");
+  await expect(page.getByText("Needs a second person")).toBeVisible();
+  const wrap = page.locator("table.stack-sm").locator("xpath=ancestor::div[contains(@class,'table-wrap')]");
+  expect(await wrap.evaluate((w) => w.scrollWidth - w.clientWidth)).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: "test-results/phone-bill-payments.png" });
+  await ctx.close();
+});
+
 test("dialogs opened from the sidebar are readable and keep focus while typing", async ({ page }) => {
   await signUp(page, { org: `Dialog ${uniq()}`, email: `d-${uniq()}@e2e.test`, sample: false });
   await page.locator(".org-button").click();

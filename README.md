@@ -33,7 +33,7 @@ A finance team receives money in USD, EUR and GBP. Some payments match an invoic
 | 🎯 **For** | small multi-currency companies on Airwallex Global Accounts |
 | 🧠 **Agentic part** | agent-to-agent evidence over MCP, verified before trust; Claude as a typed, advisory reader |
 | 🛡️ **Safety** | money rules in code · four-eyes · duplicate lock · stable request ids · pause switch · SENT ≠ PAID |
-| ✅ **Proof** | 379 backend tests · 16 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
+| ✅ **Proof** | 388 backend tests · 18 browser tests · 5-job CI · 2,127 random payments with 0 allocation disagreements · live Airwallex refund SENT → PAID · live hosted link paid and booked |
 
 ---
 
@@ -84,6 +84,10 @@ Your organization is isolated from every other one. A practice company uses made
 
 **Proof you can check:** Treasury → *Plan history* → **Replay** runs the planner again on a decision's stored inputs and compares the result. Activity → **Verify log integrity** recomputes the audit hash chain, which detects an edited or removed event. Someone with database write access could rewrite the whole chain, so keep the head hash from a downloaded evidence export to rule that out.
 
+**CEO view:** one screen says whether the company is safe, what the agent handled, what needs a person, and whether the numbers can be trusted. It only reads; any time-saved figure is labelled as an estimate with its assumption.
+
+**Bills that release cash:** a bill can name the invoice its payment releases. Within a priority, a bill that releases more than it costs goes first, and the reason says so. Critical bills still come first.
+
 **Paid in the wrong currency:** the payment is held and Ledgerline recommends converting only what the invoice needs, or holding it if a bill in that currency is short. A person clicks **Convert and apply**; the invoice settles when the bank reports the conversion settled.
 
 **Not done yet:** live-money Airwallex access, sending email from the server (balance requests open as a draft in your own mail), and connecting a customer's own hosted payer agent (payer agents currently run on this server).
@@ -98,6 +102,7 @@ Everything an employee needs to act on is in the **Inbox**, so start there each 
 
 | When | Go to | What you do |
 |:--|:--|:--|
+| Start of day, if you run the company | **CEO view** | See in one screen whether anything needs you |
 | Start of day | **Inbox** | Work through what is waiting: unclear payments, approvals and payments whose bank outcome is unknown |
 | A payment is unclear | **Payments** → open it | Read the decision path, then **Ask payer's agent** or **Read remittance…**. Ledgerline checks the answer against your records |
 | Someone needs a second person | **Approvals** | Check the amount and destination, then approve or reject. You cannot approve your own proposal |

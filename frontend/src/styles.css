@@ -281,6 +281,12 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--re
   .compare .arrow { transform: rotate(90deg); }
   .hide-sm { display: none; }
 }
+@media (max-width: 640px) { /* a list where every cell explains itself reads better as cards than as a table to scroll */
+  table.stack-sm thead { display: none; }
+  table.stack-sm tr { display: block; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  table.stack-sm td { display: block; padding: 3px 0; border: 0; text-align: left; min-width: 0 !important; }
+  table.stack-sm td .row { justify-content: flex-start !important; flex-wrap: wrap; }
+}
 
 /* ---------------------------------------------------------------- auth */
 .auth-page { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; background: var(--canvas); }

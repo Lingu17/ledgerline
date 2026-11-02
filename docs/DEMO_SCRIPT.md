@@ -20,7 +20,8 @@ Prepare two windows: a fresh **Practice company** at https://35-207-220-110.ssli
 | 3:10 | **Switch to Ledgerline Singapore** | "That was a simulated bank. This is my Airwallex sandbox." Treasury → Bring cash in early: the paid EUR 197 link. Then Bill payments: EUR 100 to the beneficiary, SENT then PAID. |
 | 3:40 | Airwallex sandbox dashboard → Transfers | The transfer on Airwallex's own screen, one only. |
 | 4:00 | Activity → **Verify log integrity**, Treasury → **Replay** | Every decision can be replayed to the identical answer, and editing the log is detected. |
-| 4:20 | Architecture page | "Claude reads messy documents through typed tools, and rules in code decide the money. It can never move any." End on: "every decision explained, every cent accounted for." |
+| 4:15 | **CEO view** | One screen: are we safe, what the agent handled, what needs you, can I trust the numbers. Say the time-saved figure is an estimate. |
+| 4:30 | Architecture page | "Claude reads messy documents through typed tools, and rules in code decide the money. It can never move any." End on: "every decision explained, every cent accounted for." |
 
 **Say these limits on camera:**
 
@@ -28,6 +29,6 @@ Prepare two windows: a fresh **Practice company** at https://35-207-220-110.ssli
 - "PAID on the sandbox comes from Airwallex's simulation call. No real money moves."
 - For the EUR 100 payment, if both accounts are yours: "Both accounts here are mine, so this shows the control, not independent review." Drop this line if a real second person approved it.
 
-Do not click through every page. If you run long, cut the cash squeeze first.
+Do not click through every page. If you run long, cut the cash squeeze first. To show a wrong-currency payment, use **Payments → Add a wrong-currency payment** after the scorecard: it adds a seventh payment, so the scorecard no longer reads 6.
 
 Figures checked on 29 Oct 2026 against a fresh sample organization: DEP-1005 → advance credit; DEP-1004 rejected on the records check (INV-2253 belongs to Brightwave); DEP-1006 refunded after one approval; scorecard 6 / 4 / 1 / 1 / 0, ledger balanced. Singapore figures from the 2 Nov live runs.

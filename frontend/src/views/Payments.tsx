@@ -19,6 +19,8 @@ export function Payments({ route }: { route: Route }) {
   const [offset, setOffset] = useState(0);
   const { can } = useAuth();
   const op = can("operator");
+  const orgStatus = useLoad(() => get<{ org: { kind: string } | null }>("/status"), []);
+  const { run, busy } = useAction();
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 200);
     return () => clearTimeout(t);
@@ -49,6 +51,7 @@ export function Payments({ route }: { route: Route }) {
             <option value="">All</option><option>USD</option><option>EUR</option><option>GBP</option>
           </select>
         </div>
+        {op && orgStatus.data?.org?.kind === "sample" && <button className="btn" disabled={!!busy} onClick={() => run("practice-fx", () => post<{ deposit_id: string }>("/demo/practice-wrong-currency"), (r) => `Added ${r.deposit_id}: USD paid against a EUR invoice`)}>Add a wrong-currency payment</button>}
         {op && <button className="btn" onClick={() => setImporting(true)}>Import CSV</button>}
         {op && <button className="btn primary" onClick={() => setRecording(true)}>Record payment</button>}
       </div>

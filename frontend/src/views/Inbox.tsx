@@ -137,11 +137,11 @@ export function Inbox() {
               <Empty title="No deposits received yet">Payments appear here when your bank reports them, or when you record or import them.</Empty>
             ) : (
               <dl className="kv">
-                <dt>Deposits received</dt><dd className="num" style={{ textAlign: "left" }}>{o.scorecard.deposits}</dd>
-                <dt>Resolved by rules and verified evidence</dt><dd>{o.scorecard.settled_without_human}</dd>
-                <dt>Decided by a person</dt><dd>{o.scorecard.approvals_by_person}</dd>
-                <dt>Escalated for review</dt><dd>{o.scorecard.escalations}</dd>
-                <dt>Duplicate payouts</dt><dd>{o.scorecard.double_payments}</dd>
+                <dt>Deposits received</dt><dd className="num" style={{ textAlign: "left" }}><a href="#/payments">{o.scorecard.deposits}</a></dd>
+                <dt>Resolved by rules and verified evidence</dt><dd><a href="#/payments?status=matched">{o.scorecard.settled_without_human}</a></dd>
+                <dt>Decided by a person</dt><dd><a href="#/approvals">{o.scorecard.approvals_by_person}</a></dd>
+                <dt>Escalated for review</dt><dd><a href="#/payments?status=escalated">{o.scorecard.escalations}</a></dd>
+                <dt>Duplicate payouts</dt><dd><a href="#/ledger">{o.scorecard.double_payments}</a></dd>
                 <dt>Ledger</dt><dd>{o.all_balanced ? <Pill status="matched" label="Balanced per currency" /> : <Pill status="escalated" label="Check ledger" />}</dd>
               </dl>
             )}

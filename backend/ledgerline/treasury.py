@@ -138,12 +138,23 @@ def plan_inputs(conn: sqlite3.Connection, ctx: AppContext, rates: dict[tuple[str
     now = ctx.clock.now()
     horizon = now + timedelta(days=ctx.policy(conn)["obligation_lookahead_days"])
     fields = ("id", "payee", "currency", "amount_minor", "due_at", "priority", "defer_until")
+    from .reconcile import invoice_views
+
+    invoices = invoice_views(conn)
+
+    def bill_input(b: dict[str, Any]) -> dict[str, Any]:
+        row = {k: b[k] for k in fields}
+        inv = invoices.get(b.get("unlocks_invoice_id") or "")
+        if inv is not None and inv.status == "open" and inv.remaining_minor > 0:  # only present when set, so older stored runs replay unchanged
+            row.update(unlocks_invoice_id=inv.id, unlocks_minor=inv.remaining_minor, unlocks_currency=inv.currency)
+        return row
+
     return {
         "now": iso(now),
         "available": {c: p["projected_after_pending_fx"] + p["obligations_due_in_window"] for c, p in pos.items()},
         "surplus": {c: max(0, p["free_after_commitments"]) for c, p in pos.items()},
         "rates": {f"{a}/{b}": str(r) for (a, b), r in sorted(rates.items())},
-        "bills": [{k: b[k] for k in fields} for b in db.rows(conn, "SELECT * FROM obligations WHERE status = 'scheduled' ORDER BY id")
+        "bills": [bill_input(b) for b in db.rows(conn, "SELECT * FROM obligations WHERE status = 'scheduled' ORDER BY id")
                   if parse_iso(b["due_at"]) <= horizon],
     }
 
@@ -153,7 +164,22 @@ def plan_bills(inputs: dict[str, Any]) -> list[dict[str, Any]]:
     now = parse_iso(inputs["now"])
     available, surplus = dict(inputs["available"]), dict(inputs["surplus"])
     rates = {tuple(k.split("/")): Decimal(v) for k, v in inputs["rates"].items()}
-    bills = sorted(inputs["bills"], key=lambda b: (PRIORITY_ORDER.get(b["priority"], 1), b["due_at"], b["id"]))
+
+    def released(b: dict[str, Any]) -> int:
+        """What paying this bill releases, in the bill's currency. Counts only if it brings in more than the bill costs."""
+        if "unlocks_minor" not in b:
+            return 0
+        rate = Decimal(1) if b["unlocks_currency"] == b["currency"] else rates.get((b["unlocks_currency"], b["currency"]))
+        value = convert_round(b["unlocks_minor"], b["unlocks_currency"], b["currency"], rate) if rate else 0
+        return value if value > b["amount_minor"] else 0
+
+    def in_usd(b: dict[str, Any]) -> int:
+        value = released(b)
+        rate = Decimal(1) if b["currency"] == "USD" else rates.get((b["currency"], "USD"))
+        return convert_round(value, b["currency"], "USD", rate) if value and rate else 0
+
+    # Within a priority, a bill that releases more cash than it costs goes first; critical bills still come before everything.
+    bills = sorted(inputs["bills"], key=lambda b: (PRIORITY_ORDER.get(b["priority"], 1), -in_usd(b), b["due_at"], b["id"]))
     out = []
     for rank, bill in enumerate(bills, start=1):
         ccy, amount = bill["currency"], bill["amount_minor"]
@@ -183,9 +209,13 @@ def plan_bills(inputs: dict[str, Any]) -> list[dict[str, Any]]:
                 reason = f"Short {fmt(shortfall, ccy)}, no surplus to convert and no permitted later date: a person must decide."
         if decision in ("fund", "convert"):
             available[ccy] = max(0, available[ccy] - amount) if decision == "fund" else 0
-        out.append({"obligation_id": bill["id"], "payee": bill["payee"], "currency": ccy, "amount_minor": amount,
-                    "due_at": bill["due_at"], "priority": bill["priority"], "defer_until": bill["defer_until"], "rank": rank,
-                    "decision": decision, "shortfall_minor": shortfall, "source_currency": source, "reason": reason})
+        row = {"obligation_id": bill["id"], "payee": bill["payee"], "currency": ccy, "amount_minor": amount,
+               "due_at": bill["due_at"], "priority": bill["priority"], "defer_until": bill["defer_until"], "rank": rank,
+               "decision": decision, "shortfall_minor": shortfall, "source_currency": source, "reason": reason}
+        if "unlocks_minor" in bill:
+            row["unlocks_invoice_id"] = bill["unlocks_invoice_id"]
+            row["reason"] = f"{reason} Paying it releases {bill['unlocks_invoice_id']} ({fmt(bill['unlocks_minor'], bill['unlocks_currency'])})."
+        out.append(row)
     return out
 
 
@@ -326,9 +356,9 @@ def add_practice_squeeze(ctx: AppContext, actor: str) -> dict[str, Any]:
             ("OBL-SQUEEZE-AGENCY", "Studio Fabrik", left + 100_000, 5, "flexible", 30),
         ]
         for oid, payee, amount, due, priority, later in bills:
-            conn.execute("INSERT INTO obligations(id, payee, currency, amount_minor, due_at, description, status, priority, defer_until) VALUES (?,?,?,?,?,?, 'scheduled', ?, ?)",
+            conn.execute("INSERT INTO obligations(id, payee, currency, amount_minor, due_at, description, status, priority, defer_until, unlocks_invoice_id) VALUES (?,?,?,?,?,?, 'scheduled', ?, ?, ?)",
                          (oid, payee, "GBP", amount, iso(now + timedelta(days=due)), "Practice cash squeeze", priority,
-                          iso(now + timedelta(days=later)) if later else None))
+                          iso(now + timedelta(days=later)) if later else None, "INV-2901" if oid == "OBL-SQUEEZE-SUPPLIER" else None))
         # A large invoice not yet due, so "bring cash in early" has something real to offer against this gap.
         early = (left + 100_000) * 2 * 102 // 100
         conn.execute("INSERT INTO invoices(id, customer_id, currency, amount_minor, prior_paid_minor, status, issued_at, due_at, description) VALUES (?,?,?,?,0,'open',?,?,?)",
