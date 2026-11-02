@@ -1,6 +1,6 @@
 # Hackathon requirements matrix
 
-Updated 30 Oct 2026. Status: **PASS** (verified, evidence named) · **BLOCKED** (needs something outside the code, smallest action named) · **NOT TESTED** · **N/A**. Detailed per-feature evidence: [FULL_APPLICATION_ACCEPTANCE_REPORT](FULL_APPLICATION_ACCEPTANCE_REPORT.md).
+Updated 2 Nov 2026. Status: **PASS** (verified, evidence named) · **BLOCKED** (needs something outside the code, smallest action named) · **NOT TESTED** · **N/A**. Detailed per-feature evidence: [FULL_APPLICATION_ACCEPTANCE_REPORT](FULL_APPLICATION_ACCEPTANCE_REPORT.md).
 
 ## A. Explicit competition requirements
 
@@ -27,7 +27,7 @@ Starter kits in the guide are examples ("take one as written, change it, or appl
 | B1 | Listen for `deposit.settled` webhooks | PASS (live) | VM: signed delivery HTTP 200, one processed event (DEP-7CDAEF2A79), plus four provider redeliveries each booked once |
 | B2 | Poll deposits if webhooks are unreliable | PASS (live) | *Find missed deposits* (`GET /deposits`, own accounts only, idempotent) run by the owner; known-receipt sync for Ledgerline-created simulations. Owner-triggered, not scheduled |
 | B3 | Clean match, fee write-off, partial with exact balance, duplicate (refund or credit), no reference, wrong currency | PASS | `test_matching.py`, fee boundary test, 50-seed evaluation with 0 disagreements |
-| B4 | Payment link for the exact balance; draft if unavailable | PASS (fallback) / BLOCKED (hosted link) | Draft verified; the sandbox refuses link creation (HTTP 400 `configuration_error`, "contact your account manager"). Likely cause per Airwallex staff on Slack: Payment Acceptance is unsupported for accounts registered in India. Smallest action: new sandbox account in US/SG/HK with new API keys |
+| B4 | Payment link for the exact balance; draft if unavailable | PASS (fallback) / PARTLY (hosted link) | Draft verified on the earlier account, refused with `configuration_error`. On the Singapore sandbox account (2 Nov) a hosted early-payment link was created, paid by test card, reported PAID and booked once. The same link call serves balance requests, but a paid balance link has not been run live |
 | B5 | Payer agent over MCP, signed `explain_payment`, three checks | PASS | Real stdio MCP; signature, binding/freshness, records; wrong signer, tampering, expiry, replay, wrong deposit/amount/currency rejected |
 | B6 | Claude reads emails and PDFs when there is no agent | PASS (live) | Browser text and PDF reads on the VM with `claude-opus-5-5`; advisory evidence; prompt injection ignored and flagged |
 | B7 | Apparent duplicate becomes credit after evidence | PASS | DEP-1005 → verified advance credit, refund dropped before money moved |

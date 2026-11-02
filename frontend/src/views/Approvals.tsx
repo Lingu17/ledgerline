@@ -20,18 +20,27 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
   const ready = approvals.data?.filter((a) => a.status === "approved") ?? [];
   const history = approvals.data?.filter((a) => !["pending", "approved"].includes(a.status)) ?? [];
   const liveBills = billPayments.data?.filter((p) => LIVE_PAYMENT.includes(p.status)) ?? [];
+  const billsToDecide = liveBills.filter((p) => p.status === "proposed");
+  const billsUnderway = liveBills.filter((p) => p.status !== "proposed");
 
   if (approvals.error) return <ErrorNote error={approvals.error} onRetry={approvals.reload} />;
   return (
     <div className="stack">
       <section className="stack">
         <h2 className="section-title" style={{ margin: 0 }}>Waiting for a decision</h2>
-        <BillPayments rows={liveBills} op={op} owner={can("owner")} localMode={localMode} />
+        <BillPayments rows={billsToDecide} op={op} owner={can("owner")} localMode={localMode} />
         {!approvals.data ? <div className="card"><Loading /></div> : pending.length === 0 ? (
-          liveBills.length === 0 && <div className="card"><Empty title="No approvals waiting">Bill payments, refunds above the auto-limit and operator returns appear here.</Empty></div>
+          billsToDecide.length === 0 && <div className="card"><Empty title="No approvals waiting">Bill payments, refunds above the auto-limit and operator returns appear here.</Empty></div>
         ) : pending.map((a) => <ScopeCard key={a.id} a={a} busy={busy} canDecide={op} ownProposal={a.created_by === me?.user.email}
             onDecide={(approve) => setConfirm({ a, approve })} />)}
       </section>
+
+      {billsUnderway.length > 0 && (
+        <section className="stack">
+          <h2 className="section-title" style={{ margin: 0 }}>Approved, on its way</h2>
+          <BillPayments rows={billsUnderway} op={op} owner={can("owner")} localMode={localMode} />
+        </section>
+      )}
 
       {ready.length > 0 && (
         <section className="stack">

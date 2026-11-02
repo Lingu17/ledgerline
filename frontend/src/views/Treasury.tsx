@@ -181,8 +181,11 @@ export const LIVE_PAYMENT = ["proposed", "approved", "processing", "sent"];
 export function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment[]; op: boolean; owner: boolean; localMode: boolean }) {
   const { run, busy } = useAction();
   const { me } = useAuth();
-  if (rows.length === 0) return null;
-  const act = (p: BillPayment, path: string, body: unknown, done: string) => run(path + p.id, () => post(`/treasury/bill-payments/${p.id}/${path}`, body), done);
+  const hasRows = rows.length > 0;
+  const beneficiaries = useLoad(() => hasRows && !localMode ? get<{ items: { id: string; name: string; account: string }[] }>("/integrations/sandbox/beneficiaries")
+    : Promise.resolve({ items: [] }), [hasRows, localMode]);
+  if (!hasRows) return null;
+  const act =(p: BillPayment, path: string, body: unknown, done: string) => run(path + p.id, () => post(`/treasury/bill-payments/${p.id}/${path}`, body), done);
   const canSimulate = localMode ? op : owner;
   return (
     <Card title="Bill payments" pad={false}>
@@ -190,10 +193,14 @@ export function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment
         <table>
           <thead><tr><th>Bill</th><th>Paid to</th><th className="num">Amount</th><th>Status</th><th /></tr></thead>
           <tbody>
-            {rows.map((p) => (
+            {rows.map((p) => {
+              const to = beneficiaries.data?.items.find((b) => b.id === p.destination);
+              return (
               <tr key={p.id}>
                 <td style={{ minWidth: 140 }}><div className="primary-text">{p.payee}</div><div className="secondary mono">{p.id} · request {p.request_id.slice(0, 8)}…</div></td>
-                <td className="small" style={{ overflowWrap: "anywhere" }}>{p.destination}</td>
+                <td className="small" style={{ minWidth: 120, overflowWrap: "anywhere" }} title={p.destination}>
+                  {to ? <><div className="primary-text">{to.name}</div><div className="secondary mono">{to.account}</div></> : p.destination}
+                </td>
                 <td className="num"><Money minor={p.amount_minor} ccy={p.currency} /></td>
                 <td className="small" style={{ minWidth: 160 }}>
                   <Pill status={p.status === "proposed" ? "pending" : p.status} label={p.status === "proposed" ? "Needs a second person" : undefined} />
@@ -216,7 +223,8 @@ export function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment
                   </div>}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
