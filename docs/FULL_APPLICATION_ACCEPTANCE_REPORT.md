@@ -208,4 +208,5 @@ A controlled pilot would need: a pilot customer's real statement export to measu
 | Redeploy | `update.sh 6ef43c5` again, then `--verify` **8/8** |
 | Live refund after redeploy | DEP-A5F71B22E4 still `refunded`, OP-46BAA6D1 `paid`, ledger balanced |
 | Key files | all `private_keys.json` mode 600 |
+| Update 2 Nov | `c9615c1` deployed (wording only: backend unchanged from `6ef43c5`), [CI 41401760092](https://github.com/Lingu17/ledgerline/actions/runs/41401760092) green, browser E2E 13 passed. Verified live: health, new text served, refund still `refunded`/`paid`, 3-day uptime and nightly backups before deploy. Fresh clone of `main` set up, ran and tested on Windows. Claude live read $0.0067, 14.6 s. The 32-check smoke was not rerun for this wording change |
 | Previous release | `3ce6c32`: CI 40999390871, smoke 32/32, restart / reboot / redeploy 8/8 each |
