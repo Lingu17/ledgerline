@@ -69,7 +69,7 @@ def test_older_logs_are_chained_by_the_upgrade(tmp_path):
     for i in range(3):
         conn.execute("INSERT INTO audit_events(at, actor, action, entity_type, entity_id, detail) VALUES (?,?,?,?,?,?)",
                      (f"2026-10-0{i + 1}T00:00:00Z", "old", "x", "y", "z", "{}"))
-    assert migrate(conn, TENANT) == [6]
+    assert migrate(conn, TENANT) == [6, 7]
     conn.row_factory = sqlite3.Row
     r = audit.verify_chain(conn)
     assert r["ok"] and r["events"] == 3

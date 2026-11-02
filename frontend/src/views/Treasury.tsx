@@ -76,6 +76,7 @@ export function Treasury({ localMode }: { localMode: boolean }) {
 
       <BillDecisions plan={decisions} op={op} payments={payments.data ?? []} onPay={setPaying} />
       <BillPayments rows={payments.data ?? []} op={op} owner={owner} localMode={localMode} />
+      <CloseTheGap op={op} localMode={localMode} />
       <PlanHistory />
       {paying && <PayBill bill={paying} localMode={localMode} onClose={() => setPaying(null)} />}
 
@@ -219,6 +220,70 @@ function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment[]; op:
           </tbody>
         </table>
       </div>
+    </Card>
+  );
+}
+
+interface GapOption { invoice_id: string; customer: string; currency: string; due_at: string; remaining_minor: number; discount_bps: number; discount_minor: number; cash_minor: number; closes_gap: boolean }
+interface GapOptions { gaps: Record<string, number>; max_bps: number; options: GapOption[] }
+interface Offer { id: string; invoice_id: string; customer: string; currency: string; discount_bps: number; discount_minor: number; amount_minor: number; status: string; url: string | null; note: string | null }
+
+function CloseTheGap({ op, localMode }: { op: boolean; localMode: boolean }) {
+  const opts = useLoad(() => get<GapOptions>("/treasury/early-pay/options"), []);
+  const offers = useLoad(() => get<Offer[]>("/treasury/early-pay"), []);
+  const { run, busy } = useAction();
+  const gaps = Object.entries(opts.data?.gaps ?? {});
+  if (!gaps.length && !offers.data?.length) return null;
+  return (
+    <Card title="Bring cash in early" pad={false}>
+      <div className="card-body small">
+        {gaps.length ? <>Bills that cannot be funded are short by {gaps.map(([c, v]) => money(v, c)).join(" and ")}. Offering a small discount on invoices not yet due can bring that cash in. Nothing is sent to a customer until you share the link.</>
+          : "No bill is short right now."}
+      </div>
+      {!!opts.data?.options.length && (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Invoice</th><th>Due</th><th className="num">Balance</th><th className="num">Costs you</th><th className="num">Cash now</th><th /></tr></thead>
+            <tbody>
+              {opts.data.options.map((o) => (
+                <tr key={o.invoice_id}>
+                  <td style={{ minWidth: 140 }}><div className="primary-text">{o.customer}</div><div className="secondary mono">{o.invoice_id}</div></td>
+                  <td className="nowrap">{day(o.due_at)}</td>
+                  <td className="num"><Money minor={o.remaining_minor} ccy={o.currency} /></td>
+                  <td className="num">{money(o.discount_minor, o.currency)}<div className="secondary">{(o.discount_bps / 100).toFixed(2)}%</div></td>
+                  <td className="num"><b>{money(o.cash_minor, o.currency)}</b>{o.closes_gap && <div className="secondary">Closes the gap</div>}</td>
+                  <td className="num">{op && <button className="btn small" disabled={!!busy} onClick={() => run("offer", () => post(`/invoices/${o.invoice_id}/early-pay`, { discount_bps: o.discount_bps }), "Early-payment offer created")}>Create offer</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!!offers.data?.length && (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Offer</th><th className="num">Customer pays</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {offers.data.map((o) => (
+                <tr key={o.id}>
+                  <td style={{ minWidth: 150 }}><div className="primary-text">{o.customer}</div><div className="secondary mono">{o.invoice_id} · {o.id}</div></td>
+                  <td className="num"><Money minor={o.amount_minor} ccy={o.currency} /><div className="secondary">{money(o.discount_minor, o.currency)} discount</div></td>
+                  <td className="small" style={{ minWidth: 180 }}>
+                    <Pill status={o.status === "paid" ? "matched" : o.status === "open" ? "pending" : "escalated"} label={o.status === "open" ? "Waiting for payment" : o.status === "paid" ? "Paid" : o.status === "unknown" ? "Outcome unknown" : "No link"} />
+                    {o.url && o.status === "open" && <div><a href={o.url} target="_blank" rel="noreferrer noopener">Open payment link</a></div>}
+                    {o.note && <div className="secondary">{o.note}</div>}
+                  </td>
+                  <td className="num">
+                    {op && o.status === "open" && (localMode
+                      ? <button className="btn small" disabled={!!busy} onClick={() => run("pp" + o.id, () => post(`/treasury/early-pay/${o.id}/practice-paid`), "Practice payment received")}>Practice: customer pays</button>
+                      : <button className="btn small" disabled={!!busy} onClick={() => run("chk" + o.id, () => post<Offer>(`/treasury/early-pay/${o.id}/check`), (r) => r.status === "paid" ? "Payment received and booked" : "Not paid yet")}>Check payment</button>)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }

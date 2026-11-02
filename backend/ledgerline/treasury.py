@@ -329,7 +329,12 @@ def add_practice_squeeze(ctx: AppContext, actor: str) -> dict[str, Any]:
             conn.execute("INSERT INTO obligations(id, payee, currency, amount_minor, due_at, description, status, priority, defer_until) VALUES (?,?,?,?,?,?, 'scheduled', ?, ?)",
                          (oid, payee, "GBP", amount, iso(now + timedelta(days=due)), "Practice cash squeeze", priority,
                           iso(now + timedelta(days=later)) if later else None))
-        audit.record(conn, iso(now), actor, "practice.cash_squeeze_added", "treasury", "practice", {"bills": [b[0] for b in bills]})
+        # A large invoice not yet due, so "bring cash in early" has something real to offer against this gap.
+        early = (left + 100_000) * 2 * 102 // 100
+        conn.execute("INSERT INTO invoices(id, customer_id, currency, amount_minor, prior_paid_minor, status, issued_at, due_at, description) VALUES (?,?,?,?,0,'open',?,?,?)",
+                     ("INV-2901", "CUST-CALDER", "GBP", early, iso(now), iso(now + timedelta(days=21)), "Annual reporting licence (practice cash squeeze)"))
+        audit.post(conn, iso(now), "Invoice INV-2901 issued", "invoice", "INV-2901", audit.move("accounts_receivable", "revenue", "GBP", early))
+        audit.record(conn, iso(now), actor, "practice.cash_squeeze_added", "treasury", "practice", {"bills": [b[0] for b in bills], "invoice": "INV-2901"})
     return refresh_decisions(ctx, "cash squeeze added", actor)
 
 

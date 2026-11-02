@@ -327,3 +327,8 @@ class AirwallexSandbox:
         if not out.get("url"):
             raise ProviderUnsupported("payment link response had no url")
         return PaymentLinkResult(out["id"], out["url"])
+
+    def payment_link_paid(self, provider_id: str) -> bool:
+        """A single-use link is paid when Airwallex says so or counts a successful payment. Anything else is not paid."""
+        out = self._request("GET", f"/pa/payment_links/{provider_id}")
+        return str(out.get("status", "")).upper() == "PAID" or (out.get("successful_payment_intent_count") or 0) > 0

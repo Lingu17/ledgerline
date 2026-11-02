@@ -210,6 +210,27 @@ CREATE TABLE IF NOT EXISTS bill_payments (
 CREATE UNIQUE INDEX IF NOT EXISTS one_live_payment_per_bill
   ON bill_payments(obligation_id) WHERE status NOT IN ('rejected','invalidated','failed','cancelled')"""),
     (6, "hash-chained audit log and replayable plan runs", _tenant_v6),
+    (7, "early-payment offers", """
+CREATE TABLE IF NOT EXISTS early_pay_offers (
+  id TEXT PRIMARY KEY,
+  invoice_id TEXT NOT NULL REFERENCES invoices(id),
+  customer_id TEXT NOT NULL REFERENCES customers(id),
+  currency TEXT NOT NULL,
+  invoice_remaining_minor INTEGER NOT NULL,
+  discount_bps INTEGER NOT NULL,
+  discount_minor INTEGER NOT NULL,
+  amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+  status TEXT NOT NULL,
+  url TEXT,
+  provider_id TEXT,
+  deposit_id TEXT,
+  note TEXT,
+  offered_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS one_live_offer_per_invoice
+  ON early_pay_offers(invoice_id) WHERE status IN ('creating','open','unknown')"""),
 ]
 
 

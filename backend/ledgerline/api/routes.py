@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
 from ..payer_agents.keys import key_location
-from .. import audit, bill_payments, claude_reader, db, demo, ledger, payouts, treasury, webhooks, workspace
+from .. import audit, bill_payments, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace
 from ..clock import iso
 from ..context import AppContext, validate_policy
 from ..payer_agents.client import explain_payments
@@ -636,6 +636,35 @@ def audit_verify(request: Request) -> dict[str, Any]:
         return audit.verify_chain(conn)
 
 
+class EarlyPayBody(BaseModel):
+    discount_bps: StrictInt
+
+
+@router.get("/treasury/early-pay/options", dependencies=read)
+def early_pay_options(request: Request) -> dict[str, Any]:
+    return early_pay.options(ctx_of(request))
+
+
+@router.get("/treasury/early-pay", dependencies=read)
+def early_pay_offers(request: Request) -> list[dict[str, Any]]:
+    return early_pay.list_offers(ctx_of(request))
+
+
+@router.post("/invoices/{invoice_id}/early-pay")
+def early_pay_offer(request: Request, invoice_id: str, body: EarlyPayBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return early_pay.create_offer(ctx_of(request), invoice_id, body.discount_bps, operator)
+
+
+@router.post("/treasury/early-pay/{offer_id}/check")
+def early_pay_check(request: Request, offer_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return early_pay.check(ctx_of(request), offer_id, operator)
+
+
+@router.post("/treasury/early-pay/{offer_id}/practice-paid")
+def early_pay_practice(request: Request, offer_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    return early_pay.practice_paid(ctx_of(request), offer_id, operator)
+
+
 @router.get("/treasury/plan-runs", dependencies=read)
 def plan_runs(request: Request) -> list[dict[str, Any]]:
     return treasury.list_plan_runs(ctx_of(request))
@@ -663,6 +692,7 @@ def audit_export(request: Request) -> Response:
             "operations": [_loads(o, "detail") for o in db.rows(conn, "SELECT * FROM operations ORDER BY created_at")],
             "operation_events": db.rows(conn, "SELECT * FROM operation_events ORDER BY id"),
             "bill_payments": db.rows(conn, "SELECT * FROM bill_payments ORDER BY created_at"),
+            "early_pay_offers": db.rows(conn, "SELECT * FROM early_pay_offers ORDER BY created_at"),
             "audit_chain": audit.verify_chain(conn),
             "plan_runs": [_loads(r, "inputs", "output") for r in db.rows(conn, "SELECT * FROM plan_runs ORDER BY at")],
             "conservation": ledger.conservation(conn),

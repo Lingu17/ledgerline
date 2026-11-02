@@ -24,6 +24,8 @@ DEFAULT_POLICY: dict[str, Any] = {
     # Cash set aside from planning, e.g. a pre-funded sandbox wallet where only a budget is the operating book.
     "ring_fenced_minor": {"USD": 0, "EUR": 0, "GBP": 0},
     "obligation_lookahead_days": 14,
+    # The largest early-payment discount anyone can offer (basis points).
+    "early_pay_max_bps": 200,
     "evidence_max_ttl_seconds": 900,
     "evidence_clock_skew_seconds": 60,
     "webhook_tolerance_seconds": 300,
@@ -41,6 +43,7 @@ def validate_policy(policy: dict[str, Any]) -> dict[str, Any]:
     for key, lo, hi in (
         ("fee_tolerance_bps", 0, 500),
         ("obligation_lookahead_days", 1, 90),
+        ("early_pay_max_bps", 0, 1000),
         ("evidence_max_ttl_seconds", 60, 3600),
         ("evidence_clock_skew_seconds", 0, 300),
         ("webhook_tolerance_seconds", 30, 900),

@@ -80,6 +80,8 @@ Your organization is isolated from every other one. A practice company uses made
 
 **When cash is short:** Treasury → *What to pay first* ranks bills due soon by priority, then due date, and decides each one: fund, convert only the shortfall, defer to a date you allowed, or escalate. New cash reopens only the decisions it changes, and each change is audited. Deciding moves no money. A funded bill can then be paid through the bank: a second person approves the exact amount and destination, the plan is rechecked before sending, and the bill closes only on PAID. **Add a cash squeeze** shows all four decisions in a practice company, and **Set aside from planning** (Settings → Policy) creates a real shortfall on a pre-funded sandbox wallet.
 
+**Bring cash in early:** when bills are short, Treasury prices a discount on invoices not yet due (capped by policy, 2% by default) and creates a hosted Airwallex link. Nothing is emailed. **Check payment** books the discount and cash once Airwallex reports the link paid, then re-plans the bills. Status is read on request; link payment webhooks are not used yet.
+
 **Proof you can check:** Treasury → *Plan history* → **Replay** runs the planner again on a decision's stored inputs and compares the result. Activity → **Verify log integrity** recomputes the audit hash chain, which detects an edited or removed event. Someone with database write access could rewrite the whole chain, so keep the head hash from a downloaded evidence export to rule that out.
 
 **Not done yet:** live-money Airwallex access, and connecting a customer's own hosted payer agent (payer agents currently run on this server).

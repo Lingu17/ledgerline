@@ -87,6 +87,8 @@ export const SOURCE_LABEL: Record<string, string> = {
   manual_import: "Manually recorded",
   airwallex_sandbox_simulation: "Sandbox simulation",
   airwallex_sandbox_webhook: "Sandbox webhook",
+  airwallex_payment_link: "Airwallex payment link",
+  practice_payment_link: "Practice payment link",
 };
 
 export function tone(status: string): "ok" | "warn" | "risk" | "info" | "muted" {

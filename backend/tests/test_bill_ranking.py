@@ -155,7 +155,7 @@ def test_practice_squeeze_shows_all_four_and_a_payment_reopens_only_what_changes
     assert d["OBL-SQUEEZE-TAX"]["decision"] == "escalate" and d["OBL-SQUEEZE-AGENCY"]["decision"] == "defer"
     assert client.post("/api/treasury/practice-squeeze").status_code == 409
 
-    open_gbp = next(i for i in client.get("/api/invoices?status=outstanding").json() if i["currency"] == "GBP" and i["remaining_minor"] >= 120_000)
+    open_gbp = next(i for i in client.get("/api/invoices?status=outstanding").json() if i["id"] == "INV-2260")
     amount = f"{open_gbp['remaining_minor'] / 100:.2f}"
     payer = next(c for c in client.get("/api/customers").json() if c["id"] == open_gbp["customer_id"])["payer_names"][0]
     pay = client.post("/api/payments", json={"external_ref": "SQUEEZE-1", "currency": "GBP", "amount": amount, "payer_name": payer, "reference": open_gbp["id"]})
