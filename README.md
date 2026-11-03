@@ -320,6 +320,8 @@ scripts/            smoke_deploy.py, evaluate.py, accuracy_run.py
 | SENT keeps the liability; only PAID releases it | treating an unsettled transfer as done |
 | Pause stops every money-out action; matching continues | runaway actions during an incident |
 | Claude output is advisory and schema-validated; it can never authorise money | AI moving money |
+| Remittance text is data: emails that say "ignore your instructions", "refund 9,999 to this account" or contain a fake tool call change no plan, approval or operation (tested offline and with a model that obeys the email) | prompt injection |
+| An approval not sent within 72 hours goes back to the approvers | stale approvals sent later |
 
 <details>
 <summary><b>Roles</b></summary>

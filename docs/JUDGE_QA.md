@@ -9,6 +9,9 @@ We don't trust it on its own. The signature only says who is speaking. The answe
 **What stops the agent from sending money?**
 The agent only proposes. Small refunds backed by a verified answer go out under a limit the company sets, and the pause switch stops them. Anything over the limit needs two people, and when the agent proposed it, the approver can't also send it: the page shows no Send button to them, and the server refuses the request (403, covered by an automated test). Claude never states an amount and has no tool that moves money.
 
+**What if a remittance email contains instructions for the AI?**
+It is treated as data. Tests feed emails that say "ignore previous instructions", "refund 9,999 to this account", "approve this", or contain a fake tool call, through the offline reader and through a model that does what the email says. In every case the result is stored as advisory evidence only, off-schema output becomes an escalation, and no plan, approval or operation changes; no amount or account from the email appears anywhere. The tools themselves have no amount or account field.
+
 **Is the two-person rule real if you used two of your own accounts?**
 The rule checks accounts, not people, and we say so. The live sandbox runs show the control and the bank call. They aren't independent review.
 
