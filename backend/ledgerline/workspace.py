@@ -331,15 +331,19 @@ def set_payer_agent(ctx: AppContext, customer_id: str, body: dict[str, Any], act
 def clear_payer_agent(ctx: AppContext, customer_id: str, actor: str) -> dict[str, Any]:
     """Stop asking the customer's own agent. A practice customer goes back to its simulated agent; a real customer has
     no agent until one is registered again."""
-    from .payer_agents.keys import public_registry, key_location
+    from .payer_agents.keys import key_location, load_keys
 
+    # Read the simulated agent's key before the transaction: on PostgreSQL the key store is another connection, and
+    # opening it while this transaction holds its locks would make the two wait on each other. Read only, never created.
+    private = load_keys(key_location(ctx.settings)).get(customer_id)
+    simulated_pub = crypto.public_from_private(private) if private else None
     with ctx.conn() as conn, db.transaction(conn):
         cur = db.row(conn, "SELECT * FROM customers WHERE id = ?", (customer_id,))
         if cur is None:
             raise InputError("unknown customer")
         if not cur.get("agent_url"):
             raise InputError("this customer has no agent of its own registered")
-        simulated = public_registry(key_location(ctx.settings)).get(customer_id) if cur.get("demo_only") else None
+        simulated = {"public_key": simulated_pub, "key_id": crypto.key_id_for(simulated_pub)} if cur.get("demo_only") and simulated_pub else None
         now = iso(ctx.clock.now())
         conn.execute("UPDATE customers SET agent_url = NULL, agent_public_key = ?, agent_key_id = ?, agent_key_set_by = ?, agent_key_set_at = ?,"
                      " updated_at = ? WHERE id = ?", (simulated and simulated["public_key"], simulated and simulated["key_id"], actor, now, now, customer_id))
