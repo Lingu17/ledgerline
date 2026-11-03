@@ -27,6 +27,8 @@ DEFAULT_POLICY: dict[str, Any] = {
     # The largest early-payment discount anyone can offer (basis points).
     "early_pay_max_bps": 200,
     "evidence_max_ttl_seconds": 900,
+    # An approval not acted on within this many hours expires and goes back to the approvers (practice companies excepted).
+    "approval_ttl_hours": 72,
     "evidence_clock_skew_seconds": 60,
     "webhook_tolerance_seconds": 300,
 }
@@ -45,6 +47,7 @@ def validate_policy(policy: dict[str, Any]) -> dict[str, Any]:
         ("obligation_lookahead_days", 1, 90),
         ("early_pay_max_bps", 0, 1000),
         ("evidence_max_ttl_seconds", 60, 3600),
+        ("approval_ttl_hours", 1, 720),
         ("evidence_clock_skew_seconds", 0, 300),
         ("webhook_tolerance_seconds", 30, 900),
     ):

@@ -87,6 +87,19 @@ def current_scope(conn: sqlite3.Connection, deposit_id: str, amount_minor: int, 
     }
 
 
+def approval_expired(ctx: AppContext, conn: sqlite3.Connection, decided_at: str | None) -> int | None:
+    """The approval window in hours if an approval given at decided_at has run out, else None. Practice companies never
+    expire, so a judge who comes back days later can still finish."""
+    if not decided_at or (ctx.org and ctx.org.get("kind") == "sample"):
+        return None
+    hours = ctx.policy(conn)["approval_ttl_hours"]
+    try:
+        given = parse_iso(decided_at)
+    except ValueError:
+        return hours  # an approval time that cannot be read counts as expired
+    return hours if ctx.clock.now() - given >= timedelta(hours=hours) else None
+
+
 def sender_must_differ(a: dict[str, Any]) -> bool:
     """Two people must be involved. If a person proposed it, the approver is the second; if not, the sender has to be.
     created_by is empty on older rows, "system" for the agent's proposals, and an email for a team member."""
@@ -192,6 +205,8 @@ def _event(conn, op_id, frm, to, detail, now):
 def execute_refund(ctx: AppContext, approval_id: str, actor: str, *, automatic: bool = False) -> dict[str, Any]:
     """Send an approved refund. One the policy approved, now over a lowered limit, goes back to a second person instead."""
     result = _send_refund(ctx, approval_id, actor)
+    if result.get("expired_after_hours") and not automatic:
+        raise StaleApproval(f"this approval expired: it was not sent within {result['expired_after_hours']} hours, so it is back with the approvers to approve again")
     if result.get("returned_to_person") and not automatic:
         raise StaleApproval("this refund is now over the auto-approval limit, so it needs a second person to approve it")
     return result
@@ -228,6 +243,12 @@ def _send_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any
                 raise PayoutError(f"approval is {a['status']}; it must be approved before execution")
             if ctx.paused(conn):
                 raise Paused("money-out is paused; the approval is kept and can execute after resume")
+            hours = approval_expired(ctx, conn, a["decided_at"])
+            if hours is not None:  # nothing is deleted: the approval goes back to the approvers, and the audit log says why
+                conn.execute("UPDATE approvals SET status='pending', decided_by=NULL, decided_at=NULL WHERE id = ?", (approval_id,))
+                audit.record(conn, now, "system", "approval.expired", "approval", approval_id,
+                             {"approved_by": a["decided_by"], "approved_at": a["decided_at"], "ttl_hours": hours})
+                return {"operation": None, "expired_after_hours": hours}
             if a["decided_by"] == "policy:auto_limit":
                 # The limit may have been lowered since the policy approved this, for example while money-out was paused.
                 stored = json.loads(a["scope"])
@@ -444,7 +465,8 @@ def auto_execute_ready(ctx: AppContext, actor: str = "system") -> list[str]:
     done = []
     for aid in ids:
         try:
-            if not execute_refund(ctx, aid, actor, automatic=True).get("returned_to_person"):
+            r = execute_refund(ctx, aid, actor, automatic=True)
+            if not r.get("returned_to_person") and not r.get("expired_after_hours"):
                 done.append(aid)
         except (Paused, StaleApproval, PayoutError, ReconcileError):
             continue

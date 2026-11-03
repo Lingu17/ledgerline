@@ -96,8 +96,8 @@ def test_second_live_refund_for_same_deposit_blocked_by_lock(ready):
     # Forge a second approved approval for the same deposit; the unique index must still refuse.
     with ready.conn() as conn, db.transaction(conn):
         a = db.row(conn, "SELECT * FROM approvals WHERE id = ?", (aid,))
-        conn.execute("INSERT INTO approvals(id, operation_type, deposit_id, scope, scope_hash, status, reason, decided_by, decided_at, invalidated_reason, created_at) VALUES ('APR-FORGED','refund','DEP-1006',?,?,'approved','x','op','t',NULL,'t')",
-                     (a["scope"], a["scope_hash"]))
+        conn.execute("INSERT INTO approvals(id, operation_type, deposit_id, scope, scope_hash, status, reason, decided_by, decided_at, invalidated_reason, created_at) VALUES ('APR-FORGED','refund','DEP-1006',?,?,'approved','x','op',?,NULL,?)",
+                     (a["scope"], a["scope_hash"], a["decided_at"], a["created_at"]))
     with pytest.raises((PayoutError, StaleApproval)):
         payouts.execute_refund(ready, "APR-FORGED", "op")
     assert ready.local_bank.count_transfers() == 1

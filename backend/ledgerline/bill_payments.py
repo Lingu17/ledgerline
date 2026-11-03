@@ -17,7 +17,7 @@ from . import audit, crypto, db, treasury
 from .clock import iso, parse_iso
 from .context import AppContext
 from .money import fmt
-from .payouts import LEASE, REQUEST_NS, Paused, PayoutError, SelfApproval, StaleApproval, same_person
+from .payouts import LEASE, REQUEST_NS, Paused, PayoutError, SelfApproval, StaleApproval, approval_expired, same_person
 from .providers.base import ProviderAmbiguous, ProviderError
 
 _FINAL_FAIL = ("failed", "cancelled")
@@ -127,7 +127,7 @@ def decide(ctx: AppContext, payment_id: str, *, approve: bool, actor: str, seen_
 
 def _claim(ctx: AppContext, payment_id: str, actor: str, rates) -> tuple[dict[str, Any], bool] | None:
     """Move to processing under the lock so concurrent callers cannot both reach the bank. None: nothing to send."""
-    problem = None
+    problem = expired = None
     with ctx.conn() as conn, db.transaction(conn):
         now_dt = ctx.clock.now()
         now = iso(now_dt)
@@ -143,15 +143,23 @@ def _claim(ctx: AppContext, payment_id: str, actor: str, rates) -> tuple[dict[st
         if ctx.paused(conn):
             raise Paused("money-out is paused; the payment is kept and can be sent after resume")
         if first:
-            problem = _scope_problem(conn, p)
-            if not problem:
-                _require_funded(conn, ctx, p["obligation_id"], rates)
-        if not problem:
+            expired = approval_expired(ctx, conn, p["decided_at"])
+            if expired is not None:  # back to the approvers; nothing deleted
+                conn.execute("UPDATE bill_payments SET status='proposed', decided_by=NULL, decided_at=NULL, updated_at=? WHERE id = ?", (now, payment_id))
+                audit.record(conn, now, "system", "bill_payment.approval_expired", "bill_payment", payment_id,
+                             {"approved_by": p["decided_by"], "approved_at": p["decided_at"], "ttl_hours": expired})
+            else:
+                problem = _scope_problem(conn, p)
+                if not problem:
+                    _require_funded(conn, ctx, p["obligation_id"], rates)
+        if expired is None and not problem:
             conn.execute("UPDATE bill_payments SET status='processing', needs_reconciliation=1, attempts=attempts+1, lease_until=?, updated_at=? WHERE id = ?",
                          (iso(now_dt + timedelta(seconds=LEASE.total_seconds())), now, payment_id))
             audit.record(conn, now, actor, "bill_payment.submitting", "bill_payment", payment_id,
                          {"request_id": p["request_id"], "lookup_first": not first})
             return _row(conn, payment_id), not first
+    if expired is not None:
+        raise StaleApproval(f"this approval expired: it was not sent within {expired} hours, so it is back with the approvers to approve again")
     _invalidate(ctx, p, problem)
     raise StaleApproval(problem)
 
