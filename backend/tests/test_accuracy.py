@@ -10,7 +10,8 @@ from .accuracy_harness import Scenario, run_sample_walkthrough
 @pytest.fixture(scope="module")
 def shared_app(tmp_path_factory):
     return create_app(load_settings({
-        "LEDGERLINE_DATA_DIR": str(tmp_path_factory.mktemp("accuracy")), "LEDGERLINE_PAYER_MCP_TRANSPORT": "memory",
+        "LEDGERLINE_DATA_DIR": str(tmp_path_factory.mktemp("accuracy")), "LEDGERLINE_SIGNUP_PER_IP_HOUR": "100000", "LEDGERLINE_SIGNUP_PER_IP_DAY": "100000", "LEDGERLINE_SIGNUP_PER_DAY": "100000", # synthetic volume, not sign-ups
+        "LEDGERLINE_PAYER_MCP_TRANSPORT": "memory",
         "ANTHROPIC_API_KEY": "", "AIRWALLEX_CLIENT_ID": "", "AIRWALLEX_API_KEY": "", "GOOGLE_CLIENT_ID": "", "APPLE_CLIENT_ID": "",
     }))
 

@@ -67,6 +67,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         log.warning("ignoring pre-SaaS single-tenant database %s; organizations live under %s", legacy, settings.data_dir / "orgs")
 
     control = ControlPlane(settings.pg_target("control") if settings.postgres else settings.data_dir / "control.sqlite3", clock)
+    control.creation_limits = dict(zip(("per_ip_hour", "per_ip_day", "per_day"), settings.signup_limits))
     app = FastAPI(title="Ledgerline", version="0.2.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
     app.state.settings = settings
     app.state.control = control

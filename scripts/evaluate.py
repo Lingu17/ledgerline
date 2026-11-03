@@ -79,7 +79,7 @@ def main() -> int:
     args = ap.parse_args()
     started = time.time()
     with tempfile.TemporaryDirectory(prefix="ledgerline-eval-") as tmp:
-        app = create_app(load_settings({"LEDGERLINE_DATA_DIR": tmp, "LEDGERLINE_PAYER_MCP_TRANSPORT": "memory",
+        app = create_app(load_settings({"LEDGERLINE_DATA_DIR": tmp, "LEDGERLINE_SIGNUP_PER_IP_HOUR": "100000", "LEDGERLINE_SIGNUP_PER_IP_DAY": "100000", "LEDGERLINE_SIGNUP_PER_DAY": "100000", "LEDGERLINE_PAYER_MCP_TRANSPORT": "memory",
                                         "LEDGERLINE_SAMPLE_WORKSPACE": "1", "ANTHROPIC_API_KEY": "", "AIRWALLEX_CLIENT_ID": "",
                                         "AIRWALLEX_API_KEY": "", "GOOGLE_CLIENT_ID": "", "APPLE_CLIENT_ID": "",
                                         "LEDGERLINE_LOG_LEVEL": "WARNING"}))

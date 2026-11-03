@@ -128,6 +128,23 @@ class ControlPlane:
     def now(self) -> str:
         return iso(self.clock.now())
 
+    # New accounts and organizations each cost a database and disk. Per client address, rolling windows; plus a cap for
+    # the whole server. Generous enough for several judges behind one office address.
+    creation_limits = {"per_ip_hour": 10, "per_ip_day": 40, "per_day": 500}
+
+    def _check_creation(self, c: sqlite3.Connection, ip: str, what: str) -> None:
+        now = self.clock.now()
+        hour, day = iso(now - timedelta(hours=1)), iso(now - timedelta(days=1))
+        count = lambda sql, params: int(c.execute(sql, params).fetchone()[0])  # noqa: E731
+        lim = self.creation_limits
+        if count("SELECT COUNT(*) FROM creations WHERE ip = ? AND at >= ?", (ip, hour)) >= lim["per_ip_hour"]:
+            raise AuthError(429, "too many new accounts or organizations from your network in the last hour; try again later or ask an owner for an invitation", retry_after=3600)
+        if count("SELECT COUNT(*) FROM creations WHERE ip = ? AND at >= ?", (ip, day)) >= lim["per_ip_day"]:
+            raise AuthError(429, "too many new accounts or organizations from your network today; try again tomorrow or ask an owner for an invitation", retry_after=86400)
+        if count("SELECT COUNT(*) FROM creations WHERE at >= ?", (day,)) >= lim["per_day"]:
+            raise AuthError(429, "this server has reached today's limit for new accounts and organizations; try again tomorrow or ask an owner for an invitation", retry_after=86400)
+        c.execute("INSERT INTO creations(at, ip, what) VALUES (?,?,?)", (iso(now), ip, what))
+
     def _audit(self, c: sqlite3.Connection, actor: str, action: str, org_id: str | None, detail: dict[str, Any]) -> None:
         c.execute("INSERT INTO control_audit(at, actor, org_id, action, detail) VALUES (?,?,?,?,?)",
                   (self.now(), actor, org_id, action, json.dumps(detail, sort_keys=True)))
@@ -170,13 +187,14 @@ class ControlPlane:
         with self.conn() as c:
             return [r["id"] for r in db.rows(c, "SELECT id FROM organizations")]
 
-    def create_org(self, user_id: str, name: Any, kind: str) -> str:
+    def create_org(self, user_id: str, name: Any, kind: str, ip: str = "unknown") -> str:
         name = _text(name, "organization name", 2, 80)
         if kind not in ("workspace", "sample"):
             raise AuthError(422, "kind must be 'workspace' or 'sample'")
         with self.conn() as c, db.transaction(c):
+            self._check_creation(c, ip, "organization")
             org_id = self._insert_org(c, name, kind, user_id)
-            self._audit(c, user_id, "org.created", org_id, {"name": name, "kind": kind})
+            self._audit(c, user_id, "org.created", org_id, {"name": name, "kind": kind, "ip": ip})
             return org_id
 
     def update_org_settings(self, org_id: str, actor: str, body: dict[str, Any], *, sandbox_available: bool) -> dict[str, Any]:
@@ -217,7 +235,7 @@ class ControlPlane:
             self._audit(c, actor, "org.airwallex_connected" if sealed else "org.airwallex_disconnected", org_id, {"receiving_accounts": accounts})
 
     # ---------------------------------------------------------------- users & sessions
-    def signup(self, *, email: Any, name: Any, password: Any, org_name: Any, kind: str, user_agent: str = "") -> tuple[str, str]:
+    def signup(self, *, email: Any, name: Any, password: Any, org_name: Any, kind: str, user_agent: str = "", ip: str = "unknown") -> tuple[str, str]:
         email = validate_email(email)
         name = _text(name, "name", 1, 80)
         validate_password(password)
@@ -227,11 +245,12 @@ class ControlPlane:
         with self.conn() as c, db.transaction(c):
             if db.row(c, "SELECT id FROM users WHERE email = ?", (email,)):
                 raise AuthError(409, "an account with this email already exists; sign in instead")
+            self._check_creation(c, ip, "signup")
             user_id = "usr_" + uuid.uuid4().hex[:12]
             c.execute("INSERT INTO users(id, email, name, password_hash, created_at, password_changed_at) VALUES (?,?,?,?,?,?)",
                       (user_id, email, name, hash_password(password), self.now(), self.now()))
             org_id = self._insert_org(c, org_name, kind, user_id)
-            self._audit(c, email, "user.signup", org_id, {"org_name": org_name, "kind": kind})
+            self._audit(c, email, "user.signup", org_id, {"org_name": org_name, "kind": kind, "ip": ip})
             token = self._new_session(c, user_id, org_id, user_agent)
             return token, org_id
 
@@ -501,6 +520,7 @@ class ControlPlane:
                     raise AuthError(409, "account_exists")
                 if not allow_signup:
                     raise AuthError(403, "signup_disabled")
+                self._check_creation(c, ip, "signup")
                 user_id = "usr_" + uuid.uuid4().hex[:12]
                 display = (name or "").strip()[:80] or email.split("@")[0]
                 c.execute("INSERT INTO users(id, email, name, password_hash, created_at, password_changed_at) VALUES (?,?,?,?,?,?)",
@@ -508,7 +528,7 @@ class ControlPlane:
                 c.execute("INSERT INTO oauth_identities(provider, subject, user_id, email, created_at, last_login_at) VALUES (?,?,?,?,?,?)",
                           (provider, subject, user_id, email, self.now(), self.now()))
                 user = db.row(c, "SELECT * FROM users WHERE id = ?", (user_id,))
-                self._audit(c, email, "user.signup", None, {"method": provider})
+                self._audit(c, email, "user.signup", None, {"method": provider, "ip": ip})
                 created = True
             membership = db.row(c, "SELECT org_id FROM memberships WHERE user_id = ? ORDER BY created_at LIMIT 1", (user["id"],))
             org_id = membership["org_id"] if membership else None

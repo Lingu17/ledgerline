@@ -40,6 +40,9 @@ _ENV_KEYS = (
     "APPLE_PRIVATE_KEY_PATH",
     "PORT",
     "LEDGERLINE_TRUSTED_PROXY_HOPS",
+    "LEDGERLINE_SIGNUP_PER_IP_HOUR",
+    "LEDGERLINE_SIGNUP_PER_IP_DAY",
+    "LEDGERLINE_SIGNUP_PER_DAY",
     "LEDGERLINE_REQUIRE_PERSISTENT_MOUNT",
     "LEDGERLINE_SANDBOX_ORGS",
     "LEDGERLINE_CLAUDE_DAILY_LIMIT",
@@ -100,6 +103,8 @@ class Settings:
     # Deployment: how many reverse proxies in front of us append to X-Forwarded-For (0 = use the socket peer),
     # and a mount point the data directory must live on (refuse to start on ephemeral storage).
     trusted_proxy_hops: int = 0
+    # New accounts and organizations: per client address per hour and per day, and for the whole server per day.
+    signup_limits: tuple[int, int, int] = (10, 40, 500)
     require_persistent_mount: str | None = None
     # The Airwallex credentials are the operator's single sandbox account. Only organizations listed here
     # (by id) may switch to it; every other organization stays on the simulated bank.
@@ -214,6 +219,8 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.apple_team_id = env.get("APPLE_TEAM_ID") or None
     s.apple_key_id = env.get("APPLE_KEY_ID") or None
     s.trusted_proxy_hops = max(0, min(5, int(env.get("LEDGERLINE_TRUSTED_PROXY_HOPS") or 0)))
+    s.signup_limits = tuple(max(1, int(env.get(k) or d)) for k, d in (("LEDGERLINE_SIGNUP_PER_IP_HOUR", 10), ("LEDGERLINE_SIGNUP_PER_IP_DAY", 40),
+                                                                     ("LEDGERLINE_SIGNUP_PER_DAY", 500)))
     s.require_persistent_mount = env.get("LEDGERLINE_REQUIRE_PERSISTENT_MOUNT") or None
     s.sandbox_org_ids = frozenset(x.strip() for x in env.get("LEDGERLINE_SANDBOX_ORGS", "").split(",") if x.strip())
     s.claude_daily_limit = max(0, int(env.get("LEDGERLINE_CLAUDE_DAILY_LIMIT") or 25))

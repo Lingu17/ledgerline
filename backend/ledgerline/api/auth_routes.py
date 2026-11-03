@@ -67,7 +67,7 @@ def signup(request: Request, response: Response, body: SignupBody) -> dict[str, 
         raise HTTPException(403, "self-service sign-up is disabled on this server; ask an owner for an invitation")
     kind = "sample" if body.start_with == "sample" else "workspace"
     token, org_id = _control(request).signup(email=body.email, name=body.name, password=body.password,
-                                             org_name=body.organization_name, kind=kind, user_agent=_ua(request))
+                                             org_name=body.organization_name, kind=kind, user_agent=_ua(request), ip=_ip(request))
     request.app.state.orgs.provision(org_id, sample=kind == "sample")
     set_session_cookie(request, response, token)
     return _me(request, token)
@@ -133,7 +133,7 @@ def create_org(request: Request, body: OrgBody) -> dict[str, Any]:
     """Any signed-in user can create another organization and becomes its owner."""
     info, token = require_session(request, mutating=True)
     kind = "sample" if body.start_with == "sample" else "workspace"
-    org_id = _control(request).create_org(info.user_id, body.name, kind)
+    org_id = _control(request).create_org(info.user_id, body.name, kind, ip=_ip(request))
     request.app.state.orgs.provision(org_id, sample=kind == "sample")
     _control(request).switch_org(token, org_id)
     return _me(request, token)

@@ -117,6 +117,15 @@ CREATE TABLE claude_calls (
 CREATE INDEX claude_calls_day ON claude_calls(day, org_id)
 """),
     (4, "each organization's own Airwallex credentials, encrypted", "ALTER TABLE organizations ADD COLUMN airwallex_credentials_enc TEXT"),
+    (5, "limits on new accounts and organizations per address", """
+CREATE TABLE creations (
+  at TEXT NOT NULL,
+  ip TEXT NOT NULL,
+  what TEXT NOT NULL
+);
+CREATE INDEX creations_ip_at ON creations(ip, at);
+CREATE INDEX creations_at ON creations(at)
+"""),
 ]
 
 

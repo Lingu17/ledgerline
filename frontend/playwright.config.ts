@@ -22,6 +22,10 @@ export default defineConfig({
       LEDGERLINE_PORT: String(PORT),
       LEDGERLINE_DATA_DIR: "../frontend/e2e/.data",
       LEDGERLINE_LOG_LEVEL: "WARNING",
+      // Every test signs up its own company from this one address; the sign-up limit has its own backend tests.
+      LEDGERLINE_SIGNUP_PER_IP_HOUR: "100000",
+      LEDGERLINE_SIGNUP_PER_IP_DAY: "100000",
+      LEDGERLINE_SIGNUP_PER_DAY: "100000",
     },
   },
 });

@@ -330,7 +330,7 @@ def test_migrations_recorded_and_legacy_tenant_upgraded(settings, tmp_path):
     legacy.close()
     app = create_app(settings)
     with app.state.control.conn() as c:
-        assert [r[0] for r in c.execute("SELECT version FROM schema_migrations")] == [1, 2, 3, 4]
+        assert [r[0] for r in c.execute("SELECT version FROM schema_migrations")] == [1, 2, 3, 4, 5]
         if app.state.settings.postgres:
             tables = {r[0] for r in c.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()").fetchall()}
         else:
