@@ -31,6 +31,15 @@ Only observed results. Sandbox, no real money. Long provider ids are shortened. 
 | Current rates | Read from `GET /fx/rates/current` and seen changing on the page from one minute to the next |
 | Not run live | A paid exact-balance link and a wrong-currency conversion; both are covered by automated tests on the simulated bank |
 
+## A customer's own payer agent over the internet, 3 Nov 2026
+
+| Item | Result |
+|---|---|
+| Set-up | Reference agent (`tools/payer_agent`) on the owner's own PC with a key it generated there; reached through a Cloudflare quick tunnel; registered by the owner on Dunmore in a new practice company on the live site |
+| Result | The live site asked it about DEP-1005 (USD 1,200). The agent's log shows the requests from the server's address. The signed answer (key `ed25519:5b38d62d2a682719`) passed all three checks, was labelled Customer's own agent, and changed the plan from refund to advance credit. No money moved |
+| Afterwards | Tunnel and agent stopped; registration removed, so Dunmore uses its simulated agent again |
+| Boundary | The owner's own machine, not an independent party. No real outside company runs an agent today |
+
 ## Historical (Vercel + Render + Neon, same sandbox account)
 
 | Capability | Observed result | Evidence boundary |
