@@ -261,6 +261,8 @@ def update_customer(ctx: AppContext, customer_id: str, body: dict[str, Any], act
         if "refund_beneficiary" in body:
             changes["refund_beneficiary"] = _text(body["refund_beneficiary"], "refund_beneficiary", 2, 120)
         if "agent_public_key" in body:
+            if cur.get("agent_url"):
+                raise InputError("this customer has its own agent registered; an Owner changes its key with the agent's URL")
             pub = body["agent_public_key"] or None
             if pub is not None:
                 if not isinstance(pub, str):
@@ -272,6 +274,8 @@ def update_customer(ctx: AppContext, customer_id: str, body: dict[str, Any], act
                     raise InputError("agent_public_key must be a base64 raw Ed25519 public key (32 bytes)") from exc
             changes["agent_public_key"] = pub
             changes["agent_key_id"] = crypto.key_id_for(pub) if pub else None
+            changes["agent_key_set_by"] = actor
+            changes["agent_key_set_at"] = iso(ctx.clock.now())
         if not changes:
             raise InputError("nothing to change")
         now = iso(ctx.clock.now())
@@ -280,6 +284,67 @@ def update_customer(ctx: AppContext, customer_id: str, body: dict[str, Any], act
         conn.execute("UPDATE customers SET updated_at = ? WHERE id = ?", (now, customer_id))
         audit.record(conn, now, actor, "customer.updated", "customer", customer_id,
                      {k: {"from": cur.get(k), "to": v} for k, v in changes.items()})
+        return db.row(conn, "SELECT * FROM customers WHERE id = ?", (customer_id,))
+
+
+def _public_key(pub: Any) -> str:
+    if not isinstance(pub, str):
+        raise InputError("public key must be a base64 raw Ed25519 public key (32 bytes)")
+    pub = pub.strip()
+    try:
+        if len(crypto.b64d(pub)) != 32:
+            raise ValueError
+    except ValueError as exc:
+        raise InputError("public key must be a base64 raw Ed25519 public key (32 bytes)") from exc
+    return pub
+
+
+MAX_OWN_AGENTS = 20
+
+
+def set_payer_agent(ctx: AppContext, customer_id: str, body: dict[str, Any], actor: str) -> dict[str, Any]:
+    """Register the customer's own agent: where to ask it, and the public key its answers must be signed with.
+    Only the public key is stored. From now on this customer is asked at that URL instead of a simulated agent."""
+    from .payer_agents.remote import AgentRefused, check_url
+
+    try:
+        url = check_url(body.get("url"), ctx.settings.payer_agent_allow_loopback)
+    except AgentRefused as exc:
+        raise InputError(str(exc)) from exc
+    pub = _public_key(body.get("public_key"))
+    with ctx.conn() as conn, db.transaction(conn):
+        cur = db.row(conn, "SELECT * FROM customers WHERE id = ?", (customer_id,))
+        if cur is None:
+            raise InputError("unknown customer")
+        others = conn.execute("SELECT COUNT(*) FROM customers WHERE agent_url IS NOT NULL AND id != ?", (customer_id,)).fetchone()[0]
+        if others >= MAX_OWN_AGENTS:
+            raise InputError(f"at most {MAX_OWN_AGENTS} customers can have their own agent in one organization")
+        now = iso(ctx.clock.now())
+        key_id = crypto.key_id_for(pub)
+        conn.execute("UPDATE customers SET agent_url = ?, agent_public_key = ?, agent_key_id = ?, agent_key_set_by = ?, agent_key_set_at = ?,"
+                     " updated_at = ? WHERE id = ?", (url, pub, key_id, actor, now, now, customer_id))
+        audit.record(conn, now, actor, "customer.payer_agent_registered", "customer", customer_id,
+                     {"url": url, "agent_key_id": key_id, "previous_key_id": cur.get("agent_key_id")})
+        return db.row(conn, "SELECT * FROM customers WHERE id = ?", (customer_id,))
+
+
+def clear_payer_agent(ctx: AppContext, customer_id: str, actor: str) -> dict[str, Any]:
+    """Stop asking the customer's own agent. A practice customer goes back to its simulated agent; a real customer has
+    no agent until one is registered again."""
+    from .payer_agents.keys import public_registry, key_location
+
+    with ctx.conn() as conn, db.transaction(conn):
+        cur = db.row(conn, "SELECT * FROM customers WHERE id = ?", (customer_id,))
+        if cur is None:
+            raise InputError("unknown customer")
+        if not cur.get("agent_url"):
+            raise InputError("this customer has no agent of its own registered")
+        simulated = public_registry(key_location(ctx.settings)).get(customer_id) if cur.get("demo_only") else None
+        now = iso(ctx.clock.now())
+        conn.execute("UPDATE customers SET agent_url = NULL, agent_public_key = ?, agent_key_id = ?, agent_key_set_by = ?, agent_key_set_at = ?,"
+                     " updated_at = ? WHERE id = ?", (simulated and simulated["public_key"], simulated and simulated["key_id"], actor, now, now, customer_id))
+        audit.record(conn, now, actor, "customer.payer_agent_removed", "customer", customer_id,
+                     {"url": cur["agent_url"], "back_to_simulated": bool(simulated)})
         return db.row(conn, "SELECT * FROM customers WHERE id = ?", (customer_id,))
 
 

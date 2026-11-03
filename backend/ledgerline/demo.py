@@ -8,7 +8,7 @@ from . import audit, db, payouts, treasury
 from .clock import iso
 from .context import AppContext
 from .money import to_major
-from .payer_agents.client import explain_payments
+from .payer_agents.client import ask_agents, explain_payments
 from .payer_agents.keys import key_location
 from .providers.base import ProviderError, ProviderUnsupported
 from .reconcile import pending_agent_questions, record_agent_answer
@@ -194,9 +194,11 @@ def publish_payment_links(ctx: AppContext, actor: str) -> list[dict[str, Any]]:
 def ask_payer_agents(ctx: AppContext) -> dict[str, Any]:
     with ctx.conn() as conn:
         questions = pending_agent_questions(conn)
-    answers, transport = explain_payments(key_location(ctx.settings), questions, ctx.settings.payer_mcp_transport)
-    results = []
-    for q, ans in zip(questions, answers):
+    results, transport = [], None
+    for q, ans, transport, problem in ask_agents(ctx, questions, simulated=explain_payments):
+        if ans is None:  # a customer's own agent could not be asked; that payment stays waiting
+            results.append({"deposit_id": q["deposit_id"], "verdict": "not_asked", "reason": problem, "category": None})
+            continue
         with ctx.conn() as conn, db.transaction(conn):
             r = record_agent_answer(conn, ctx, q["deposit_id"], q["customer_id"], ans, transport)
         results.append({"deposit_id": q["deposit_id"], "verdict": r["verification"]["verdict"],

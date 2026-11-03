@@ -1,0 +1,9 @@
+[
+  {
+    "currency": "USD",
+    "amount_minor": 120000,
+    "invoice_id": "INV-2291",
+    "reason": "advance_payment",
+    "note": "Advance for the March platform subscription (our PO 7781). Answered by our own agent, signed with our own key."
+  }
+]

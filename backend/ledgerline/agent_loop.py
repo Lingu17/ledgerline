@@ -12,8 +12,7 @@ from typing import Any
 from . import audit, db, payouts, treasury
 from .clock import iso
 from .context import AppContext
-from .payer_agents.client import explain_payments
-from .payer_agents.keys import key_location
+from .payer_agents.client import ask_agents, explain_payments
 from .reconcile import ReconcileError, pending_agent_questions, record_agent_answer
 
 log = logging.getLogger("ledgerline.agent")
@@ -27,12 +26,16 @@ def ask_pending(ctx: AppContext, only: str | None = None) -> dict[str, Any]:
     if not questions:
         return {"asked": 0, "results": []}
     try:
-        answers, transport = explain_payments(key_location(ctx.settings), questions, ctx.settings.payer_mcp_transport)
+        asked = ask_agents(ctx, questions, simulated=explain_payments)
     except Exception as exc:  # noqa: BLE001 - an unreachable agent must never lose the payment; it stays waiting
         log.warning("payer agent unavailable: %s", type(exc).__name__)
         return {"asked": 0, "results": [], "error": type(exc).__name__}
     results = []
-    for q, answer in zip(questions, answers):
+    transport = None
+    for q, answer, transport, problem in asked:
+        if answer is None:  # the customer's own agent could not be asked this time; the payment stays waiting
+            log.warning("payer agent for %s not asked: %s", q["deposit_id"], problem)
+            continue
         try:
             with ctx.conn() as conn, db.transaction(conn):
                 r = record_agent_answer(conn, ctx, q["deposit_id"], q["customer_id"], answer, transport)

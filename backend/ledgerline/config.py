@@ -23,6 +23,7 @@ _ENV_KEYS = (
     "LEDGERLINE_LOG_LEVEL",
     "LEDGERLINE_WEBHOOK_SECRET",
     "LEDGERLINE_PAYER_MCP_TRANSPORT",
+    "LEDGERLINE_PAYER_AGENT_ALLOW_LOOPBACK",
     "LEDGERLINE_PROVIDER",
     "LEDGERLINE_SAMPLE_WORKSPACE",
     "AIRWALLEX_CLIENT_ID",
@@ -83,6 +84,7 @@ class Settings:
     log_level: str = "INFO"
     webhook_secret: str = "local-demo-webhook-secret-not-for-production"
     payer_mcp_transport: str = "stdio"  # stdio | memory
+    payer_agent_allow_loopback: bool = False  # local development and tests only: lets a customer's agent be http://localhost
     provider: str = "local"  # local | airwallex_sandbox
     sample_workspace: bool = True  # first launch: seed and receive the six reference deposits
     airwallex_client_id: str | None = None
@@ -204,6 +206,7 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.log_level = (env.get("LEDGERLINE_LOG_LEVEL") or "INFO").upper()
     s.webhook_secret = env.get("LEDGERLINE_WEBHOOK_SECRET") or s.webhook_secret
     s.payer_mcp_transport = env.get("LEDGERLINE_PAYER_MCP_TRANSPORT", s.payer_mcp_transport)
+    s.payer_agent_allow_loopback = env.get("LEDGERLINE_PAYER_AGENT_ALLOW_LOOPBACK", "0").strip().lower() in ("1", "true", "yes")
     s.provider = env.get("LEDGERLINE_PROVIDER", s.provider)
     s.sample_workspace = env.get("LEDGERLINE_SAMPLE_WORKSPACE", "1").strip().lower() not in ("0", "false", "no")
     s.airwallex_client_id = env.get("AIRWALLEX_CLIENT_ID") or None

@@ -8,11 +8,10 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
-from ..payer_agents.keys import key_location
 from .. import agent_loop, audit, bill_payments, ceo, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace, wrong_currency
 from ..clock import iso
 from ..context import AppContext, validate_policy
-from ..payer_agents.client import explain_payments
+from ..payer_agents.client import ask_agents, explain_payments
 from ..providers.local import DEMO_RATES
 from ..reconcile import deposit_buckets, latest_plan, pending_agent_questions, record_agent_answer
 from .security import require_operator, require_owner, require_reader
@@ -200,9 +199,11 @@ def ask_agent(request: Request, deposit_id: str, operator: str = Depends(require
         qs = [q for q in pending_agent_questions(conn) if q["deposit_id"] == deposit_id]
     if not qs:
         raise HTTPException(409, "deposit is not awaiting a payer agent answer")
-    answers, transport = explain_payments(key_location(ctx.settings), qs, ctx.settings.payer_mcp_transport)
+    _q, answer, transport, problem = ask_agents(ctx, qs[:1], simulated=explain_payments)[0]
+    if answer is None:
+        raise HTTPException(502, f"could not ask the customer's own agent: {problem}. The payment stays waiting.")
     with ctx.conn() as conn, db.transaction(conn):
-        r = record_agent_answer(conn, ctx, deposit_id, qs[0]["customer_id"], answers[0], transport)
+        r = record_agent_answer(conn, ctx, deposit_id, qs[0]["customer_id"], answer, transport)
     payouts.auto_execute_ready(ctx, operator)
     return r
 
@@ -318,6 +319,22 @@ def import_payments(request: Request, body: CsvBody, background: BackgroundTasks
     result = workspace.import_payments_csv(ctx_of(request), body.csv, operator)
     background.add_task(agent_loop.on_arrival, ctx_of(request))
     return result
+
+
+class PayerAgentBody(BaseModel):
+    url: StrictStr = Field(max_length=300)
+    public_key: StrictStr = Field(max_length=100)
+
+
+@router.put("/customers/{customer_id}/payer-agent")
+def set_payer_agent(request: Request, customer_id: str, body: PayerAgentBody, owner: str = Depends(require_owner)) -> dict[str, Any]:
+    """Owner only: ask this customer's own agent at this URL; its answers must be signed by this public key."""
+    return workspace.set_payer_agent(ctx_of(request), customer_id, body.model_dump(), owner)
+
+
+@router.delete("/customers/{customer_id}/payer-agent")
+def clear_payer_agent(request: Request, customer_id: str, owner: str = Depends(require_owner)) -> dict[str, Any]:
+    return workspace.clear_payer_agent(ctx_of(request), customer_id, owner)
 
 
 @router.post("/customers/import")

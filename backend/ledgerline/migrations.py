@@ -257,6 +257,11 @@ CREATE TABLE IF NOT EXISTS deposit_conversions (
 CREATE UNIQUE INDEX IF NOT EXISTS one_live_conversion_per_deposit
   ON deposit_conversions(deposit_id) WHERE status = 'processing'"""),
     (9, "bills that release an invoice when paid", "ALTER TABLE obligations ADD COLUMN unlocks_invoice_id TEXT"),
+    (10, "a customer's own payer agent, reached over the network, and who set its key", """
+ALTER TABLE customers ADD COLUMN agent_url TEXT;
+ALTER TABLE customers ADD COLUMN agent_key_set_by TEXT;
+ALTER TABLE customers ADD COLUMN agent_key_set_at TEXT
+"""),
 ]
 
 

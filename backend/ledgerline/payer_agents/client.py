@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +37,88 @@ async def _call_all(target: Any, requests: list[dict[str, Any]]) -> list[dict[st
                 out.append({"status": "error", "detail": str(getattr(result, "content", ""))})
             else:
                 out.append(_parse_result(result))
+    return out
+
+
+QUESTION_FIELDS = ("customer_id", "deposit_id", "currency", "amount_minor", "received_at", "reference")
+# One organization's own agents must not hold up anyone else: each round gets a time budget, the rest waits for the next
+# round, and an agent that keeps failing is left alone for a while.
+ROUND_BUDGET = 30.0
+BACKOFF_AFTER, BACKOFF_SECONDS = 3, 600
+_failures: dict[str, tuple[int, float]] = {}
+_failures_lock = threading.Lock()
+
+
+def _backed_off(url: str) -> float | None:
+    with _failures_lock:
+        count, until = _failures.get(url, (0, 0.0))
+    return until if count >= BACKOFF_AFTER and time.monotonic() < until else None
+
+
+def _record(url: str, ok: bool) -> None:
+    with _failures_lock:
+        if ok:
+            _failures.pop(url, None)
+            return
+        count = _failures.get(url, (0, 0.0))[0] + 1
+        _failures[url] = (count, time.monotonic() + BACKOFF_SECONDS if count >= BACKOFF_AFTER else 0.0)
+
+
+def agent_label(transport: str) -> str:
+    """How an answer's source reads on screen: the customer's own agent, or a simulated one on this server."""
+    return "Customer's own agent" if transport.startswith("mcp/http") else "Simulated agent"
+
+
+def ask_agents(ctx, questions: list[dict[str, Any]], simulated=None) -> list[tuple[dict[str, Any], dict[str, Any] | None, str, str | None]]:
+    """Ask each payer's agent. A customer that registered its own agent is asked at its URL over the network; the rest
+    go to the simulated agents on this server. Returns (question, answer, transport, problem) in question order. When a
+    customer's own agent cannot be asked, answer is None and problem says why: the payment simply stays waiting.
+    Errors from the simulated agents propagate, as before."""
+    from urllib.parse import urlsplit
+
+    from .. import db
+    from . import remote
+    from .keys import key_location
+
+    simulated = simulated or explain_payments
+    with ctx.conn() as conn:
+        urls = {r["id"]: r["agent_url"] for r in db.rows(conn, "SELECT id, agent_url FROM customers WHERE agent_url IS NOT NULL")}
+    out: list[Any] = [None] * len(questions)
+    by_url: dict[str, list[int]] = {}
+    for i, q in enumerate(questions):
+        if q["customer_id"] in urls:
+            by_url.setdefault(urls[q["customer_id"]], []).append(i)
+    local = [i for i, q in enumerate(questions) if q["customer_id"] not in urls]
+    if local:
+        answers, label = simulated(key_location(ctx.settings), [questions[i] for i in local], ctx.settings.payer_mcp_transport)
+        for i, a in zip(local, answers):
+            out[i] = (questions[i], a, label, None)
+    started = time.monotonic()
+    for url, idxs in by_url.items():
+        label = f"mcp/http {urlsplit(url).hostname}"
+        remaining = ROUND_BUDGET - (time.monotonic() - started)
+        skip = None
+        if remaining < 1:
+            skip = "not asked this round: this organization's time for asking its customers' agents is used up; asked next round"
+        elif _backed_off(url) is not None:
+            skip = f"not asked: this agent failed {BACKOFF_AFTER} times in a row, so it is left alone for {BACKOFF_SECONDS // 60} minutes"
+        if skip:
+            for i in idxs:
+                out[i] = (questions[i], None, label, skip)
+            continue
+        # Only what the question needs leaves this server: no balances, notes or other customers' data.
+        reqs = [{k: questions[i][k] for k in QUESTION_FIELDS} for i in idxs]
+        try:
+            answers = remote.ask_remote(url, reqs, ctx.settings.payer_agent_allow_loopback, deadline=remaining)
+            if len(answers) != len(idxs):
+                raise remote.AgentUnreachable("the agent answered a different number of questions")
+            _record(url, True)
+            for i, a in zip(idxs, answers):
+                out[i] = (questions[i], a if isinstance(a, dict) else {"status": "error", "detail": "answer is not an object"}, label, None)
+        except (remote.AgentRefused, remote.AgentUnreachable) as exc:
+            _record(url, False)
+            for i in idxs:
+                out[i] = (questions[i], None, label, str(exc))
     return out
 
 

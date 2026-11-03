@@ -339,6 +339,12 @@ def record_agent_answer(conn: sqlite3.Connection, ctx: AppContext, deposit_id: s
             skew_seconds=policy["evidence_clock_skew_seconds"],
             applicable_minor=applicable,
         ).to_dict()
+        # A key a team member set or changed is named on every answer it signs, so the rest of the team can see it.
+        who = db.row(conn, "SELECT agent_key_set_by, agent_key_set_at FROM customers WHERE id = ?", (asked_customer_id,))
+        if who and who["agent_key_set_by"]:
+            for check in result["checks"]:
+                if check["name"] == "signature":
+                    check["detail"] += f" (key set by {who['agent_key_set_by']} on {who['agent_key_set_at'][:10]})"
 
     raw = json.dumps(envelope if envelope is not None else answer, sort_keys=True)
     claim_hash = crypto.sha256_hex(raw.encode())
