@@ -21,6 +21,7 @@ import tarfile
 import time
 import urllib.parse
 import urllib.request
+from contextlib import closing
 from pathlib import Path
 
 MAGIC = b"LLBK1"
@@ -37,7 +38,7 @@ def snapshot(data: Path, dest_root: Path, keep: int) -> Path:
         target = dest / rel
         if src.suffix == ".sqlite3":
             target.parent.mkdir(parents=True, exist_ok=True)
-            with sqlite3.connect(src) as s, sqlite3.connect(target) as t:
+            with closing(sqlite3.connect(src)) as s, closing(sqlite3.connect(target)) as t:
                 s.backup(t)
         elif "payer_agents" in rel.parts:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -92,9 +93,11 @@ def upload(blob: bytes, bucket: str, name: str, token_url: str = METADATA_TOKEN,
 
 
 def offsite(snapshot_dir: Path, bucket: str, key_file: Path) -> str:
+    """Raises on any failure, so the unit fails visibly. On success, records when, in backups/last_offsite."""
     name = f"ledgerline/{snapshot_dir.name}.tar.gz.enc"
     blob = encrypt(pack(snapshot_dir), read_key(key_file), name)
     meta = upload(blob, bucket, name)
+    (snapshot_dir.parent / "last_offsite").write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {name}\n")
     print(f"off-server copy {name}: {len(blob)} bytes, generation {meta.get('generation')}")
     return name
 

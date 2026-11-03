@@ -31,10 +31,15 @@ def check(blob_path: Path, key_path: Path, name: str | None = None) -> bool:
             tar.extractall(tmp, filter="data")
         root = next(Path(tmp).iterdir())
         with closing(sqlite3.connect(root / "control.sqlite3")) as c:
-            orgs = c.execute("SELECT COUNT(*) FROM organizations").fetchone()[0]
+            org_ids = {r[0] for r in c.execute("SELECT id FROM organizations")}
             users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        print(f"{name}: control database opens: {orgs} organizations, {users} accounts")
-        for db_path in sorted(root.glob("orgs/*/ledgerline.sqlite3")):  # each organization's books (not its simulated bank)
+        books = sorted(root.glob("orgs/*/ledgerline.sqlite3"))  # each organization's books (not its simulated bank)
+        print(f"{name}: control database opens: {len(org_ids)} organizations, {users} accounts, {len(books)} sets of books")
+        missing = sorted(org_ids - {p.parent.name for p in books})
+        if missing:
+            ok = False
+            print(f"  MISSING books for {len(missing)} organization(s): {', '.join(missing)}")
+        for db_path in books:
             conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
             try:

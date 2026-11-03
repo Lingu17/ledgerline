@@ -5,17 +5,30 @@ it. Run them in this order. Never paste a key into a chat.
 
 ## 1. Off-server backups (Cloud Shell, about 10 minutes, with a 1–2 minute restart of the VM)
 
+Do this **now, well before 13 Nov**, never while judges may be looking: it stops the VM for a minute or two.
+
 Open **Cloud Shell** from the Google Cloud Console, then run:
 
 ```bash
 PROJECT=project-0b143378-307b-4214-818
 ZONE=asia-south1-a
+REGION=asia-south1
 VM=ledgerline
 BUCKET=ledgerline-backups-$(openssl rand -hex 4)
 gcloud config set project $PROJECT
 
-# A private bucket: no public access, versions kept, everything deleted after 30 days.
-gcloud storage buckets create gs://$BUCKET --location=asia-south1 --uniform-bucket-level-access --public-access-prevention
+# FIRST: the site's address is its IP (35-207-220-110.sslip.io). If that IP is not reserved, stopping the VM would
+# change it, and the site, its certificate and every link to it would stop working. Check it is reserved:
+IP=$(gcloud compute instances describe $VM --zone=$ZONE --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+RESERVED=$(gcloud compute addresses list --filter="address=$IP" --format='value(name)')
+echo "VM address: $IP   reserved as: ${RESERVED:-NOT RESERVED}"
+# If it says NOT RESERVED, reserve this exact address now (it stays on the running VM), then run the check again:
+#   gcloud compute addresses create ledgerline-ip --addresses=$IP --region=$REGION
+# Do not go on until the check prints a name instead of NOT RESERVED.
+
+# A private bucket in another location than the VM (a multi-region in Asia), so one regional outage cannot take both
+# copies: no public access, versions kept, everything deleted after 30 days.
+gcloud storage buckets create gs://$BUCKET --location=asia --uniform-bucket-level-access --public-access-prevention
 gcloud storage buckets update gs://$BUCKET --versioning
 cat > lifecycle.json <<'EOF'
 {"rule": [{"action": {"type": "Delete"}, "condition": {"age": 30}},
@@ -27,24 +40,31 @@ gcloud storage buckets update gs://$BUCKET --lifecycle-file=lifecycle.json
 gcloud iam service-accounts create ledgerline-vm --display-name="Ledgerline VM"
 SA=ledgerline-vm@$PROJECT.iam.gserviceaccount.com
 gcloud storage buckets add-iam-policy-binding gs://$BUCKET --member=serviceAccount:$SA --role=roles/storage.objectCreator
-# Only if you keep the Google Ops Agent (step 3): let it write logs and metrics.
+# Let the Google Ops Agent keep writing logs and metrics under the new account. (If step 3 later turns the agent off,
+# these two roles can be removed; the old account may have been failing exactly because it lacked them.)
 gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/logging.logWriter --condition=None
 gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/monitoring.metricWriter --condition=None
 
-# Switch the VM to it. The VM must be stopped for this; the site is down for 1-2 minutes and keeps its address.
-gcloud compute instances stop $VM --zone=$ZONE
-gcloud compute instances set-service-account $VM --zone=$ZONE --service-account=$SA --scopes=cloud-platform
-gcloud compute instances start $VM --zone=$ZONE
+# Switch the VM to it. The VM must be stopped for this; the site is down for 1-2 minutes. This runs only if the
+# address is reserved, so it keeps its address.
+OLD_SA=$(gcloud compute instances describe $VM --zone=$ZONE --format='value(serviceAccounts[0].email)')
+echo "Old service account (keep this to undo): $OLD_SA"
+if [ -n "$(gcloud compute addresses list --filter="address=$IP" --format='value(name)')" ]; then
+  gcloud compute instances stop $VM --zone=$ZONE &&
+  gcloud compute instances set-service-account $VM --zone=$ZONE --service-account=$SA --scopes=cloud-platform &&
+  gcloud compute instances start $VM --zone=$ZONE
+else
+  echo "STOP: $IP is not reserved; reserve it first (see above)."
+fi
 echo "Bucket: $BUCKET"
 ```
 
 Why a new service account: the VM's current one is the project's default, which usually has the broad Editor role.
 Giving it storage write would let the VM read and delete backups too. The new one can only create objects in this
-bucket. Undo: `gcloud compute instances set-service-account` back to the old account (shown by
-`gcloud compute instances describe $VM --zone=$ZONE --format='value(serviceAccounts[0].email)'` before you switch),
-with its old scopes.
+bucket. Undo (another stop and start): `gcloud compute instances set-service-account $VM --zone=$ZONE
+--service-account=$OLD_SA --scopes=devstorage.read_only,logging-write,monitoring-write,service-management,service-control,trace`.
 
-Check the site is back: open https://35-207-220-110.sslip.io.
+Check the site is back: open https://35-207-220-110.sslip.io (same address; the certificate is unchanged).
 
 Then on the VM (your own SSH window):
 
@@ -85,12 +105,14 @@ unit file can match what was kept. Undo: `harden.sh undo-systemd`, `harden.sh un
 ## 3. Logs (on the VM, 2 minutes)
 
 ```bash
-sudo bash /opt/ledgerline/src/deploy/vm/harden.sh opsagent-why   # what the Ops Agent keeps logging
 sudo bash /opt/ledgerline/src/deploy/vm/harden.sh journald       # cap the journal at 300 MB
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh opsagent-why   # what the Ops Agent keeps logging, after step 1
 ```
 
-If you don't use Cloud Monitoring or Cloud Logging for this VM, stop the agent: `harden.sh opsagent-off` (undo:
-`harden.sh opsagent-on`). If you do, send the `opsagent-why` output so its configuration can be fixed instead.
+Run `opsagent-why` after step 1: the new service account's log and metric roles may be what stops the loop. Send its
+output (it has no secrets). Only if the loop continues and you don't use Cloud Monitoring or Cloud Logging for this
+VM, stop the agent with `harden.sh opsagent-off` (undo: `harden.sh opsagent-on`), and the two roles from step 1 can
+then be removed.
 
 ## 4. SSH (on the VM, 2 minutes)
 

@@ -45,6 +45,28 @@ def test_an_encrypted_copy_restores_and_verifies(snapshot, key_file, tmp_path, c
     assert "books balanced=True, audit chain ok=True" in out and "PASS" in out and "1 organizations" in out
 
 
+def test_a_copy_missing_an_organizations_books_fails(snapshot, key_file, tmp_path, capsys):
+    next(snapshot.glob("orgs/*/ledgerline.sqlite3")).unlink()
+    assert restore_check.check(write_encrypted(snapshot, key_file, tmp_path), key_file) is False
+    out = capsys.readouterr().out
+    assert "MISSING books for 1 organization" in out and "FAIL" in out
+
+
+def test_a_successful_upload_records_when(snapshot, key_file, monkeypatch):
+    monkeypatch.setattr(backup, "upload", lambda blob, bucket, name: {"generation": "7"})
+    name = backup.offsite(snapshot, "bucket", key_file)
+    assert (snapshot.parent / "last_offsite").read_text().split()[1] == name
+
+
+def test_a_failed_upload_fails_the_backup_and_records_nothing(snapshot, key_file, monkeypatch):
+    def down(*_a):
+        raise OSError("bucket unreachable")
+    monkeypatch.setattr(backup, "upload", down)
+    with pytest.raises(OSError):
+        backup.offsite(snapshot, "bucket", key_file)
+    assert not (snapshot.parent / "last_offsite").exists()
+
+
 def test_a_tampered_copy_a_wrong_key_or_a_renamed_copy_is_refused(snapshot, key_file, tmp_path):
     blob = write_encrypted(snapshot, key_file, tmp_path)
     data = bytearray(blob.read_bytes())

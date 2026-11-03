@@ -25,9 +25,9 @@ install_and_build() {
 
 restore() { as_app bash "$CHECKOUT" "$SRC" "$PREV" && install_and_build; }
 
-healthy() {
+healthy() {  # the health route answers, and a signed-out request to a real route is refused (so routing and auth work)
   for _ in $(seq 1 "$HEALTH_TRIES"); do
-    if curl -fsS "$HEALTH_URL"; then echo; return 0; fi
+    if curl -fsS "$HEALTH_URL" && [[ $(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL%/health}/deposits") == 401 ]]; then echo; return 0; fi
     sleep 2
   done
   return 1

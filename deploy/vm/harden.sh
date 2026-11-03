@@ -66,8 +66,9 @@ sandbox_props() {
 
 sandbox_check() {
   local -a props; mapfile -t props < <(sandbox_props)
-  systemd-run --quiet --wait --collect --pipe --uid=ledgerline --gid=ledgerline -p WorkingDirectory="$SRC/backend" "${props[@]}" \
-    /opt/ledgerline/venv/bin/python - <<'PY' 2>&1 | tail -3 | grep -q "SANDBOX OK"
+  local out
+  out=$(systemd-run --quiet --wait --collect --pipe --uid=ledgerline --gid=ledgerline -p WorkingDirectory="$SRC/backend" "${props[@]}" \
+    /opt/ledgerline/venv/bin/python - 2>&1 <<'PY'
 import os, sys, urllib.request, anyio
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -86,6 +87,10 @@ assert "no_agent" in anyio.run(ask)
 assert urllib.request.urlopen("https://www.googleapis.com/generate_204", timeout=10).status == 204
 print("SANDBOX OK")
 PY
+) || true
+  grep -q "SANDBOX OK" <<<"$out" && return 0
+  echo "  sandbox check output:"; tail -5 <<<"$out" | sed 's/^/    /'
+  return 1
 }
 
 status() {
@@ -96,6 +101,15 @@ status() {
   echo "== Ops Agent log lines in the last hour: $(journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager | wc -l)"
   echo "== ssh"; sshd -T 2>/dev/null | grep -E "^(permitrootlogin|passwordauthentication) "; systemctl is-active fail2ban 2>/dev/null || true
   echo "== backup"; [[ -f /etc/ledgerline/backup.env ]] && grep -o "^LEDGERLINE_BACKUP_BUCKET=.*" /etc/ledgerline/backup.env || echo "no off-server copy configured"
+  local last=/var/lib/ledgerline/backups/last_offsite
+  if [[ -f $last ]]; then
+    local age=$(( ($(date +%s) - $(date -d "$(cut -d' ' -f1 "$last")" +%s)) / 3600 ))
+    echo "last off-server copy: $(cat "$last") (${age} h ago)"; (( age <= 36 )) || echo "WARNING: no off-server copy for over 36 hours"
+  else
+    echo "no off-server copy has been made yet"
+  fi
+  systemctl is-failed --quiet ledgerline-backup.service && echo "WARNING: the last backup run failed: journalctl -u ledgerline-backup -n 20"
+  return 0
 }
 
 files() {
@@ -170,8 +184,14 @@ backup_step() {
   chown root:ledgerline /etc/ledgerline/backup.env; chmod 640 /etc/ledgerline/backup.env
   install -m 644 "$SRC/deploy/vm/ledgerline-backup.service" /etc/systemd/system/ledgerline-backup.service
   systemctl daemon-reload
-  systemctl start ledgerline-backup.service || true
-  journalctl -u ledgerline-backup --since -2min -q --no-pager -o cat | tail -3
+  local started; started=$(date '+%Y-%m-%d %H:%M:%S')
+  if ! systemctl start ledgerline-backup.service; then
+    journalctl -u ledgerline-backup --since "$started" -q --no-pager -o cat | tail -8
+    echo "FAILED: the backup or its upload did not complete (see above). The bucket name, the VM service account and"
+    echo "its role on the bucket are the usual causes. Undo: sudo rm /etc/ledgerline/backup.env"
+    exit 1
+  fi
+  journalctl -u ledgerline-backup --since "$started" -q --no-pager -o cat | tail -3
   echo "Store two keys in your password manager now, from your own SSH window (never paste them into a chat):"
   echo "  sudo cat /etc/ledgerline/backup.key        # decrypts the off-server copies"
   echo "  sudo cat /var/lib/ledgerline/connections.key   # decrypts saved Airwallex keys"
