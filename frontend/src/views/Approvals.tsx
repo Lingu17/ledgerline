@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { get, post, type Approval, type Operation } from "../api";
+import { get, post, type Approval, type Operation, type Status } from "../api";
 import { Card, Checks, Empty, ErrorNote, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { money, when } from "../format";
 import { useAuth } from "../auth";
@@ -10,6 +10,7 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
   const approvals = useLoad(() => get<Approval[]>("/approvals"), []);
   const ops = useLoad(() => get<Operation[]>("/operations"), []);
   const billPayments = useLoad(() => get<BillPayment[]>("/treasury/bill-payments"), []);
+  const status = useLoad(() => get<Status>("/status"), []);
   const { run, busy } = useAction();
   const [confirm, setConfirm] = useState<{ a: Approval; approve: boolean } | null>(null);
   const { can, me } = useAuth();
@@ -51,6 +52,7 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
               <div>
                 <b>{money(a.scope.amount_minor, a.scope.currency)}</b> to {a.scope.destination}
                 <div className="muted small">{a.id} · approved by {a.decided_by} {when(a.decided_at)}</div>
+                <div className="muted small"><Expiry decidedAt={a.decided_at} ttlHours={status.data?.policy.approval_ttl_hours} practice={status.data?.org?.kind === "sample"} /></div>
               </div>
               {a.sender_must_differ && a.decided_by === me?.user.email ? (
                 <div style={{ maxWidth: 380 }}>
@@ -202,4 +204,12 @@ function ScopeCard({ a, onDecide, busy, canDecide, ownProposal }: { a: Approval;
       </div>
     </div>
   );
+}
+
+/** An approval not sent within the policy window goes back to the approvers. Practice companies never expire. */
+export function Expiry({ decidedAt, ttlHours, practice }: { decidedAt: string | null; ttlHours?: number; practice: boolean }) {
+  if (!decidedAt || !ttlHours) return null;
+  if (practice) return <>Does not expire in a practice company</>;
+  const left = (new Date(decidedAt).getTime() + ttlHours * 3600_000 - Date.now()) / 3600_000;
+  return left > 1 ? <>Expires in {Math.floor(left)} h if not sent</> : left > 0 ? <>Expires in under an hour if not sent</> : <>Expired: goes back for approval when someone tries to send it</>;
 }

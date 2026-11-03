@@ -270,6 +270,7 @@ export interface Policy {
   evidence_max_ttl_seconds: number;
   evidence_clock_skew_seconds: number;
   webhook_tolerance_seconds: number;
+  approval_ttl_hours: number;
 }
 
 export interface AuditEvent {

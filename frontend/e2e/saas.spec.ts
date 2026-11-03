@@ -291,6 +291,7 @@ test("one person finishes the practice walkthrough with the practice teammate se
   await page.getByRole("button", { name: "Approve this scope" }).click();
   await expect(page.getByText(/so you can't also send it/)).toBeVisible();
   await expect(page.getByText("Practice only")).toBeVisible();
+  await expect(page.getByText("Does not expire in a practice company")).toBeVisible();
   await expect(page.getByRole("button", { name: "Execute refund" })).toHaveCount(0);
 
   await page.goto("/#/walkthrough");
