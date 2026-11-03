@@ -20,6 +20,8 @@ APP=/opt/ledgerline
 DATA=/var/lib/ledgerline
 ENV_FILE=/etc/ledgerline/ledgerline.env
 PY=3.14.8
+# LEDGERLINE_LOCAL_ONLY=1 (the recovery drill): no background checks, no nightly backup, no public HTTPS check.
+LOCAL_ONLY="${LEDGERLINE_LOCAL_ONLY:-0}"
 
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
@@ -84,6 +86,7 @@ LEDGERLINE_ALLOWED_ORIGINS=$([[ $MODE == single ]] && echo "https://$HOST" || ec
 LEDGERLINE_PUBLIC_URL=$FRONTEND_ORIGIN
 LEDGERLINE_LOG_LEVEL=INFO
 LEDGERLINE_ALLOW_SIGNUP=1
+$([[ $LOCAL_ONLY == 1 ]] && echo "# Recovery drill: never call customers' agents or providers from this copy" && echo LEDGERLINE_WATCH_SECONDS=0)
 # Optional, server-side only. Leave empty until you have real credentials.
 AIRWALLEX_CLIENT_ID=
 AIRWALLEX_API_KEY=
@@ -100,7 +103,8 @@ install -m 644 "$APP/src/deploy/vm/ledgerline-backup.timer" /etc/systemd/system/
 CADDY_SRC="$APP/src/deploy/vm/Caddyfile"; [[ $MODE == single ]] && CADDY_SRC="$APP/src/deploy/vm/Caddyfile.single"
 sed "s/__HOST__/$HOST/" "$CADDY_SRC" > /etc/caddy/Caddyfile
 systemctl daemon-reload
-systemctl enable --now ledgerline.service ledgerline-backup.timer
+if [[ $LOCAL_ONLY == 1 ]]; then systemctl enable --now ledgerline.service; systemctl disable --now ledgerline-backup.timer 2>/dev/null || true
+else systemctl enable --now ledgerline.service ledgerline-backup.timer; fi
 systemctl restart ledgerline.service
 systemctl reload caddy || systemctl restart caddy
 
@@ -114,6 +118,7 @@ if [[ $ok -ne 1 ]]; then
   journalctl -u ledgerline -n 40 --no-pager >&2 || true
   exit 1
 fi
+if [[ $LOCAL_ONLY == 1 ]]; then echo "local only: public HTTPS not checked"; exit 0; fi
 echo "== health (public HTTPS; the certificate is issued on the first request)"
 for i in $(seq 1 20); do
   if curl -fsS "https://$HOST/api/health" >/dev/null; then echo "public HTTPS ok: https://$HOST/api/health"; exit 0; fi; sleep 3

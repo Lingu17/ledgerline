@@ -12,11 +12,17 @@ START=$(date +%s)
 IP=$(curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)
 HOST="${IP//./-}.sslip.io"
 cp "$BUNDLE" /srv/ledgerline.bundle
-echo "== install from the bundle as $HOST"
-LEDGERLINE_REPO=/srv/ledgerline.bundle bash "$(dirname "$0")/setup.sh" "$HOST" self "$REF"
+SETUP=$(mktemp -d); git clone -q /srv/ledgerline.bundle "$SETUP/src" && git -C "$SETUP/src" checkout -q "$REF"
+echo "== install from the bundle as $HOST (local only)"
+LEDGERLINE_LOCAL_ONLY=1 LEDGERLINE_REPO=/srv/ledgerline.bundle bash "$SETUP/src/deploy/vm/setup.sh" "$HOST" self "$REF"
+rm -rf "$SETUP"
+systemctl is-enabled ledgerline-backup.timer >/dev/null 2>&1 && { echo "STOP: backups are enabled on the drill VM" >&2; exit 1; }
+grep -q "^LEDGERLINE_WATCH_SECONDS=0" /etc/ledgerline/ledgerline.env || { echo "STOP: background checks are on in the drill VM" >&2; exit 1; }
 echo "== restore the backup"
 systemctl stop ledgerline
 NAME="ledgerline/$(basename "$BLOB")"
+WORK=$(mktemp -d); cp "$BLOB" "$KEY" "$WORK/"; chown -R ledgerline "$WORK"; chmod 700 "$WORK"   # the service user cannot read a home folder
+BLOB="$WORK/$(basename "$BLOB")"; KEY="$WORK/$(basename "$KEY")"
 sudo -u ledgerline /opt/ledgerline/venv/bin/python - "$BLOB" "$KEY" "$NAME" <<'PY'
 import io, shutil, sys, tarfile, tempfile
 from pathlib import Path
@@ -41,4 +47,5 @@ for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8000/api/health
 curl -fsS http://127.0.0.1:8000/api/health; echo
 echo "== verify the restored books"
 sudo -u ledgerline env PYTHONPATH=/opt/ledgerline/src/backend /opt/ledgerline/venv/bin/python /opt/ledgerline/src/deploy/vm/restore_check.py "$BLOB" "$KEY" "$NAME"
+rm -rf "$WORK"
 echo "RECOVERY TIME: $(( ($(date +%s) - START + 59) / 60 )) minutes from a fresh VM to a healthy, verified Ledgerline"

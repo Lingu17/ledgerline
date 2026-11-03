@@ -117,6 +117,8 @@ unit file can match what was kept. Undo: `harden.sh undo-systemd`, `harden.sh un
 
 ## 3. Logs (on the VM, 2 minutes)
 
+The backup alerts in step 5 read the VM's logs through the Google Ops Agent. Fixing the agent's log loop keeps all three alerts; turning the agent off leaves only the site-down alert.
+
 ```bash
 sudo bash /opt/ledgerline/src/deploy/vm/harden.sh journald       # cap the journal at 300 MB
 sudo bash /opt/ledgerline/src/deploy/vm/harden.sh opsagent-why   # what the Ops Agent keeps logging, after step 1
@@ -147,13 +149,13 @@ bash alerts.sh create <your email>
 ```
 
 You get an email when the site's health check fails for 10 minutes, when the nightly backup fails, and when no
-off-server copy has been made for 36 hours. The last two read the VM's logs through the Google Ops Agent, so they need
+off-server copy has been made for 23 hours. The last two read the VM's logs through the Google Ops Agent, so they need
 the agent running (step 3). Undo: `bash alerts.sh undo`. Uptime checks and alerts fit in the free allowance.
 
 ## 6. Recovery drill: how long a full restore takes (Cloud Shell, about 20 minutes, once)
 
 This proves the off-server copy can bring the whole service back on a new machine, and measures how long it takes.
-It uses a temporary VM with no web access (no http tags), so the restored data is never public, and deletes it after.
+It uses a temporary VM with no web access (no http tags) and no cloud identity (no service account), so the restored data is never public and the VM cannot read anything else in your project. Background checks and backups are off on it, so it never calls a customer's agent or a provider. It is deleted afterwards.
 
 On your computer, make a bundle of the code and upload it and `deploy/vm/restore_drill.sh` to Cloud Shell:
 
@@ -165,7 +167,7 @@ In Cloud Shell (put the backup key from your password manager in `backup.key` fi
 
 ```bash
 ZONE=asia-south1-a
-gcloud compute instances create ledgerline-drill --zone=$ZONE --machine-type=e2-small --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud
+gcloud compute instances create ledgerline-drill --zone=$ZONE --machine-type=e2-small --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud --no-service-account --no-scopes
 LATEST=$(gcloud storage ls gs://$BUCKET/ledgerline/ | sort | tail -1); gcloud storage cp "$LATEST" .
 gcloud compute scp ledgerline.bundle restore_drill.sh "$(basename "$LATEST")" backup.key ledgerline-drill:~ --zone=$ZONE
 gcloud compute ssh ledgerline-drill --zone=$ZONE --command "sudo bash restore_drill.sh ledgerline.bundle $(basename "$LATEST") backup.key main"

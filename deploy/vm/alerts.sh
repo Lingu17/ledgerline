@@ -3,7 +3,7 @@
 #
 #   1. An uptime check on https://35-207-220-110.sslip.io/api/health every 5 minutes, and an email when it fails.
 #   2. An email when the nightly backup fails (log line "ledgerline-backup.service: Failed").
-#   3. An email when no off-server copy has been logged for 36 hours ("off-server copy" missing).
+#   3. An email when no off-server copy has been logged for 23 hours (Cloud Monitoring's absence windows stay under a day).
 # 2 and 3 read the VM's logs, which reach Cloud Logging through the Google Ops Agent; if the agent is turned off
 # (SERVER_STEPS step 3), only alert 1 works. Uptime checks and alerting fit in Cloud Monitoring's free allowance.
 set -euo pipefail
@@ -45,11 +45,11 @@ EOF
    "comparison": "COMPARISON_GT", "thresholdValue": 0, "duration": "0s", "trigger": {"count": 1}}}]}
 EOF
   cat > "$tmp/offsite_missing.json" <<EOF
-{"displayName": "Ledgerline: no off-server copy for 36 hours", "combiner": "OR", "notificationChannels": ["$CHANNEL"],
+{"displayName": "Ledgerline: no off-server copy for about a day", "combiner": "OR", "notificationChannels": ["$CHANNEL"],
  "conditions": [{"displayName": "no off-server copy logged", "conditionAbsent": {
    "filter": "metric.type=\"logging.googleapis.com/user/ledgerline_offsite_copy\" AND resource.type=\"gce_instance\"",
    "aggregations": [{"alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_COUNT"}],
-   "duration": "129600s", "trigger": {"count": 1}}}]}
+   "duration": "82800s", "trigger": {"count": 1}}}]}
 EOF
   for f in uptime backup_failed offsite_missing; do gcloud alpha monitoring policies create --policy-from-file="$tmp/$f.json" >/dev/null; done
   rm -rf "$tmp"
