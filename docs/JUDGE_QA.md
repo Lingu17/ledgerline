@@ -1,7 +1,7 @@
 # Judge Q&A, short and honest
 
 **Who would actually answer your agent call today?**
-Nobody outside yet. The protocol (MCP) and the signatures (Ed25519) are real, and every answer must pass three checks, but the payer agents are simulated and their keys are on our server. A real company would run its own agent that holds its own key, register the public key with us, and we'd call it the same way.
+No outside company yet. The built-in payer agents are simulated, with their keys on our server. A customer can instead run its own agent with its own key and register its address and public key; Ledgerline then asks it over the network and applies the same three checks. That path is tested end to end with our reference agent as a separate process; anyone can run it (see the quickstart), but no real company does today.
 
 **Why trust a signed answer at all?**
 We don't trust it on its own. The signature only says who is speaking. The answer must also be about this exact payment, be fresh, and agree with our records. DEP-1004 shows a correctly signed answer being rejected because the records disagree.
