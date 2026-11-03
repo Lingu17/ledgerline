@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
 import re
 import secrets
@@ -132,9 +133,22 @@ class ControlPlane:
     # the whole server. Generous enough for several judges behind one office address.
     creation_limits = {"per_ip_hour": 10, "per_ip_day": 40, "per_day": 500}
 
+    @staticmethod
+    def _creation_key(ip: str) -> str:
+        """One IPv6 client usually holds a whole /64, so it is counted as one address."""
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return ip
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is None:
+            return str(ipaddress.ip_network(f"{addr}/64", strict=False))
+        return str(addr.ipv4_mapped or addr) if isinstance(addr, ipaddress.IPv6Address) else str(addr)
+
     def _check_creation(self, c: sqlite3.Connection, ip: str, what: str) -> None:
         now = self.clock.now()
+        ip = self._creation_key(ip)
         hour, day = iso(now - timedelta(hours=1)), iso(now - timedelta(days=1))
+        c.execute("DELETE FROM creations WHERE at < ?", (iso(now - timedelta(days=2)),))  # only the last day is ever counted
         count = lambda sql, params: int(c.execute(sql, params).fetchone()[0])  # noqa: E731
         lim = self.creation_limits
         if count("SELECT COUNT(*) FROM creations WHERE ip = ? AND at >= ?", (ip, hour)) >= lim["per_ip_hour"]:

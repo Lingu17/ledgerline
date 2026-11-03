@@ -80,6 +80,23 @@ def test_a_spoofed_forwarded_for_changes_nothing(settings):
     assert sign_up(app2, {"x-forwarded-for": "192.0.2.200"})[0].status_code == 429
 
 
+def test_ipv6_addresses_in_one_slash_64_count_as_one_client(settings):
+    app, _ = make_app(settings, hops=1)
+    for i in range(3):
+        assert sign_up(app, {"x-forwarded-for": f"2001:db8:1:2::{i + 1}"})[0].status_code == 200
+    assert sign_up(app, {"x-forwarded-for": "2001:db8:1:2:ffff::9"})[0].status_code == 429
+    assert sign_up(app, {"x-forwarded-for": "2001:db8:1:3::1"})[0].status_code == 200  # another /64
+
+
+def test_old_rows_are_pruned(settings):
+    app, clock = make_app(settings)
+    sign_up(app)
+    clock.advance(timedelta(days=3))
+    sign_up(app)
+    with app.state.control.conn() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM creations").fetchone()[0] == 1
+
+
 def test_the_address_is_recorded_on_sign_up_and_new_organization(settings):
     app, _ = make_app(settings, hops=1)
     r, c = sign_up(app, {"x-forwarded-for": "198.51.100.23"})
