@@ -1,0 +1,104 @@
+# Server steps for the owner
+
+These change cloud and server security settings, so the owner runs them. Each step says how to check it and how to undo
+it. Run them in this order. Never paste a key into a chat.
+
+## 1. Off-server backups (Cloud Shell, about 10 minutes, with a 1–2 minute restart of the VM)
+
+Open **Cloud Shell** from the Google Cloud Console, then run:
+
+```bash
+PROJECT=project-0b143378-307b-4214-818
+ZONE=asia-south1-a
+VM=ledgerline
+BUCKET=ledgerline-backups-$(openssl rand -hex 4)
+gcloud config set project $PROJECT
+
+# A private bucket: no public access, versions kept, everything deleted after 30 days.
+gcloud storage buckets create gs://$BUCKET --location=asia-south1 --uniform-bucket-level-access --public-access-prevention
+gcloud storage buckets update gs://$BUCKET --versioning
+cat > lifecycle.json <<'EOF'
+{"rule": [{"action": {"type": "Delete"}, "condition": {"age": 30}},
+          {"action": {"type": "Delete"}, "condition": {"daysSinceNoncurrentTime": 30}}]}
+EOF
+gcloud storage buckets update gs://$BUCKET --lifecycle-file=lifecycle.json
+
+# A service account for the VM that can only add backup files to this bucket: not read, not delete, nothing else.
+gcloud iam service-accounts create ledgerline-vm --display-name="Ledgerline VM"
+SA=ledgerline-vm@$PROJECT.iam.gserviceaccount.com
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET --member=serviceAccount:$SA --role=roles/storage.objectCreator
+# Only if you keep the Google Ops Agent (step 3): let it write logs and metrics.
+gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/logging.logWriter --condition=None
+gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/monitoring.metricWriter --condition=None
+
+# Switch the VM to it. The VM must be stopped for this; the site is down for 1-2 minutes and keeps its address.
+gcloud compute instances stop $VM --zone=$ZONE
+gcloud compute instances set-service-account $VM --zone=$ZONE --service-account=$SA --scopes=cloud-platform
+gcloud compute instances start $VM --zone=$ZONE
+echo "Bucket: $BUCKET"
+```
+
+Why a new service account: the VM's current one is the project's default, which usually has the broad Editor role.
+Giving it storage write would let the VM read and delete backups too. The new one can only create objects in this
+bucket. Undo: `gcloud compute instances set-service-account` back to the old account (shown by
+`gcloud compute instances describe $VM --zone=$ZONE --format='value(serviceAccounts[0].email)'` before you switch),
+with its old scopes.
+
+Check the site is back: open https://35-207-220-110.sslip.io.
+
+Then on the VM (your own SSH window):
+
+```bash
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh backup <the bucket name printed above>
+```
+
+It creates the backup key (once), runs one backup and shows `off-server copy ledgerline/<date>.tar.gz.enc`. It then
+prints two commands. Run them in the same window and save each output as its own entry in your password manager:
+`backup.key` decrypts the off-server copies, `connections.key` decrypts saved Airwallex keys. Without them, a copy
+from the bucket cannot be read and Airwallex has to be connected again after a disk loss.
+
+**Restore test (proves the copy and the saved key both work):** in the Cloud Console open the bucket, download the
+newest `ledgerline/<date>.tar.gz.enc`, save the backup key from your password manager into a file, then from the
+repository on your computer:
+
+```bash
+PYTHONPATH=backend backend/.venv/Scripts/python deploy/vm/restore_check.py <downloaded file> <key file>
+```
+
+It should end with `restore check: PASS`, listing each organization with `books balanced=True, audit chain ok=True`.
+Delete the key file afterwards.
+
+## 2. Files and the app's sandbox (on the VM, about 15 minutes; the app restarts several times for a few seconds)
+
+```bash
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh status     # before
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh files      # owner-only files
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh systemd    # sandbox, one group at a time
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh status     # after
+```
+
+After each change the script checks the app: health, a signed-out request refused with 401, and, under the same
+sandbox, the payer-agent call, the signing and encryption libraries and an outbound HTTPS request. A group of settings
+that breaks a check is taken back out and named as REMOVED. Send the output (it has no secrets) so the repository's
+unit file can match what was kept. Undo: `harden.sh undo-systemd`, `harden.sh undo-files`.
+
+## 3. Logs (on the VM, 2 minutes)
+
+```bash
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh opsagent-why   # what the Ops Agent keeps logging
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh journald       # cap the journal at 300 MB
+```
+
+If you don't use Cloud Monitoring or Cloud Logging for this VM, stop the agent: `harden.sh opsagent-off` (undo:
+`harden.sh opsagent-on`). If you do, send the `opsagent-why` output so its configuration can be fixed instead.
+
+## 4. SSH (on the VM, 2 minutes)
+
+Keep your current SSH window open.
+
+```bash
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh ssh
+```
+
+It turns off root login (after testing the configuration) and starts fail2ban for SSH. Open a **new** SSH connection
+and check it works before closing the old one. Undo: `harden.sh undo-ssh`.

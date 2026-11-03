@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# Server hardening, one step at a time, run by the owner:  sudo bash /opt/ledgerline/src/deploy/vm/harden.sh <step>
+#
+#   status          read only: hardening score, file modes, journald use, Ops Agent log rate, SSH settings
+#   files           owner-only files: UMask=0077 for the app and the backup, existing databases 600, folders 700
+#   systemd         sandbox the app one group of settings at a time; a group that breaks a check is taken back out
+#   journald        cap the system journal at 300 MB
+#   opsagent-why    read only: the Google Ops Agent's most common log lines in the last hour
+#   opsagent-off    stop and disable the Google Ops Agent   (undo: opsagent-on)
+#   ssh             PermitRootLogin no, then fail2ban guarding sshd
+#   backup BUCKET   encrypted nightly copy to that Cloud Storage bucket, then one run now
+#   undo-systemd | undo-files | undo-journald | undo-ssh
+#
+# After every change to the app's unit: daemon-reload, restart, then checks: active, /api/health answers, a signed-out
+# /api/deposits answers 401, and, in the same sandbox, the stdio payer-agent call, Ed25519 and AES-GCM, and an outbound
+# HTTPS request. Nothing here prints a secret.
+set -Eeuo pipefail
+
+main() {
+  [[ $EUID -eq 0 ]] || { echo "run with sudo" >&2; exit 2; }
+  SRC=/opt/ledgerline/src
+  DROPIN=/etc/systemd/system/ledgerline.service.d
+  case "${1:-}" in
+    status) status ;;
+    files) files ;;
+    undo-files) rm -f "$DROPIN/umask.conf"; reload_restart && check_app && echo "umask drop-in removed (file modes left as they are)" ;;
+    systemd) harden_systemd ;;
+    undo-systemd) rm -f "$DROPIN/hardening.conf"; reload_restart && check_app && echo "hardening drop-in removed" ;;
+    journald) journald ;;
+    undo-journald) rm -f /etc/systemd/journald.conf.d/ledgerline.conf; systemctl restart systemd-journald; journalctl --disk-usage ;;
+    opsagent-why) opsagent_why ;;
+    opsagent-off) systemctl disable --now google-cloud-ops-agent.service google-cloud-ops-agent-fluent-bit.service \
+                    google-cloud-ops-agent-opentelemetry-collector.service || true
+                  systemctl --no-pager --plain list-units --all 'google-cloud-ops-agent*' | head -5 ;;
+    opsagent-on) systemctl enable --now google-cloud-ops-agent ;;
+    ssh) ssh_step ;;
+    undo-ssh) rm -f /etc/ssh/sshd_config.d/10-ledgerline.conf; sshd -t && systemctl reload-or-restart ssh; echo "PermitRootLogin back to the default (fail2ban left running; 'systemctl disable --now fail2ban' to stop it)" ;;
+    backup) backup_step "${2:?bucket name}" ;;
+    *) sed -n '2,15p' "$0"; exit 2 ;;
+  esac
+}
+
+reload_restart() { systemctl daemon-reload; systemctl restart ledgerline; }
+
+check_app() {
+  local ok=1 i
+  for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8000/api/health && break; sleep 2; done
+  systemctl is-active --quiet ledgerline || { echo "  CHECK FAILED: service not active"; ok=0; }
+  curl -fsS -o /dev/null http://127.0.0.1:8000/api/health || { echo "  CHECK FAILED: /api/health"; ok=0; }
+  [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/deposits) == 401 ]] || { echo "  CHECK FAILED: signed-out /api/deposits is not 401"; ok=0; }
+  sandbox_check || { echo "  CHECK FAILED: payer agent, crypto or outbound HTTPS inside the sandbox"; ok=0; }
+  (( ok ))
+}
+
+# The app's own sandbox settings (unit file plus drop-ins), applied to a one-off process, so the checks run under
+# exactly the restrictions the app has.
+sandbox_props() {
+  local d
+  for d in NoNewPrivileges ProtectSystem ProtectHome PrivateTmp ReadWritePaths ReadOnlyPaths UMask CapabilityBoundingSet \
+           AmbientCapabilities PrivateDevices ProtectKernelTunables ProtectKernelModules ProtectKernelLogs ProtectControlGroups \
+           ProtectClock ProtectHostname RestrictAddressFamilies RestrictNamespaces LockPersonality RestrictRealtime \
+           RestrictSUIDSGID SystemCallArchitectures SystemCallFilter; do
+    { grep -h "^$d=" /etc/systemd/system/ledgerline.service "$DROPIN"/*.conf 2>/dev/null || true; } | tail -1 | sed 's/^/-p\n/'
+  done
+}
+
+sandbox_check() {
+  local -a props; mapfile -t props < <(sandbox_props)
+  systemd-run --quiet --wait --collect --pipe --uid=ledgerline --gid=ledgerline -p WorkingDirectory="$SRC/backend" "${props[@]}" \
+    /opt/ledgerline/venv/bin/python - <<'PY' 2>&1 | tail -3 | grep -q "SANDBOX OK"
+import os, sys, urllib.request, anyio
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from mcp import Client, StdioServerParameters
+from mcp.client.stdio import get_default_environment
+k = Ed25519PrivateKey.generate(); k.public_key().verify(k.sign(b"x"), b"x")
+AESGCM(os.urandom(32)).encrypt(os.urandom(12), b"x", None)
+p = StdioServerParameters(command=sys.executable, args=["-m", "ledgerline.payer_agents.server"], cwd=os.getcwd(),
+                          env={**get_default_environment(), "LEDGERLINE_AGENT_KEYS": "{}"})
+async def ask():
+    async with Client(p) as c:
+        r = await c.call_tool("explain_payment", {"customer_id": "X", "deposit_id": "D", "currency": "USD", "amount_minor": 1,
+                                                  "received_at": "2026-01-01T00:00:00Z"})
+        return str(r.structured_content)
+assert "no_agent" in anyio.run(ask)
+assert urllib.request.urlopen("https://www.googleapis.com/generate_204", timeout=10).status == 204
+print("SANDBOX OK")
+PY
+}
+
+status() {
+  echo "== hardening score"; systemd-analyze security ledgerline 2>/dev/null | tail -1
+  echo "== drop-ins"; ls "$DROPIN" 2>/dev/null || echo "none"
+  echo "== files readable by group or others under /var/lib/ledgerline: $(find /var/lib/ledgerline -type f -perm /044 | wc -l)"
+  echo "== journald"; journalctl --disk-usage; cat /etc/systemd/journald.conf.d/ledgerline.conf 2>/dev/null || echo "no cap set"
+  echo "== Ops Agent log lines in the last hour: $(journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager | wc -l)"
+  echo "== ssh"; sshd -T 2>/dev/null | grep -E "^(permitrootlogin|passwordauthentication) "; systemctl is-active fail2ban 2>/dev/null || true
+  echo "== backup"; [[ -f /etc/ledgerline/backup.env ]] && grep -o "^LEDGERLINE_BACKUP_BUCKET=.*" /etc/ledgerline/backup.env || echo "no off-server copy configured"
+}
+
+files() {
+  mkdir -p "$DROPIN"
+  printf '[Service]\nUMask=0077\n' > "$DROPIN/umask.conf"
+  install -m 644 "$SRC/deploy/vm/ledgerline-backup.service" /etc/systemd/system/ledgerline-backup.service
+  reload_restart
+  if ! check_app; then rm -f "$DROPIN/umask.conf"; reload_restart; check_app || true; echo "files: reverted, app checks failed with UMask"; exit 1; fi
+  find /var/lib/ledgerline -type f -exec chmod 600 {} +
+  find /var/lib/ledgerline -type d -exec chmod 700 {} +
+  check_app && echo "files: done. Readable by group or others now: $(find /var/lib/ledgerline -perm /044 | wc -l). Undo: harden.sh undo-files"
+}
+
+harden_systemd() {
+  local before; before=$(systemd-analyze security ledgerline 2>/dev/null | tail -1)
+  mkdir -p "$DROPIN"
+  local -a groups=(
+    "CapabilityBoundingSet=|AmbientCapabilities="
+    "PrivateDevices=yes|ProtectKernelTunables=yes|ProtectKernelModules=yes|ProtectKernelLogs=yes|ProtectControlGroups=yes|ProtectClock=yes|ProtectHostname=yes"
+    "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX"
+    "RestrictNamespaces=yes|LockPersonality=yes|RestrictRealtime=yes|RestrictSUIDSGID=yes"
+    "SystemCallArchitectures=native|SystemCallFilter=@system-service"
+  )
+  local kept="" g
+  for g in "${groups[@]}"; do
+    printf '[Service]\n%s%s\n' "$kept" "${g//|/$'\n'}" > "$DROPIN/hardening.conf"
+    reload_restart
+    if check_app; then kept+="${g//|/$'\n'}"$'\n'; echo "kept:     ${g//|/, }"
+    else echo "REMOVED:  ${g//|/, } (a check failed with it)"; fi
+  done
+  printf '[Service]\n%s' "$kept" > "$DROPIN/hardening.conf"
+  reload_restart
+  check_app || { echo "the kept settings failed together; run: harden.sh undo-systemd"; exit 1; }
+  echo "waiting 130 s for a background check round..."; local since; since=$(date '+%Y-%m-%d %H:%M:%S'); sleep 130
+  echo "service errors since the last restart: $(journalctl -u ledgerline --since "$since" -q --no-pager | grep -cE 'Traceback|ERROR|watcher')"
+  echo "score before: $before"; echo "score after:  $(systemd-analyze security ledgerline 2>/dev/null | tail -1)"
+  echo "MemoryDenyWriteExecute is deliberately not set. Undo: harden.sh undo-systemd"
+}
+
+journald() {
+  mkdir -p /etc/systemd/journald.conf.d
+  printf '[Journal]\nSystemMaxUse=300M\n' > /etc/systemd/journald.conf.d/ledgerline.conf
+  systemctl restart systemd-journald
+  journalctl --disk-usage; echo "Undo: harden.sh undo-journald"
+}
+
+opsagent_why() {
+  echo "lines in the last hour: $(journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager | wc -l)"
+  journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager -o cat | cut -c1-150 | sed -E 's/[0-9]{2,}/N/g' | sort | uniq -c | sort -rn | head -5
+}
+
+ssh_step() {
+  printf 'PermitRootLogin no\n' > /etc/ssh/sshd_config.d/10-ledgerline.conf
+  if ! sshd -t; then rm -f /etc/ssh/sshd_config.d/10-ledgerline.conf; echo "sshd config test failed; nothing changed"; exit 1; fi
+  systemctl reload-or-restart ssh  # existing sessions stay open
+  sshd -T | grep -E "^permitrootlogin "
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=180 install -y -q fail2ban >/dev/null
+  printf '[sshd]\nenabled = true\nbackend = systemd\nmaxretry = 5\nfindtime = 10m\nbantime = 1h\n' > /etc/fail2ban/jail.d/ledgerline-sshd.local
+  systemctl enable --now fail2ban; sleep 2; fail2ban-client status sshd | head -4
+  echo "Keep this window open. Open a NEW SSH connection now; close this one only after that works. Undo: harden.sh undo-ssh"
+}
+
+backup_step() {
+  local bucket="$1"
+  [[ "$bucket" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]] || { echo "not a bucket name: $bucket" >&2; exit 2; }
+  if [[ ! -f /etc/ledgerline/backup.key ]]; then
+    (umask 077; head -c 32 /dev/urandom | base64 > /etc/ledgerline/backup.key)
+    echo "created /etc/ledgerline/backup.key"
+  fi
+  chown ledgerline:ledgerline /etc/ledgerline/backup.key; chmod 600 /etc/ledgerline/backup.key
+  printf 'LEDGERLINE_BACKUP_BUCKET=%s\nLEDGERLINE_BACKUP_KEY_FILE=/etc/ledgerline/backup.key\n' "$bucket" > /etc/ledgerline/backup.env
+  chown root:ledgerline /etc/ledgerline/backup.env; chmod 640 /etc/ledgerline/backup.env
+  install -m 644 "$SRC/deploy/vm/ledgerline-backup.service" /etc/systemd/system/ledgerline-backup.service
+  systemctl daemon-reload
+  systemctl start ledgerline-backup.service || true
+  journalctl -u ledgerline-backup --since -2min -q --no-pager -o cat | tail -3
+  echo "Store two keys in your password manager now, from your own SSH window (never paste them into a chat):"
+  echo "  sudo cat /etc/ledgerline/backup.key        # decrypts the off-server copies"
+  echo "  sudo cat /var/lib/ledgerline/connections.key   # decrypts saved Airwallex keys"
+  echo "Undo: sudo rm /etc/ledgerline/backup.env (the next backup is local only again)"
+}
+
+main "$@"; exit
