@@ -18,24 +18,43 @@
   <img alt="CI" src="https://github.com/Lingu17/ledgerline/actions/workflows/ci.yml/badge.svg">
 </p>
 
-<h3 align="center">Ledgerline works out what every incoming payment was for, checks the answer,<br>and keeps a person in control of any money that leaves.</h3>
+<h3 align="center">When a payment doesn't match, Ledgerline's agent asks the payer's agent,<br>checks the answer, and only then decides. A person stays in control of any money that leaves.</h3>
 
-<p align="center"><b>Built for small companies that bill in several currencies.</b> Sandbox and made-up data only: no real money moves.</p>
+<p align="center"><b>For small companies that bill in several currencies.</b> Sandbox and made-up data only: no real money moves.</p>
+
+<p align="center">
+  <a href="https://35-207-220-110.sslip.io"><b>▶ Try it live</b></a> ·
+  <a href="VIDEO_LINK"><b>🎬 Watch the 3-minute video</b></a> ·
+  <a href="docs/JUDGE_QUICKSTART.md"><b>Judge quickstart</b></a> ·
+  <a href="docs/JUDGE_QA.md"><b>Judge Q&amp;A</b></a>
+</p>
 
 ---
 
-## ⚡ What it does, in plain English
+## The problem, in one line
 
-A 12-person company bills customers in the US, Europe and the UK. Money arrives with a missing reference, a bank fee taken off, or in the wrong currency, and sometimes a customer pays twice. One finance person chases each case by email, for days, while bills fall due in another currency.
+Money arrives with a missing reference, a fee taken off, in the wrong currency, or twice. Someone chases each case by email for days, and one wrong refund is real money gone.
 
-**Ledgerline does that chasing.** It settles the clear payments by itself. When one is unclear, it asks the customer's own finance agent what the money was for, and it **checks the answer before believing it**. It does this by itself as soon as the payment arrives. Then it settles the invoice, holds a credit, requests the exact balance, or proposes a refund. Small refunds backed by a verified answer go out under your limit with no person involved; you set that limit, and the pause switch stops it. Anything larger, and every bill payment, needs two people: if the agent proposed a refund, the person who approves it cannot also send it.
+## Try it alone in 3 steps (about 5 minutes)
 
-> **The moment that shows it.** A payment looks like a duplicate, so the first plan is to refund it. The customer's agent answers, with a signature, that it was an advance. Ledgerline checks that answer, changes its decision, and **no wrong refund ever leaves the bank**. Another agent gives a signed but false answer: it is rejected, and a person gets the reason.
+1. Open **[the live app](https://35-207-220-110.sslip.io)** → **Get started** → choose **Practice company**. Any name and email work, with a password of 12+ characters. Nothing is emailed.
+2. **Payments → DEP-1005 → Ask payer's agent.** The payment looks like a duplicate, so the first plan proposes a refund and holds it. The payer's agent answers with a signed claim that it was an advance. Three checks pass and the plan changes to **advance credit**. No wrong refund leaves. Then try **DEP-1004**: its signature is valid but the claim is false, so it is **rejected** and sent to a person with the reason.
+3. **Practice steps → run to the end.** Approve the over-limit refund under **Approvals**, then press **Send as practice teammate**, because the person who approves a refund the agent proposed can't also send it. Watch the bank go **SENT → PAID** and the ledger balance to the cent.
+
+## What it decides by itself, and what it never does
+
+| By itself | Never by itself |
+|:--|:--|
+| Settles clear payments, writes off bank fees within tolerance, holds credits, and prepares the exact-balance request (a person sends it) | Sends a refund over your limit without two people |
+| In a real company, asks the payer's agent the moment an unclear payment arrives | Believes an answer that fails any of the three checks |
+| Sends small refunds backed by a verified answer, under the limit you set | Lets Claude state an amount or move money. Claude only reads documents, as advice |
+
+**The three checks on every agent answer:** who signed it · that it is about this payment and still fresh · that your own records agree.
 
 > **Limits, stated up front**
 > - **The payer agents are simulated.** No outside company answers the agent call today. They use real MCP and real Ed25519 signatures, but they answer from a fixed table with keys held on this server, so a signature proves the mechanism, not that an outside party said anything.
 > - **Run on the real Airwallex sandbox:** signed deposit webhooks, a refund of an unmatched deposit (SENT → PAID, one transfer), a currency conversion, a EUR 100 bill payment (SENT → PAID), a paid early-payment link, beneficiaries and live rates. **Tested only on the simulated bank:** refunds the agent proposes, including the rule that a different member sends them and the practice teammate; automatic refunds under the limit; a refund returned to a person after the limit is lowered; failed and timed-out transfers; the pause switch; a paid exact-balance link; and wrong-currency conversion.
-> - **One person with two emails would pass the two-person rule.** It checks accounts, not people. Both live payments out above, the refund and the bill payment, were proposed and approved with two accounts that belong to the owner, so they show the control and the bank call, not independent review.
+> - **One person with two emails would pass the two-person rule.** It checks accounts, not people. Both live payments out, the refund and the bill payment, were proposed and approved with two accounts that belong to the owner, so they show the control and the bank call, not independent review.
 
 <p align="center"><img src="docs/screenshots/11-ceo.png" alt="The CEO view: cash, what needs a person, what the agent handled, and whether the numbers can be trusted" width="85%"></p>
 
@@ -416,7 +435,7 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 
 | For | Read |
 |:--|:--|
-| Judges | [JUDGE_QUICKSTART](docs/JUDGE_QUICKSTART.md) · [DEMO_SCRIPT](docs/DEMO_SCRIPT.md) |
+| Judges | [JUDGE_QUICKSTART](docs/JUDGE_QUICKSTART.md) · [JUDGE_QA](docs/JUDGE_QA.md) · [DEMO_SCRIPT](docs/DEMO_SCRIPT.md) |
 | Evidence | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) · [EVALUATION](docs/EVALUATION.md) · [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) |
 | Acceptance | [FULL_APPLICATION_ACCEPTANCE_REPORT](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) · [HACKATHON_REQUIREMENTS_MATRIX](docs/HACKATHON_REQUIREMENTS_MATRIX.md) |
 | Operations | [DEPLOYMENT](docs/DEPLOYMENT.md) · [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md) |

@@ -1,4 +1,22 @@
-# Demo script (under 5 minutes)
+# Demo script
+
+## 3-minute version
+
+Record in a fresh practice company. Before recording, invite a second member under Team and open that account in a private window. Recording alone, use **Send as practice teammate** instead, and say it exists only in practice companies.
+
+| Time | On screen | Say |
+|:--|:--|:--|
+| 0:00–0:15 | Landing page | "Ledgerline is for small companies that bill in several currencies. When a payment doesn't match, its agent asks the payer's agent, checks the answer, and only then decides. Up front: the payer agents are simulated, and both accounts you'll see are mine." |
+| 0:15–0:35 | Inbox | "Six payments came in. Three settled by themselves. Three are unclear, so the agent asks each payer's agent; a practice company waits so I can show you." |
+| 0:35–1:15 | Payments → DEP-1005 → Ask payer's agent | "This looks like a duplicate, so the first plan proposes a refund and holds it. The payer's agent answers over MCP with a signed claim: it was an advance. Three checks: who signed it, that it's about this payment and fresh, and that our records agree. All pass, so the plan changes to advance credit. No wrong refund left the bank." |
+| 1:15–1:40 | DEP-1004 → Ask payer's agent | "This answer is properly signed, but it claims another customer's invoice. The records check fails, so it's rejected and goes to a person with the reason. A valid signature isn't enough." |
+| 1:40–2:25 | Approvals: approve in window 1, send in window 2 | "This refund is over our limit. I approve it here. The agent proposed it, so the person who approves it can't also send it: my window shows the reason instead of a Send button, and the server would refuse it too. A different member sends it from the second window." |
+| 2:25–2:45 | Practice steps: SENT then PAID, then Ledger | "The bank says SENT, which isn't final, so the liability stays. At PAID, it's released. The ledger balances to the cent, per currency." |
+| 2:45–3:00 | CEO view | "Four of six payments were decided with no person. Rules for money live in code. Claude only reads documents, as advice, and can never move money. That's Ledgerline." |
+
+Tips: hold on the approver's window for a second, because the missing Send button and its reason are the clearest sign of the two-person rule (the server's 403 for the same request is covered by an automated test). Don't scroll through settings. Keep the mouse still while you talk.
+
+## Longer version (under 5 minutes)
 
 Organizers review **the video, the code and the writeup**, and the walkthrough must stay under five minutes (the official site's limit). Record at 1080p with the browser zoomed for legibility.
 

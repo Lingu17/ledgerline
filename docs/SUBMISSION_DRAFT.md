@@ -10,7 +10,8 @@ The owner submits on HackerEarth. Nothing in this repository saves or submits an
 
 **Live app:** https://35-207-220-110.sslip.io (always on). **Architecture:** https://35-207-220-110.sslip.io/#/architecture
 **Repository:** https://github.com/Lingu17/ledgerline (private: the owner must grant judges access or decide on visibility before submitting)
-**Demo video:** to be recorded by the owner (script: `docs/DEMO_SCRIPT.md`)
+**Demo video:** to be recorded by the owner (script: `docs/DEMO_SCRIPT.md`, 3-minute version at the top)
+**Judge Q&A:** `docs/JUDGE_QA.md` (short, honest answers to the likely questions)
 
 **Limits, stated up front**
 
