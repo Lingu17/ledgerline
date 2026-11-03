@@ -143,6 +143,33 @@ def test_organizations_cannot_see_or_touch_each_other(app):
     assert ctx_a.settings.db_path != ctx_b.settings.db_path
 
 
+def test_money_out_and_evidence_of_one_organization_are_unreachable_from_another(app):
+    a = new_client(app)
+    signup(a, email="a2@alpha.test", org="Alpha Two", start_with="sample")
+    for step in ["deposits", "links", "agents", "treasury"]:
+        assert a.post("/api/demo/step", json={"step": step}).status_code == 200
+    approval = next(x for x in a.get("/api/approvals").json() if x["status"] == "pending")
+    assert a.post(f"/api/approvals/{approval['id']}/approve", json={"scope_hash": approval["scope_hash"]}).status_code == 200
+    operation = a.get("/api/operations").json()[0]
+    before = (a.get("/api/approvals").json(), a.get("/api/operations").json(), len(a.get("/api/audit/export").json()["audit_events"]))
+
+    b = new_client(app)
+    signup(b, email="b2@beta.test", org="Beta Two", start_with="empty")
+    for path in [f"/api/approvals/{approval['id']}/execute", f"/api/approvals/{approval['id']}/send-as-practice-teammate",
+                 f"/api/approvals/{approval['id']}/reject", f"/api/operations/{operation['id']}/sync",
+                 "/api/deposits/DEP-1006/ask-agent", "/api/deposits/DEP-1004/return-to-sender"]:
+        body = {"scope_hash": approval["scope_hash"]} if path.endswith("/reject") else {}
+        r = b.post(path, json=body)
+        assert r.status_code in (403, 404, 409, 422), (path, r.status_code, r.text)
+    r = b.post(f"/api/operations/{operation['id']}/simulate-bank", json={"next_status": "SENT"})
+    assert r.status_code in (403, 404, 409), r.text
+    assert b.get("/api/operations").json() == [] and b.get("/api/evidence").json() == []
+    assert b.get("/api/treasury/bill-payments").json() == []
+    assert b.get(f"/api/deposits/{approval['deposit_id']}").status_code == 404
+    # Nothing Beta tried changed Alpha: same approvals, same operations, no new audit events.
+    assert (a.get("/api/approvals").json(), a.get("/api/operations").json(), len(a.get("/api/audit/export").json()["audit_events"])) == before
+
+
 def test_user_in_two_orgs_switches_context(app):
     c = new_client(app)
     me = signup(c, email="multi@example.test", org="First", start_with="sample")
