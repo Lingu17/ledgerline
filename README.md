@@ -24,7 +24,8 @@
 
 <p align="center">
   <a href="https://35-207-220-110.sslip.io"><b>▶ Try it live</b></a> ·
-  <a href="VIDEO_LINK"><b>🎬 Watch the 3-minute video</b></a> ·
+  <!-- Owner: replace the next line with <a href="(video URL)"><b>🎬 Watch the 3-minute video</b></a> once it is recorded. -->
+  <b>🎬 3-minute video: coming before 13 Nov</b> ·
   <a href="docs/JUDGE_QUICKSTART.md"><b>Judge quickstart</b></a> ·
   <a href="docs/JUDGE_QA.md"><b>Judge Q&amp;A</b></a>
 </p>

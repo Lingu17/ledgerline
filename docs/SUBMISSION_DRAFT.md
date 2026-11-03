@@ -13,6 +13,8 @@ The owner submits on HackerEarth. Nothing in this repository saves or submits an
 **Demo video:** to be recorded by the owner (script: `docs/DEMO_SCRIPT.md`, 3-minute version at the top)
 **Judge Q&A:** `docs/JUDGE_QA.md` (short, honest answers to the likely questions)
 
+**Before submitting (owner):** record the video and put its link in the README's top links line, replacing "3-minute video: coming before 13 Nov" (the comment above it shows the exact line); grant judges access to the repository; open the README on GitHub once as a judge would.
+
 **Limits, stated up front**
 
 - The payer agents are simulated. No outside company answers the agent call today: they use real MCP and Ed25519 signatures but answer from a fixed table, with keys held on our server.
