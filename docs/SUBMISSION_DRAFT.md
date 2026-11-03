@@ -13,7 +13,17 @@ The owner submits on HackerEarth. Nothing in this repository saves or submits an
 **Demo video:** to be recorded by the owner (script: `docs/DEMO_SCRIPT.md`, 3-minute version at the top)
 **Judge Q&A:** `docs/JUDGE_QA.md` (short, honest answers to the likely questions)
 
-**Before submitting (owner):** record the video and put its link in the README's top links line, replacing "3-minute video: coming before 13 Nov" (the comment above it shows the exact line); grant judges access to the repository; open the README on GitHub once as a judge would.
+**Before submitting (owner), in order:**
+
+1. Server: run `docs/SERVER_STEPS.md` steps 0 to 6 (code live, backups off the server and the two keys in your password manager, owner-only files and sandbox, logs, SSH, email alerts, the recovery drill) well before the deadline, never during judging.
+2. Video: record it, then put its link in the README's top line in place of "3-minute video: coming before 13 Nov" (the comment above that line shows the exact markup).
+3. Secrets: on your computer, scan the whole history and check what is tracked. Both must print nothing:
+   `git log -p --all | grep -nE "sk-ant-[A-Za-z0-9]|AIza[0-9A-Za-z_-]{30}|-----BEGIN [A-Z ]*PRIVATE KEY|x-api-key: [A-Za-z0-9]{20}"` and
+   `git ls-files | grep -iE "(^|/)\.env$|private_keys|agent_key|connections\.key|backup\.key|\.sqlite3$|\.pem$"`
+   (or run `gitleaks detect` if you have it).
+4. Author email: every commit shows your Gmail address as its author. Leave it, or decide to rewrite history before going public (that needs a force-push; ask first).
+5. Make the repository public, then open https://github.com/Lingu17/ledgerline while signed out: the README renders, the links work, the screenshots load.
+6. Submit on HackerEarth by 13 Nov 23:59 IST with the live link, the repository link and the video link.
 
 **Limits, stated up front**
 
