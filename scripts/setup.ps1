@@ -4,7 +4,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location "$root\backend"
 if (-not (Test-Path .venv)) { python -m venv .venv }
 .\.venv\Scripts\python -m pip install --upgrade pip
-.\.venv\Scripts\python -m pip install -r requirements-lock.txt
+.\.venv\Scripts\python -m pip install --require-hashes -r requirements-lock.txt
 Set-Location "$root\frontend"
 npm ci
 npm run build

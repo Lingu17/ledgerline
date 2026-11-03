@@ -368,7 +368,7 @@ Every rule is enforced by the API; the UI only hides what you cannot do.
 Linux or macOS:
 
 ```bash
-python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements-lock.txt
+python3 -m venv backend/.venv && backend/.venv/bin/pip install --require-hashes -r backend/requirements-lock.txt
 ```
 
 ```bash

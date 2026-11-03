@@ -57,7 +57,7 @@ sudo -u ledgerline bash "$APP/src/deploy/vm/checkout.sh" "$APP/src" "$REF" 2>/de
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 sudo -u ledgerline env UV_PYTHON_INSTALL_DIR="$APP/python" uv python install "$PY"
 sudo -u ledgerline env UV_PYTHON_INSTALL_DIR="$APP/python" uv venv -q --allow-existing --python "$PY" "$APP/venv"
-sudo -u ledgerline env VIRTUAL_ENV="$APP/venv" uv pip install -q -r "$APP/src/backend/requirements-lock.txt"
+sudo -u ledgerline env VIRTUAL_ENV="$APP/venv" uv pip install -q --require-hashes -r "$APP/src/backend/requirements-lock.txt"
 
 if [[ $MODE == single ]]; then
   echo "== frontend build (Node 22): the API serves frontend/dist on the same origin"
