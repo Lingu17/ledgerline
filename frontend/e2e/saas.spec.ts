@@ -271,6 +271,44 @@ test("the approver of an agent-proposed refund is told why they cannot send it",
   await expect(page.getByRole("button", { name: "Execute refund" })).toHaveCount(0);
 });
 
+test("one person finishes the practice walkthrough with the practice teammate sending the refund", async ({ page }) => {
+  await signUp(page, { org: `Solo ${uniq()}`, email: `solo-${uniq()}@e2e.test`, sample: true });
+  // Waits for each named step to show as done, so a step is never judged before the page has loaded or refreshed.
+  const row = (title: string) => page.locator(".steps li").filter({ hasText: title });
+  const finish = async (title: string) => {
+    await expect(row(title)).toBeVisible();
+    if ((await row(title).locator(".n.done").count()) === 0) await row(title).getByRole("button", { name: "Run", exact: true }).click();
+    await expect(row(title).locator(".n.done")).toHaveCount(1, { timeout: 30_000 });
+  };
+  await page.goto("/#/walkthrough");
+  for (const title of ["Receive six deposits", "Request the short balance", "Ask payer agents", "Cover the EUR bill"]) await finish(title);
+  await expect(row("Approve and send the refund").getByText(/waiting for a person to approve/)).toBeVisible();
+
+  await page.goto("/#/approvals");
+  await page.getByRole("button", { name: "Approve…" }).click();
+  await page.getByRole("button", { name: "Approve this scope" }).click();
+  await expect(page.getByText(/so you can't also send it/)).toBeVisible();
+  await expect(page.getByText("Practice only")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Execute refund" })).toHaveCount(0);
+
+  await page.goto("/#/walkthrough");
+  await expect(page.getByText(/let the practice teammate send it/)).toBeVisible();
+  await page.getByRole("button", { name: "Send as practice teammate" }).click();
+  await expect(page.getByText("The practice teammate sent the refund").first()).toBeVisible();
+  // The practice teammate's send also completes this step; wait for the page to show it.
+  await expect(row("Approve and send the refund").locator(".n.done")).toHaveCount(1, { timeout: 30_000 });
+  for (const title of ["Bank reports SENT", "Bank reports PAID"]) await finish(title);
+  await expect(page.locator(".steps .n.done")).toHaveCount(8);
+
+  const actors = await page.evaluate(async () => {
+    const events: { action: string; actor: string }[] = (await (await fetch("/api/audit/export")).json()).audit_events;
+    return events.filter((e) => e.action === "refund.created" || e.action === "approval.approved").map((e) => `${e.action} ${e.actor}`);
+  });
+  expect(actors).toHaveLength(2);
+  expect(actors).toContain("refund.created practice-teammate");
+  expect(actors.find((a) => a.startsWith("approval.approved"))).toMatch(/@e2e\.test$/);
+});
+
 test("refund held by the pause returns to a second person when the limit is lowered", async ({ page }) => {
   await signUp(page, { org: `Limit ${uniq()}`, email: `limit-${uniq()}@e2e.test`, sample: true });
   const r = await page.evaluate(async () => {

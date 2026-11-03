@@ -472,6 +472,12 @@ def execute(request: Request, approval_id: str, operator: str = Depends(require_
     return payouts.execute_refund(ctx_of(request), approval_id, operator)
 
 
+@router.post("/approvals/{approval_id}/send-as-practice-teammate")
+def send_as_practice_teammate(request: Request, approval_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    """Practice companies only (403 elsewhere): a labelled stand-in sends a refund a member approved."""
+    return payouts.send_as_practice_teammate(ctx_of(request), approval_id, operator)
+
+
 @router.get("/operations", dependencies=read)
 def list_operations(request: Request) -> list[dict[str, Any]]:
     ctx = ctx_of(request)

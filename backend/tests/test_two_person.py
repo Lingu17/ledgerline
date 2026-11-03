@@ -4,7 +4,9 @@ import pytest
 from ledgerline import db, payouts, treasury
 from ledgerline import bill_payments
 
-from .conftest import one, run_to
+from ledgerline.demo import run_step
+
+from .conftest import new_client, one, run_to, signup
 from .test_saas import _invite_and_join
 
 
@@ -103,6 +105,89 @@ def test_policy_approved_refund_still_sends_itself(ctx):
 
     agent_loop.ask_pending(ctx)
     assert one(ctx, "SELECT COUNT(*) AS n FROM operations WHERE kind = 'refund'")["n"] == 1
+
+
+def audit_events(client):
+    return client.get("/api/audit/export").json()["audit_events"]
+
+
+def practice_send(client, approval_id, **kw):
+    return client.post(f"/api/approvals/{approval_id}/send-as-practice-teammate", **kw)
+
+
+def test_practice_teammate_sends_what_the_judge_approved_and_the_walkthrough_finishes(client, app):
+    a = setup_refund(client)
+    for step in ("links", "agents", "treasury"):
+        assert client.post("/api/demo/step", json={"step": step}).status_code == 200
+    client.post(f"/api/approvals/{a['id']}/approve", json={"scope_hash": a["scope_hash"]})
+    assert client.get("/api/demo").json()["practice_teammate_can_send"] == a["id"]
+    r = practice_send(client, a["id"])
+    assert r.status_code == 200, r.text
+    assert len(refund_ops(client)) == 1 and transfers(client, app) == 1
+    created = next(e for e in audit_events(client) if e["action"] == "refund.created")
+    assert created["actor"] == "practice-teammate"
+    sent = next(e for e in audit_events(client) if e["action"] == "practice_teammate.sent")
+    assert sent["actor"] == "practice-teammate" and sent["detail"]["button_pressed_by"] == "owner@northbeam.test"
+    assert not any(e["actor"] == "owner@northbeam.test" and e["action"].startswith("refund.") for e in audit_events(client))
+    for step in ("approve", "bank_sent", "bank_paid"):
+        assert client.post("/api/demo/step", json={"step": step}).status_code == 200, step
+    assert all(s["done"] for s in client.get("/api/demo").json()["steps"] if s["id"] != "seed")
+    assert practice_send(client, a["id"]).json()["replayed"] is True and transfers(client, app) == 1
+
+
+def test_practice_teammate_is_refused_in_a_real_company_whatever_the_request_says(app):
+    c = new_client(app)
+    signup(c, email="fin@real.test", org="Real Co", start_with="empty")
+    ctx = app.state.orgs.get(c.org_id)
+    assert ctx.org["kind"] == "workspace"
+    run_step(ctx, "seed", "tester")
+    run_to(ctx, "agents")
+    a = next(x for x in c.get("/api/approvals").json() if x["deposit_id"] == "DEP-1006")
+    assert a["status"] == "pending" and a["created_by"] == "system"
+    assert c.post(f"/api/approvals/{a['id']}/approve", json={"scope_hash": a["scope_hash"]}).status_code == 200
+    for kw in ({}, {"json": {"practice": True, "kind": "sample", "actor": "practice-teammate"}},
+               {"headers": {"X-Practice-Company": "1", "X-Org-Kind": "sample"}}):
+        r = practice_send(c, a["id"], **kw)
+        assert r.status_code == 403 and "second real member" in r.json()["detail"], r.text
+    assert ctx.local_bank.count_transfers("Ledgerline refund DEP-1006") == 0
+    assert [o for o in c.get("/api/operations").json() if o["kind"] == "refund"] == []
+    assert next(x for x in c.get("/api/approvals").json() if x["id"] == a["id"])["status"] == "approved"
+    assert not any(e["actor"] == "practice-teammate" for e in audit_events(c))
+    assert "practice_teammate_can_send" not in c.get("/api/demo").json()
+
+
+def test_practice_teammate_cannot_send_a_refund_it_approved(client, app):
+    a = setup_refund(client)
+    ctx = app.state.orgs.get(client.org_id)
+    with ctx.conn() as conn, db.transaction(conn):
+        conn.execute("UPDATE approvals SET status='approved', decided_by='practice-teammate' WHERE id = ?", (a["id"],))
+    r = practice_send(client, a["id"])
+    assert r.status_code == 403 and "it approved" in r.json()["detail"]
+    assert refund_ops(client) == [] and transfers(client, app) == 0
+
+
+def test_practice_teammate_cannot_skip_the_approval(client, app):
+    a = setup_refund(client)
+    r = practice_send(client, a["id"])
+    assert r.status_code == 409 and "must be approved" in r.json()["detail"]
+    assert refund_ops(client) == [] and transfers(client, app) == 0
+
+
+def test_bill_payment_proposer_check_ignores_letter_case(ctx):
+    run_to(ctx, "deposits")
+    funded = next(d for d in treasury.refresh_decisions(ctx, "t")["decisions"] if d["decision"] == "fund")
+    p = bill_payments.propose(ctx, funded["obligation_id"], "Payee", "Proposer@Test")
+    with pytest.raises(payouts.SelfApproval):
+        bill_payments.decide(ctx, p["id"], approve=True, actor="proposer@test", seen_scope_hash=p["scope_hash"])
+
+
+def test_refund_proposer_check_ignores_letter_case(ctx):
+    run_to(ctx, "agents")
+    a = one(ctx, "SELECT * FROM approvals WHERE deposit_id = 'DEP-1006'")
+    with ctx.conn() as conn, db.transaction(conn):
+        conn.execute("UPDATE approvals SET created_by = ? WHERE id = ?", ("Proposer@Test", a["id"]))
+    with pytest.raises(payouts.SelfApproval):
+        payouts.decide(ctx, a["id"], approve=True, actor="proposer@test", seen_scope_hash=a["scope_hash"])
 
 
 def test_a_bill_payment_is_never_proposed_and_approved_by_one_person(ctx):

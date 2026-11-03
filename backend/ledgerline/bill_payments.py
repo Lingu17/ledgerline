@@ -17,7 +17,7 @@ from . import audit, crypto, db, treasury
 from .clock import iso, parse_iso
 from .context import AppContext
 from .money import fmt
-from .payouts import LEASE, REQUEST_NS, Paused, PayoutError, SelfApproval, StaleApproval
+from .payouts import LEASE, REQUEST_NS, Paused, PayoutError, SelfApproval, StaleApproval, same_person
 from .providers.base import ProviderAmbiguous, ProviderError
 
 _FINAL_FAIL = ("failed", "cancelled")
@@ -109,7 +109,7 @@ def decide(ctx: AppContext, payment_id: str, *, approve: bool, actor: str, seen_
             raise PayoutError(f"this payment is {p['status']}, not waiting for a decision")
         if seen_scope_hash != p["scope_hash"]:
             raise StaleApproval("the payment you saw is not the one on record; reload and review again")
-        if approve and p["proposed_by"] == actor:
+        if approve and same_person(p["proposed_by"], actor):
             raise SelfApproval("you proposed this payment; a different team member must approve it")
         problem = _scope_problem(conn, p)
         if not problem:

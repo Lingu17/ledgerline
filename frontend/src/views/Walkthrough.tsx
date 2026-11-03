@@ -8,6 +8,7 @@ interface DemoState {
   steps: { id: string; title: string; description: string; done: boolean }[];
   next: string | null;
   blocked: string | null;
+  practice_teammate_can_send?: string | null;
   provider: string;
 }
 
@@ -41,6 +42,13 @@ export function Walkthrough() {
                     {s.blocked}. <a href="#/approvals">Go to Approvals</a>
                   </div>
                 )}
+                {s.next === step.id && s.practice_teammate_can_send && can("operator") && (
+                  <PracticeTeammateSend approvalId={s.practice_teammate_can_send} busy={busy}
+                    onSend={() => run("practice-send", async () => {
+                      await post(`/approvals/${s.practice_teammate_can_send}/send-as-practice-teammate`);
+                      return post("/demo/step", { step: "approve" });
+                    }, "The practice teammate sent the refund")} />
+                )}
               </div>
               <div>
                 {can("operator") && s.next === step.id && step.id !== "seed" && (
@@ -69,6 +77,24 @@ export function Walkthrough() {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+/** Practice companies only: the server refuses this in a real company. */
+export function PracticeTeammateSend({ approvalId, busy, onSend }: { approvalId: string; busy: string | null; onSend: () => void }) {
+  return (
+    <div className="notice small" style={{ marginTop: 8 }}>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <span className="pill warn">Practice only</span>
+        <button className="btn small" disabled={!!busy} onClick={onSend}>
+          {busy === "practice-send" ? "Sending…" : "Send as practice teammate"}
+        </button>
+      </div>
+      <div className="muted" style={{ marginTop: 6 }}>
+        A stand-in second member that exists only in practice companies, so you can finish alone. It sends {approvalId} and is recorded
+        as <span className="mono">practice-teammate</span>, never as a real member. It cannot approve. A real company needs a second real member.
+      </div>
     </div>
   );
 }

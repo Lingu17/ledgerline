@@ -32,6 +32,11 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 
 > **The moment that shows it.** A payment looks like a duplicate, so the first plan is to refund it. The customer's agent answers, with a signature, that it was an advance. Ledgerline checks that answer, changes its decision, and **no wrong refund ever leaves the bank**. Another agent gives a signed but false answer: it is rejected, and a person gets the reason.
 
+> **Limits, stated up front**
+> - **The payer agents are simulated.** No outside company answers the agent call today. They use real MCP and real Ed25519 signatures, but they answer from a fixed table with keys held on this server, so a signature proves the mechanism, not that an outside party said anything.
+> - **Run on the real Airwallex sandbox:** signed deposit webhooks, a refund of an unmatched deposit approved by a second member account (SENT → PAID, one transfer), a currency conversion, a EUR 100 bill payment (SENT → PAID), a paid early-payment link, beneficiaries and live rates. **Tested only on the simulated bank:** refunds the agent proposes, including the rule that a different member sends them and the practice teammate; automatic refunds under the limit; a refund returned to a person after the limit is lowered; failed and timed-out transfers; the pause switch; a paid exact-balance link; and wrong-currency conversion.
+> - **One person with two emails would pass the two-person rule.** It checks accounts, not people. The live sandbox approvals above were made with member accounts the software cannot tell apart from one person, so they show the control and the bank call, not independent review.
+
 <p align="center"><img src="docs/screenshots/11-ceo.png" alt="The CEO view: cash, what needs a person, what the agent handled, and whether the numbers can be trusted" width="85%"></p>
 
 ### Why a CEO would care
@@ -64,7 +69,7 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 | **Payment matching** | Clean matches, bank fees written off, part payments, duplicates and missing references | Live |
 | **The agent asks by itself** | An unclear payment gets its question asked on arrival, with no click. A signed answer must pass three checks: who signed it, that it is about this payment and still fresh, and that your records agree | Tested, simulated agents |
 | **AI document reader** | Claude reads remittance emails and PDFs and suggests; a person decides | Live |
-| **Two people for money out** | Every bill payment, and refunds above your limit. A person proposes and another approves; if the agent proposed it, one person approves and another sends. The approver sees the exact amount and destination; if anything changes, the approval is void | Live |
+| **Two people for money out** | Every bill payment, and refunds above your limit. A person proposes and another approves; if the agent proposed it, one person approves and another sends. The approver sees the exact amount and destination; if anything changes, the approval is void | Live; agent-proposed refunds tested |
 | **Refunds and bill payments** | One transfer under a duplicate lock. SENT is not final; only PAID closes it | Live |
 | **What to pay first** | Ranks bills and decides: fund, convert, defer or escalate. A bill that releases more cash than it costs goes first | Tested |
 | **Convert only the shortfall** | Keeps a reserve per currency and buys only what a bill needs | Live |
@@ -86,12 +91,12 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 1. Open **https://35-207-220-110.sslip.io** → **Get started** → any name and email (nothing is emailed) → **Practice company**.
 2. The **Inbox** has a short guide. **Payments → DEP-1005 → Ask payer's agent**: the duplicate turns out to be an advance, and the refund is dropped. A practice company waits for you to press this so you can watch; **Receive an unclear payment** shows a payment handled with no click, which is how a real company works. That payment is built to match the simulated agent's table, and it works once per company.
 3. **Payments → DEP-1004 → Ask payer's agent**: a correctly signed but false answer is rejected.
-4. **Practice steps**: a currency conversion, a refund a person approves, and the bank moving from SENT to PAID.
+4. **Practice steps**: a currency conversion, a refund you approve, and the bank moving from SENT to PAID. Alone, press **Send as practice teammate** to send the refund you approved. That labelled stand-in exists only in practice companies, the server refuses it anywhere else, and a real company needs a second real member.
 5. **CEO view**: the whole company on one screen.
 
 Each company's data is isolated. A practice company uses made-up data and a simulated bank. For your own company, choose **My company** and connect your Airwallex sandbox keys under Settings.
 
-**What it does not do yet:** handle live money, send email from the server (balance requests open as a draft in your own mail), or connect a customer's own hosted agent. **The payer agents are simulations:** they use real MCP and real signatures, but answer from a fixed table with keys held on this server, so today the signature proves the mechanism, not that an outside party said anything. Without an agent, a person or the document reader handles the case, so it is useful today. Time saved has not been measured with a real customer.
+**What it does not do yet:** handle live money, send email from the server (balance requests open as a draft in your own mail), or connect a customer's own hosted agent; the payer agents are simulations (see the limits above). Without an agent, a person or the document reader handles the case, so it is useful today. Time saved has not been measured with a real customer.
 
 ---
 

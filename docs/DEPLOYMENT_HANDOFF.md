@@ -20,4 +20,4 @@ Updated 2 Nov 2026. Submit by 13 Nov 2026, 23:59 IST (official site; HackerEarth
 
 ## Historical (retired 30 Oct)
 
-27–29 Oct: Vercel Hobby → Render Free → Neon Free. Verified there: smoke 32/32 and 8/8 persistence after a Render instance replacement; sandbox deposits, FX conversion, signed delivery, and an independently approved EUR 5 refund through SENT → PAID. Details in [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md). `LEDGERLINE_SECRET_KEY` there encrypts payer keys in Neon and must never change; it is not used on the VM.
+27–29 Oct: Vercel Hobby → Render Free → Neon Free. Verified there: smoke 32/32 and 8/8 persistence after a Render instance replacement; sandbox deposits, FX conversion, signed delivery, and a EUR 5 refund approved by a second member account through SENT → PAID. Details in [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md). `LEDGERLINE_SECRET_KEY` there encrypts payer keys in Neon and must never change; it is not used on the VM.

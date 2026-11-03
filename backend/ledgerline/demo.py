@@ -21,7 +21,7 @@ STEPS = [
     ("links", "Request the short balance", "Publish a payment link for the exact balance, or record an honest draft if links are unavailable."),
     ("agents", "Ask payer agents", "Call explain_payment over MCP, verify the three checks, revise plans."),
     ("treasury", "Cover the EUR bill", "Quote and convert only the EUR shortfall above reserve."),
-    ("approve", "Approve and send the refund", "One member approves the over-limit refund on the Approvals page, and a different member sends it under the duplicate lock. Invite a second member under Team."),
+    ("approve", "Approve and send the refund", "One member approves the over-limit refund on the Approvals page, and a different member sends it under the duplicate lock. Alone in a practice company, the labelled practice teammate can send it; a real company needs a second real member."),
     ("bank_sent", "Bank reports SENT", "The refund is SENT. Not final: the liability stays on the books."),
     ("bank_paid", "Bank reports PAID", "Final. Liability released; conservation checked to the cent."),
 ]
@@ -37,6 +37,7 @@ def state(ctx: AppContext) -> dict[str, Any]:
         done = db.get_setting(conn, "demo_steps_done", [])
         nxt = next((s for s in STEP_IDS if s not in done), None)
         blocked = None
+        practice_teammate_can_send = None
         if nxt == "approve":
             a = db.row(conn, "SELECT * FROM approvals WHERE operation_type='refund' AND status IN ('pending','approved') ORDER BY created_at LIMIT 1")
             executed = db.row(conn, "SELECT id FROM operations WHERE kind='refund' AND deposit_id='DEP-1006'")
@@ -47,11 +48,13 @@ def state(ctx: AppContext) -> dict[str, Any]:
             elif a["status"] == "pending":
                 blocked = f"waiting for a person to approve {a['id']} on the Approvals page"
             elif payouts.sender_must_differ(a):
-                blocked = f"{a['decided_by']} approved {a['id']}, so a different team member must send it on the Approvals page (invite one under Team)"
+                blocked = f"{a['decided_by']} approved {a['id']}, so a different team member must send it: invite one under Team, or let the practice teammate send it"
+                practice_teammate_can_send = a["id"]
         return {
             "steps": [{"id": i, "title": t, "description": d, "done": i in done} for i, t, d in STEPS],
             "next": nxt,
             "blocked": blocked,
+            "practice_teammate_can_send": practice_teammate_can_send,
             "provider": ctx.provider.label,
         }
 

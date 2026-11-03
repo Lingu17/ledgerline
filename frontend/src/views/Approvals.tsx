@@ -4,6 +4,7 @@ import { Card, Checks, Empty, ErrorNote, Loading, Modal, Money, Pill, useAction,
 import { money, when } from "../format";
 import { useAuth } from "../auth";
 import { BillPayments, LIVE_PAYMENT, type BillPayment } from "./Treasury";
+import { PracticeTeammateSend } from "./Walkthrough";
 
 export function Approvals({ localMode, sandboxMode = false }: { localMode: boolean; sandboxMode?: boolean }) {
   const approvals = useLoad(() => get<Approval[]>("/approvals"), []);
@@ -52,7 +53,13 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
                 <div className="muted small">{a.id} · approved by {a.decided_by} {when(a.decided_at)}</div>
               </div>
               {a.sender_must_differ && a.decided_by === me?.user.email ? (
-                <div className="small muted" style={{ maxWidth: 320 }}>You approved this and nobody on the team proposed it, so you can't also send it. Any other Operator or Owner can. <a href="#/team">Invite one under Team</a>.</div>
+                <div style={{ maxWidth: 380 }}>
+                  <div className="small muted">You approved this and nobody on the team proposed it, so you can't also send it. Any other Operator or Owner can. <a href="#/team">Invite one under Team</a>.</div>
+                  {op && me?.organization?.kind === "sample" && (
+                    <PracticeTeammateSend approvalId={a.id} busy={busy}
+                      onSend={() => run("practice-send", () => post(`/approvals/${a.id}/send-as-practice-teammate`), (r: any) => `The practice teammate sent refund ${r.operation.id}: ${r.operation.status}`)} />
+                  )}
+                </div>
               ) : op && <button className="btn primary" disabled={!!busy}
                 onClick={() => run("exec" + a.id, () => post(`/approvals/${a.id}/execute`), (r: any) => `Refund ${r.operation.id} is ${r.operation.status}`)}>
                 {busy === "exec" + a.id ? "Sending…" : "Execute refund"}
@@ -142,7 +149,7 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
             <button className={`btn ${confirm.approve ? "primary" : "danger solid"}`} disabled={!!busy}
               onClick={async () => {
                 const path = confirm.approve ? "approve" : "reject";
-                await run(path, () => post(`/approvals/${confirm.a.id}/${path}`, { scope_hash: confirm.a.scope_hash }), confirm.approve ? "Approved. Execute when ready." : "Rejected");
+                await run(path, () => post(`/approvals/${confirm.a.id}/${path}`, { scope_hash: confirm.a.scope_hash }), confirm.approve ? "Approved. It is ready to send." : "Rejected");
                 setConfirm(null);
               }}>
               {confirm.approve ? "Approve this scope" : "Reject"}

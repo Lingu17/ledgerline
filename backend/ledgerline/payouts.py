@@ -53,6 +53,18 @@ class SelfApproval(PayoutError):
     """Four-eyes rule: whoever proposed a money-out cannot approve it."""
 
 
+class PracticeOnly(PayoutError):
+    """Something that exists only in a practice company was asked for in a real one."""
+
+
+# A labelled stand-in in practice companies, so one person can finish the walkthrough. It can only send, never approve.
+PRACTICE_TEAMMATE = "practice-teammate"
+
+
+def same_person(a: str | None, b: str | None) -> bool:
+    return bool(a) and bool(b) and a.casefold() == b.casefold()
+
+
 # --------------------------------------------------------------------------- scope
 def current_scope(conn: sqlite3.Connection, deposit_id: str, amount_minor: int, evidence_id: str | None) -> dict[str, Any]:
     d = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (deposit_id,))
@@ -149,7 +161,7 @@ def decide(ctx: AppContext, approval_id: str, *, approve: bool, actor: str, seen
                 raise PayoutError(f"approval is {a['status']}, not pending")
             if seen_scope_hash != a["scope_hash"]:
                 raise StaleApproval("the approval you saw is not the one on record; reload and review again")
-            if approve and a.get("created_by") and a["created_by"] == actor:
+            if approve and same_person(a.get("created_by"), actor):
                 raise SelfApproval("you proposed this refund; a different team member must approve it")
             check = _recheck(conn, a, now)
             if check["ok"]:
@@ -185,6 +197,23 @@ def execute_refund(ctx: AppContext, approval_id: str, actor: str, *, automatic: 
     return result
 
 
+def send_as_practice_teammate(ctx: AppContext, approval_id: str, pressed_by: str) -> dict[str, Any]:
+    """Practice companies only: the practice teammate sends a refund a member approved. The audit log names it, never a
+    real member, and the usual sender check still applies to it."""
+    if not ctx.org or ctx.org.get("kind") != "sample":
+        raise PracticeOnly("the practice teammate exists only in practice companies; a real company needs a second real member to send this")
+    with ctx.conn() as conn:
+        a = db.row(conn, "SELECT decided_by FROM approvals WHERE id = ?", (approval_id,))
+    if a and same_person(a["decided_by"], PRACTICE_TEAMMATE):
+        raise SelfApproval("the practice teammate cannot send a refund it approved")
+    result = execute_refund(ctx, approval_id, PRACTICE_TEAMMATE)
+    if not result.get("replayed"):
+        with ctx.conn() as conn, db.transaction(conn):
+            audit.record(conn, iso(ctx.clock.now()), PRACTICE_TEAMMATE, "practice_teammate.sent", "approval", approval_id,
+                         {"operation_id": result["operation"]["id"], "button_pressed_by": pressed_by})
+    return result
+
+
 def _send_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any]:
     with ctx.conn() as conn:
         with db.transaction(conn):
@@ -209,7 +238,7 @@ def _send_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any
                                  {"reason": "the amount is now over the refund auto-approval limit", "amount_minor": stored["amount_minor"],
                                   "limit_minor": limit, "currency": stored["currency"]})
                     return {"operation": None, "returned_to_person": True}
-            if sender_must_differ(a) and actor.casefold() == (a["decided_by"] or "").casefold():
+            if sender_must_differ(a) and same_person(actor, a["decided_by"]):
                 raise SelfApproval("you approved this refund and nobody on the team proposed it, so a different team member must send it")
             check = _recheck(conn, a, now)
             if not check["ok"]:

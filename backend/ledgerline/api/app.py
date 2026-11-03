@@ -16,7 +16,7 @@ from ..context import AppContext
 from ..control import AuthError, ControlPlane
 from ..demo import DemoError
 from ..money import MoneyError
-from ..payouts import Paused, PayoutError, SelfApproval, StaleApproval
+from ..payouts import Paused, PayoutError, PracticeOnly, SelfApproval, StaleApproval
 from ..providers.base import ProviderError
 from ..providers.local import LocalBank
 from ..reconcile import ReconcileError
@@ -109,6 +109,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.add_exception_handler(Paused, _err(423))
     app.add_exception_handler(StaleApproval, _err(409))
     app.add_exception_handler(SelfApproval, _err(403))
+    app.add_exception_handler(PracticeOnly, _err(403))
     for exc_type in (PayoutError, ReconcileError, TreasuryError, DemoError):
         app.add_exception_handler(exc_type, _err(409))
     app.add_exception_handler(MoneyError, _err(422))
