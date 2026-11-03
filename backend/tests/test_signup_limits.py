@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from fastapi.testclient import TestClient
 
+from ledgerline import db
 from ledgerline.api.app import create_app
 from ledgerline.clock import Clock
 
@@ -103,8 +104,8 @@ def test_the_address_is_recorded_on_sign_up_and_new_organization(settings):
     c.headers["X-CSRF-Token"] = r.json()["csrf_token"]
     c.post("/api/organizations", json={"name": "Second", "start_with": "empty"}, headers={"x-forwarded-for": "198.51.100.23"})
     with app.state.control.conn() as conn:
-        rows = conn.execute("SELECT action, detail FROM control_audit WHERE action IN ('user.signup', 'org.created')").fetchall()
-    assert {a: json.loads(d)["ip"] for a, d in rows} == {"user.signup": "198.51.100.23", "org.created": "198.51.100.23"}
+        rows = db.rows(conn, "SELECT action, detail FROM control_audit WHERE action IN ('user.signup', 'org.created')")
+    assert {r["action"]: json.loads(r["detail"])["ip"] for r in rows} == {"user.signup": "198.51.100.23", "org.created": "198.51.100.23"}
 
 
 def test_ten_judges_behind_one_office_address_get_in_with_the_default_limits(settings):
