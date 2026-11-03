@@ -154,7 +154,8 @@ test("full journey as two people", async ({ page, browser }) => {
     await page.goto("/#/payments");
     await page.getByRole("button", { name: "Add a wrong-currency payment" }).click();
     await page.waitForLoadState("networkidle");
-    const id = await page.evaluate(async () => ((await (await fetch("/api/deposits?limit=200")).json()) as { id: string; source: string }[]).find((x) => x.source === "practice_payment")!.id);
+    // The unclear payment added above is also a practice payment, so pick this one by its own bank reference.
+    const id = await page.evaluate(async () => ((await (await fetch("/api/deposits?limit=200")).json()) as { id: string; provider_ref: string }[]).find((x) => x.provider_ref === "PRACTICE-FX-1")!.id);
     await page.goto(`/#/payments?deposit=${id}`);
     await expect(page.getByRole("heading", { name: "Paid in the wrong currency" })).toBeVisible();
     await page.getByRole("button", { name: "Convert and apply" }).click();

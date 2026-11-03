@@ -69,7 +69,7 @@ A 12-person company bills customers in the US, Europe and the UK. Money arrives 
 | **Payment matching** | Clean matches, bank fees written off, part payments, duplicates and missing references | Live |
 | **The agent asks by itself** | An unclear payment gets its question asked on arrival, with no click. A signed answer must pass three checks: who signed it, that it is about this payment and still fresh, and that your records agree | Tested, simulated agents |
 | **AI document reader** | Claude reads remittance emails and PDFs and suggests; a person decides | Live |
-| **Two people for money out** | Every bill payment, and refunds above your limit. A person proposes and another approves; if the agent proposed it, one person approves and another sends. The approver sees the exact amount and destination; if anything changes, the approval is void | Live; agent-proposed refunds tested |
+| **Two people for money out** | Every bill payment, and refunds above your limit. A person proposes and another approves; if the agent proposed it, one person approves and another sends. The approver sees the exact amount and destination; if anything changes, the approval is void | Live; agent-proposed refunds tested on the simulated bank only |
 | **Refunds and bill payments** | One transfer under a duplicate lock. SENT is not final; only PAID closes it | Live |
 | **What to pay first** | Ranks bills and decides: fund, convert, defer or escalate. A bill that releases more cash than it costs goes first | Tested |
 | **Convert only the shortfall** | Keeps a reserve per currency and buys only what a bill needs | Live |
