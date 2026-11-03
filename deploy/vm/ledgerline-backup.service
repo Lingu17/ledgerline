@@ -1,9 +1,15 @@
 [Unit]
-Description=Ledgerline nightly SQLite backup (consistent copies, 7 kept)
+Description=Ledgerline nightly SQLite backup (consistent copies, 7 kept; encrypted off-server copy when a bucket is set)
 
 [Service]
 Type=oneshot
 User=ledgerline
+# Optional: LEDGERLINE_BACKUP_BUCKET and LEDGERLINE_BACKUP_KEY_FILE. Without them only the local copies are made.
+EnvironmentFile=-/etc/ledgerline/backup.env
 ExecStart=/opt/ledgerline/venv/bin/python /opt/ledgerline/src/deploy/vm/backup.py /var/lib/ledgerline /var/lib/ledgerline/backups 7
+UMask=0077
 ReadWritePaths=/var/lib/ledgerline
 ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
