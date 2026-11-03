@@ -45,17 +45,17 @@ QUESTION_FIELDS = ("customer_id", "deposit_id", "currency", "amount_minor", "rec
 # round, and an agent that keeps failing is left alone for a while.
 ROUND_BUDGET = 30.0
 BACKOFF_AFTER, BACKOFF_SECONDS = 3, 600
-_failures: dict[str, tuple[int, float]] = {}
+_failures: dict[tuple[str, str], tuple[int, float]] = {}  # keyed by (organization, URL): one cannot back off another
 _failures_lock = threading.Lock()
 
 
-def _backed_off(url: str) -> float | None:
+def _backed_off(url: tuple[str, str]) -> float | None:
     with _failures_lock:
         count, until = _failures.get(url, (0, 0.0))
     return until if count >= BACKOFF_AFTER and time.monotonic() < until else None
 
 
-def _record(url: str, ok: bool) -> None:
+def _record(url: tuple[str, str], ok: bool) -> None:
     with _failures_lock:
         if ok:
             _failures.pop(url, None)
@@ -94,13 +94,14 @@ def ask_agents(ctx, questions: list[dict[str, Any]], simulated=None) -> list[tup
         for i, a in zip(local, answers):
             out[i] = (questions[i], a, label, None)
     started = time.monotonic()
+    org_key = (ctx.org or {}).get("id", "")
     for url, idxs in by_url.items():
         label = f"mcp/http {urlsplit(url).hostname}"
         remaining = ROUND_BUDGET - (time.monotonic() - started)
         skip = None
         if remaining < 1:
             skip = "not asked this round: this organization's time for asking its customers' agents is used up; asked next round"
-        elif _backed_off(url) is not None:
+        elif _backed_off((org_key, url)) is not None:
             skip = f"not asked: this agent failed {BACKOFF_AFTER} times in a row, so it is left alone for {BACKOFF_SECONDS // 60} minutes"
         if skip:
             for i in idxs:
@@ -112,11 +113,11 @@ def ask_agents(ctx, questions: list[dict[str, Any]], simulated=None) -> list[tup
             answers = remote.ask_remote(url, reqs, ctx.settings.payer_agent_allow_loopback, deadline=remaining)
             if len(answers) != len(idxs):
                 raise remote.AgentUnreachable("the agent answered a different number of questions")
-            _record(url, True)
+            _record((org_key, url), True)
             for i, a in zip(idxs, answers):
                 out[i] = (questions[i], a if isinstance(a, dict) else {"status": "error", "detail": "answer is not an object"}, label, None)
         except (remote.AgentRefused, remote.AgentUnreachable) as exc:
-            _record(url, False)
+            _record((org_key, url), False)
             for i in idxs:
                 out[i] = (questions[i], None, label, str(exc))
     return out

@@ -390,6 +390,10 @@ def test_an_agent_that_keeps_failing_is_left_alone_for_a_while(loopback_app):
         hits = Broken.hits
         _q, answer, _t, problem = ask_agents(ctx, q)[0]
         assert answer is None and "failed 3 times in a row" in problem and Broken.hits == hits  # not contacted again
+        other = practice_client(loopback_app, "other-org@practice.test")  # same URL, another organization: not backed off
+        register(other, s.url, crypto.generate_keypair()[1])
+        ask_agents(loopback_app.state.orgs.get(other.org_id), q)
+        assert Broken.hits > hits  # contacted (the client may retry its first request)
     finally:
         s.close()
 
