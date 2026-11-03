@@ -3,6 +3,18 @@
 These change cloud and server security settings, so the owner runs them. Each step says how to check it and how to undo
 it. Run them in this order. Never paste a key into a chat.
 
+## 0. The new code must be live first (on the VM, 10 seconds)
+
+The script, the new backup and its unit come from the deployed code. In your SSH window:
+
+```bash
+git -C /opt/ledgerline/src log --oneline -1
+test -f /opt/ledgerline/src/deploy/vm/harden.sh && grep -q last_offsite /opt/ledgerline/src/deploy/vm/backup.py \
+  && echo "OK: the code for these steps is live" || echo "STOP: deploy 2ce45c0 or later first"
+```
+
+Go on only if it prints OK.
+
 ## 1. Off-server backups (Cloud Shell, about 10 minutes, with a 1–2 minute restart of the VM)
 
 Do this **now, well before 13 Nov**, never while judges may be looking: it stops the VM for a minute or two.
@@ -86,7 +98,8 @@ PYTHONPATH=backend backend/.venv/Scripts/python deploy/vm/restore_check.py <down
 ```
 
 It should end with `restore check: PASS`, listing each organization with `books balanced=True, audit chain ok=True`.
-Delete the key file afterwards.
+Then delete both the downloaded backup and the key file from your computer (and empty the recycle bin): together
+they are a readable copy of every account's data.
 
 ## 2. Files and the app's sandbox (on the VM, about 15 minutes; the app restarts several times for a few seconds)
 
