@@ -20,3 +20,16 @@ The refund keeps one request ID for its whole life. After a timeout or an unclea
 
 **How do you know the matching is right?**
 An accuracy run on synthetic data (200 made-up companies and 25 practice walkthroughs, rules only) makes 51,475 checks across 8,826 payments and 4,087 invoices, with 0 mismatches against a separate reference model. There are also over 400 backend tests, and CI runs them on PostgreSQL as well. See [ACCURACY_REPORT](ACCURACY_REPORT.md).
+
+**How does it compare with Airwallex's own reference builds?**
+Compared with the design rules in Airwallex's public AWS reference builds ([awx-devx/airwallex-agentic-banking-aws](https://github.com/awx-devx/airwallex-agentic-banking-aws)). This is our own comparison; Airwallex has not reviewed Ledgerline.
+
+| Rule in the reference builds | Ledgerline |
+|:--|:--|
+| The model only reads and proposes; no tool input names an account, tenant or request id | Yes. Claude reads documents through typed tools and cannot state an amount; payer agents only answer questions |
+| Code computes every amount and re-checks the policy before anything runs | Yes. Rules in code set amounts; the approved scope is re-checked under a lock before sending |
+| An approval is bound to the exact proposal, comes from someone other than the proposer, and arrives before it expires | Yes. Bound to a scope hash, proposer ≠ approver, and an approval expires after 72 hours. In addition, the approver of an agent-proposed refund cannot also send it |
+| A few low-risk actions run without approval, within policy limits | Yes. Refunds under the limit with a verified answer; the pause switch stops them |
+| Every write is idempotent; after an unknown outcome, read back before sending again | Yes. One request id per refund or bill payment, looked up before any retry, one live refund per payment |
+| Tenants are resolved on the server, never from model output | Yes. Every request is bound to the signed-in member's organization; each organization has its own database file |
+| Only one separately privileged component holds the Airwallex key and can write | **Not the same.** All money-out goes through one provider adapter in code, but it runs in the same server process as the rest of the app, which holds the keys |
