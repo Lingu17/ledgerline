@@ -31,6 +31,7 @@ UPLOAD = "https://storage.googleapis.com/upload/storage/v1/b/{bucket}/o?uploadTy
 
 def snapshot(data: Path, dest_root: Path, keep: int) -> Path:
     dest = dest_root / time.strftime("%Y%m%d-%H%M%S")
+    dest.mkdir(parents=True, exist_ok=True)
     for src in data.rglob("*"):
         if dest_root in src.parents or not src.is_file():
             continue

@@ -14,6 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deploy" / "vm"))
 import backup  # noqa: E402
 import restore_check  # noqa: E402
 
+# The nightly backup copies the server's SQLite files; when the whole suite runs on PostgreSQL there are none to copy.
+pytestmark = pytest.mark.skipif(bool(os.environ.get("LEDGERLINE_DATABASE_URL")), reason="SQLite backup; this run stores data in PostgreSQL")
+
 
 @pytest.fixture
 def snapshot(client, app, settings, tmp_path):
