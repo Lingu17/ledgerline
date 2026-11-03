@@ -352,6 +352,13 @@ export function PlanCard({ plan, ccy }: { plan: Plan; ccy: string }) {
   );
 }
 
+/** Who answered: the customer's own agent over the network, or a simulated agent on this server. */
+export function AgentSource({ transport }: { transport: string | null }) {
+  return transport?.startsWith("mcp/http")
+    ? <Pill status="info" label="Customer's own agent" />
+    : <Pill status="muted" label="Simulated agent" />;
+}
+
 export function EvidenceBlock({ e }: { e: Evidence }) {
   const claim = e.envelope?.claim;
   const proposal = e.envelope?.proposal;
@@ -361,6 +368,7 @@ export function EvidenceBlock({ e }: { e: Evidence }) {
         <h3 className="row" style={{ gap: 8 }}>
           {e.source === "mcp_signed" ? "Signed payer answer" : e.source === "claude_extracted" ? "Remittance read by Claude" : "Remittance read by offline rules"}
           <Pill status={e.verdict} label={e.verdict === "advisory" ? "Advisory only" : e.verdict === "verified" ? "Verified" : "Rejected"} />
+          {e.source === "mcp_signed" && <AgentSource transport={e.transport} />}
         </h3>
         <span className="muted small mono">{e.id} · {e.transport}</span>
       </div>

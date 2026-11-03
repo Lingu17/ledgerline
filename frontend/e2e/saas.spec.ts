@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { resolve } from "node:path";
 
 // Generated per run; never stored. Meets the 12+ chars / upper / lower / digit policy.
 const PASSWORD = `E2e-${randomBytes(9).toString("base64url")}Aa1`;
@@ -307,6 +309,31 @@ test("one person finishes the practice walkthrough with the practice teammate se
   expect(actors).toHaveLength(2);
   expect(actors).toContain("refund.created practice-teammate");
   expect(actors.find((a) => a.startsWith("approval.approved"))).toMatch(/@e2e\.test$/);
+});
+
+test("own agent: an owner points a practice customer at its own payer agent, and the answer says where it came from", async ({ page }) => {
+  // The reference agent runs as its own process (see playwright.config.ts); read its public key from its own key file.
+  const py = resolve(process.cwd(), "..", "backend", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+  const printed = execFileSync(py, [resolve(process.cwd(), "../tools/payer_agent/agent.py"), "--print-key",
+    "--key-file", resolve(process.cwd(), "e2e/.data/agent/agent_key.json")]).toString();
+  const publicKey = /Public key[^:]*: (\S+)/.exec(printed)![1];
+
+  await signUp(page, { org: `Own agent ${uniq()}`, email: `own-${uniq()}@e2e.test`, sample: true });
+  await page.goto("/#/customers");
+  const dunmore = page.getByRole("row").filter({ hasText: "CUST-DUNMORE" });
+  await expect(dunmore.getByText("Simulated agent")).toBeVisible();
+  await dunmore.getByRole("button", { name: "Payer agent…" }).click();
+  await page.getByLabel("Agent address").fill("http://127.0.0.1:8791/mcp");
+  await page.getByLabel("Agent public key").fill(publicKey);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(dunmore.getByText("Own agent")).toBeVisible();
+
+  await page.goto("/#/payments?deposit=DEP-1005");
+  await page.getByRole("button", { name: /Ask payer's agent/ }).first().click();
+  const drawer = page.locator(".drawer");
+  await expect(drawer.getByText("Customer's own agent").first()).toBeVisible({ timeout: 25_000 });
+  await expect(drawer.getByText("mcp/http 127.0.0.1").first()).toBeVisible();
+  await expect(drawer.getByText("Verified", { exact: true }).first()).toBeVisible();
 });
 
 test("refund held by the pause returns to a second person when the limit is lowered", async ({ page }) => {

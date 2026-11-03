@@ -31,6 +31,7 @@ export function Customers({ route }: { route: Route }) {
   const invoices = useLoad(() => getPage<Invoice[]>(`/invoices?${qs}`), [qs.toString()]);
   const [modal, setModal] = useState<"" | "customer" | "invoice" | "import-customers" | "import-invoices">("");
   const [editing, setEditing] = useState<Customer | null>(null);
+  const [agentFor, setAgentFor] = useState<Customer | null>(null);
   const invoiceId = route.params.get("invoice");
 
   return (
@@ -51,9 +52,17 @@ export function Customers({ route }: { route: Route }) {
                   <tr key={c.id}>
                     <td style={{ minWidth: 150 }}><div className="primary-text">{c.name}</div><div className="secondary mono nowrap">{c.id} · {c.country}</div></td>
                     <td className="hide-sm small">{c.payer_names.join(", ")}</td>
-                    <td className="small">{c.agent_key_id ? <><Pill status="matched" label="Key registered" /><div className="secondary mono hide-sm" title={c.agent_key_id}>{c.agent_key_id}</div></> : <span className="muted">None</span>}</td>
+                    <td className="small">
+                      {c.agent_url ? <Pill status="info" label="Own agent" /> : c.agent_key_id ? <Pill status="muted" label={c.demo_only ? "Simulated agent" : "Key registered"} /> : <span className="muted">None</span>}
+                      {c.agent_url && <div className="secondary mono hide-sm" title={c.agent_url}>{new URL(c.agent_url).host}</div>}
+                      {c.agent_key_id && <div className="secondary mono hide-sm" title={c.agent_key_id}>{c.agent_key_id}</div>}
+                      {c.agent_key_set_by && <div className="secondary">Key set by {c.agent_key_set_by} · {day(c.agent_key_set_at)}</div>}
+                    </td>
                     <td className="num">{c.credits.length ? c.credits.map((cr, i) => <div key={i}><Money minor={cr.amount_minor} ccy={cr.currency} /></div>) : <span className="muted">—</span>}</td>
-                    <td className="num">{op && <button className="btn small" onClick={() => setEditing(c)}>Edit</button>}</td>
+                    <td className="num"><div className="row" style={{ justifyContent: "flex-end", gap: 6 }}>
+                      {can("owner") && <button className="btn small" onClick={() => setAgentFor(c)}>Payer agent…</button>}
+                      {op && <button className="btn small" onClick={() => setEditing(c)}>Edit</button>}
+                    </div></td>
                   </tr>
                 ))}
               </tbody>
@@ -99,6 +108,7 @@ export function Customers({ route }: { route: Route }) {
         example="Orchard Tea Co,GBP,1250.00,2026-11-30,October supply" onClose={() => setModal("")} />}
       {modal === "customer" && <CustomerForm onClose={() => setModal("")} />}
       {editing && <CustomerForm existing={editing} onClose={() => setEditing(null)} />}
+      {agentFor && <PayerAgentForm customer={agentFor} onClose={() => setAgentFor(null)} />}
       {modal === "invoice" && <NewInvoice customers={allCustomers.data ?? []} onClose={() => setModal("")} />}
       {invoiceId && <InvoiceDrawer id={invoiceId} onClose={() => go("customers")} />}
     </div>
@@ -248,12 +258,65 @@ function CustomerForm({ onClose, existing }: { onClose: () => void; existing?: C
           <Field id="nc-ben" label="Refund account" wide hint={existing ? "Changing this invalidates any refund approval bound to the old account" : "Where refunds go"}>
             <input id="nc-ben" type="text" value={f.refund_beneficiary} onChange={set("refund_beneficiary")} />
           </Field>
-          <Field id="nc-key" label={existing ? "Replace payer agent public key (optional)" : "Payer agent public key (optional)"} wide hint="Base64 raw Ed25519 key their agent signs explain_payment answers with">
-            <input id="nc-key" type="text" className="mono" value={f.agent_public_key} onChange={set("agent_public_key")} />
-          </Field>
+          {!existing?.agent_url && (
+            <Field id="nc-key" label={existing ? "Replace payer agent public key (optional)" : "Payer agent public key (optional)"} wide hint="Base64 raw Ed25519 key their agent signs explain_payment answers with">
+              <input id="nc-key" type="text" className="mono" value={f.agent_public_key} onChange={set("agent_public_key")} />
+            </Field>
+          )}
         </div>
         {err && <div className="notice risk small" role="alert" style={{ marginTop: 12 }}>{err}</div>}
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy}>{existing ? "Save changes" : "Create customer"}</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Owner only: ask this customer's own agent at its URL. Only the public key is stored; its answers still face the three checks. */
+function PayerAgentForm({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const [url, setUrl] = useState(customer.agent_url ?? "");
+  const [key, setKey] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url.trim()) return setErr("Enter the agent's address.");  // the server enforces https and a public address
+    if (!key.trim()) return setErr("Paste the public key the agent printed when it started.");
+    setErr(null);
+    try {
+      await post(`/customers/${customer.id}/payer-agent`, { url: url.trim(), public_key: key.trim() }, "PUT");
+      await run("agent", async () => null, `${customer.name} is now asked at its own agent`);
+      onClose();
+    } catch (ex) {
+      setErr((ex as Error).message);
+    }
+  };
+  const remove = async () => {
+    const r = await run("agent", () => post(`/customers/${customer.id}/payer-agent`, undefined, "DELETE"),
+      customer.demo_only ? `${customer.name} uses its simulated agent again` : `${customer.name} has no agent now`);
+    if (r) onClose();
+  };
+  return (
+    <Modal title={`Payer agent for ${customer.name}`} onClose={onClose}>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        The customer runs its own agent, which keeps its own private key. Ledgerline asks it over the network what a payment was for
+        and stores only its public key. Every answer still has to pass the three checks, and it can change a plan but never move money.
+        {customer.demo_only ? " Without one, this practice customer uses a simulated agent on this server." : ""}
+      </p>
+      <form onSubmit={save} noValidate>
+        <div className="form-grid">
+          <Field id="pa-url" label="Agent address" wide hint="https only, a public address, for example https://agent.example.com/mcp">
+            <input id="pa-url" type="url" className="mono" value={url} onChange={(e) => setUrl(e.target.value)} />
+          </Field>
+          <Field id="pa-key" label="Agent public key" wide hint="Base64 Ed25519 public key, as the agent printed it">
+            <input id="pa-key" type="text" className="mono" value={key} onChange={(e) => setKey(e.target.value)} />
+          </Field>
+        </div>
+        {err && <div className="notice risk small" role="alert" style={{ marginTop: 12 }}>{err}</div>}
+        <div className="form-actions">
+          {customer.agent_url && <button type="button" className="btn danger" disabled={!!busy} onClick={remove}>Stop using its own agent</button>}
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" disabled={!!busy}>Save</button>
+        </div>
       </form>
     </Modal>
   );

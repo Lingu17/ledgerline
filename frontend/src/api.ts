@@ -310,6 +310,9 @@ export interface Customer {
   country: string;
   payer_names: string[];
   agent_key_id: string | null;
+  agent_url: string | null;
+  agent_key_set_by: string | null;
+  agent_key_set_at: string | null;
   refund_beneficiary: string;
   demo_only: number;
   credits: { id: number; deposit_id: string; currency: Ccy; amount_minor: number; earmark_invoice_id: string | null }[];
