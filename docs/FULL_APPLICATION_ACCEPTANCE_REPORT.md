@@ -19,7 +19,7 @@ Environments: **Unit/API** = pytest, in-process, temp data (`backend/tests`, 297
 |---|---|---|---|---|
 | Apparent duplicate → advance credit | Refund proposed, signed agent claim passes 3 checks, plan revised to credit, no money moves | Unit, E2E path, Local UI, evaluation | `test_valid_advance_claim_passes_all_three`, DEP-1005 decision path "3/3 passed … refund dropped", EVALUATION | PASS |
 | Signed but false claim rejected | Signature valid, records disagree, escalated with reason, no money | Unit, Local UI, evaluation | `test_foreign_invoice_claim_fails_records_check`, DEP-1004 "Failed: Our records agree" | PASS |
-| Genuine refund under second-member approval | Second person approves exact scope; one transfer; SENT keeps liability; PAID releases | Unit; Hist. live; VM live | `test_payouts.py`; VM APR-FC97829A / OP-46BAA6D1; a second member account approved (the software cannot tell whether two accounts are one person); SENT 04:20:43 → PAID 04:20:56 UTC on 30 Oct; provider GET and request-id lookup confirm one PAID EUR 1.23 transfer | PASS |
+| Genuine refund under second-member approval | Second person approves exact scope; one transfer; SENT keeps liability; PAID releases | Unit; Hist. live; VM live | `test_payouts.py`; VM APR-FC97829A / OP-46BAA6D1; the owner's second account approved (both accounts belong to the owner, so this is not independent review); SENT 04:20:43 → PAID 04:20:56 UTC on 30 Oct; provider GET and request-id lookup confirm one PAID EUR 1.23 transfer | PASS |
 | Every decision explained | Each payment shows received → plan → evidence → checks → decision → approval → settlement → accounting | E2E, Local UI | `payment detail shows the decision path…`; DEP-1001/1004/1005/1006 checked | PASS |
 | Every cent accounted for | Applied + credit + refund + unapplied = received, per deposit; per-currency conservation | Unit, evaluation | `test_partial_allocation_conserves…`, scorecard `ledger_balanced: true`, 2,127 random payments 0 disagreements | PASS |
 
@@ -79,7 +79,7 @@ Environments: **Unit/API** = pytest, in-process, temp data (`backend/tests`, 297
 | Exactly one transfer, duplicate lock, stable request id | `test_concurrent_execution_sends_exactly_one_transfer`, `test_second_live_refund_for_same_deposit_blocked_by_lock`, `test_timeout_before_accept_retries_once_with_same_request_id` | PASS |
 | Timeout → lookup before any resubmission | `test_timeout_after_accept_is_reconciled_not_resent`, `test_transfer_timeout_is_ambiguous_and_lookup_uses_request_id` | PASS |
 | SENT keeps liability; only PAID releases; failure/cancel restore | `test_sent_is_not_final…`, `test_failed_after_send_returns_funds_to_unapplied`, `test_rejected_by_provider_releases_reservation`; Hist. live | PASS |
-| Live refund on the VM | 30 Oct: DEP-A5F71B22E4 → APR-FC97829A → OP-46BAA6D1; different member approved and executed; one provider transfer `a6c5d55a-…`, one attempt. Journal reconstructed at SENT: payable 123 minor units; at PAID: 0. All five EUR accounting checks pass | PASS |
+| Live refund on the VM | 30 Oct: DEP-A5F71B22E4 → APR-FC97829A → OP-46BAA6D1; the owner's second account approved and executed (not independent review); one provider transfer `a6c5d55a-…`, one attempt. Journal reconstructed at SENT: payable 123 minor units; at PAID: 0. All five EUR accounting checks pass | PASS |
 
 ## 5. Claude and payer-agent evidence
 
@@ -174,7 +174,7 @@ No FAIL items remain open.
 
 ## Remaining blockers and limitations
 
-1. **VM refund lifecycle completed** (30 Oct): independent second-member approval, provider SENT → PAID, one transfer, liability released only at PAID, balanced journal. Evidence below and in INTEGRATION_EVIDENCE. The SENT state was also sampled live through the API at 04:20:43–04:20:56 UTC: deposit `refund_in_flight`, `refund_pending` 123, `refund_paid` 0, one attempt; after PAID: `refund_pending` 0, `refund_paid` 123, deposit `refunded`, EUR refund-liability check payable 0.00. The approver is a separate member account (Operator role); Ledgerline enforces proposer ≠ approver between accounts but cannot verify that two accounts belong to two different people.
+1. **VM refund lifecycle completed** (30 Oct): second-account approval (both accounts are the owner's, so not independent review), provider SENT → PAID, one transfer, liability released only at PAID, balanced journal. Evidence below and in INTEGRATION_EVIDENCE. The SENT state was also sampled live through the API at 04:20:43–04:20:56 UTC: deposit `refund_in_flight`, `refund_pending` 123, `refund_paid` 0, one attempt; after PAID: `refund_pending` 0, `refund_paid` 123, deposit `refunded`, EUR refund-liability check payable 0.00. The approver is a separate member account (Operator role); Ledgerline enforces proposer ≠ approver between accounts but cannot verify that two accounts belong to two different people. Here both accounts belong to the owner.
 2. **Hosted payment link** (BLOCKED): Airwallex sandbox returns `configuration_error`; needs Airwallex to enable the capability. The labelled draft is the fallback, not the original capability.
 3. **Submission, video, judge repository access** (BLOCKED, owner).
 4. Old stack retired on 30 Oct (done).

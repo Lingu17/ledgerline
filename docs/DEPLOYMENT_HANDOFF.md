@@ -13,7 +13,7 @@ Updated 2 Nov 2026. Submit by 13 Nov 2026, 23:59 IST (official site; HackerEarth
 
 ## Pending with the owner
 
-1. **VM refund completed 30 Oct.** DEP-A5F71B22E4 / APR-FC97829A / OP-46BAA6D1: second real member approved and executed; SENT 04:20:43 → PAID 04:20:56 UTC. Independent provider lookup returns one PAID EUR 1.23 transfer; timestamped journal proves liability retained until PAID; all five EUR checks pass. No further refund action needed.
+1. **VM refund completed 30 Oct.** DEP-A5F71B22E4 / APR-FC97829A / OP-46BAA6D1: approved and executed with the owner's second account (not independent review); SENT 04:20:43 → PAID 04:20:56 UTC. Independent provider lookup returns one PAID EUR 1.23 transfer; timestamped journal proves liability retained until PAID; all five EUR checks pass. No further refund action needed.
 2. Old Vercel/Render/Neon stack: **retired 30 Oct** with the owner's approval (Vercel project, Render service and Neon project deleted; Vercel URLs removed from Google OAuth). The live app was verified healthy before and after.
 3. Hosted payment links: Airwallex staff told another team on Slack (1 Nov) that this `configuration_error` means Payment Acceptance is unsupported for an account registered in India; the fix is a new sandbox account in a supported country (US, SG, HK) with new API keys. Our account's country is not readable with the scoped key, so this is the likely cause rather than confirmed.
 4. Record the demo video; grant judges repository access; submit on HackerEarth.

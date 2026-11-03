@@ -28,7 +28,7 @@ Prepare two windows: a fresh **Practice company** at https://35-207-220-110.ssli
 
 - "Payer agents here are simulations using real MCP and real signatures; I run them myself, and one lies on purpose. Customers mostly don't have agents yet, so today rules, the document reader and a person handle those cases, and the same checks are ready when they do."
 - "PAID on the sandbox comes from Airwallex's simulation call. No real money moves."
-- For the EUR 100 payment, if both accounts are yours: "Both accounts here are mine, so this shows the control, not independent review." Drop this line if a real second person approved it.
+- For the EUR 100 payment and the live refund: "Both accounts here are mine, so this shows the control, not independent review."
 
 Do not click through every page. If you run long, cut the cash squeeze first. To show a wrong-currency payment, use **Payments → Add a wrong-currency payment** after the scorecard: it adds a seventh payment, so the scorecard no longer reads 6.
 
