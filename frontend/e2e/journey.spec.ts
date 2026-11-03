@@ -24,6 +24,8 @@ async function scan(page: Page, label: string) {
     await page.goto(`/#/${p}`);
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.waitForTimeout(250);
+    // A page that is still drawing is not a blank page: give it up to 5 s to show content before judging it.
+    await page.waitForFunction(() => (document.querySelector("main") ?? document.body).innerText.length >= 20, null, { timeout: 5000 }).catch(() => {});
     const r = await page.evaluate(() => {
       const t = (document.querySelector("main") ?? document.body).innerText;
       const bad = t.match(/undefined|NaN|\[object|\bnull\b|Infinity|Traceback|Internal Server Error/g);
