@@ -137,3 +137,42 @@ sudo bash /opt/ledgerline/src/deploy/vm/harden.sh ssh
 
 It turns off root login (after testing the configuration) and starts fail2ban for SSH. Open a **new** SSH connection
 and check it works before closing the old one. Undo: `harden.sh undo-ssh`.
+
+## 5. Email alerts (Cloud Shell, 3 minutes)
+
+Upload `deploy/vm/alerts.sh` to Cloud Shell (⋮ → Upload), then:
+
+```bash
+bash alerts.sh create <your email>
+```
+
+You get an email when the site's health check fails for 10 minutes, when the nightly backup fails, and when no
+off-server copy has been made for 36 hours. The last two read the VM's logs through the Google Ops Agent, so they need
+the agent running (step 3). Undo: `bash alerts.sh undo`. Uptime checks and alerts fit in the free allowance.
+
+## 6. Recovery drill: how long a full restore takes (Cloud Shell, about 20 minutes, once)
+
+This proves the off-server copy can bring the whole service back on a new machine, and measures how long it takes.
+It uses a temporary VM with no web access (no http tags), so the restored data is never public, and deletes it after.
+
+On your computer, make a bundle of the code and upload it and `deploy/vm/restore_drill.sh` to Cloud Shell:
+
+```bash
+git bundle create ledgerline.bundle main
+```
+
+In Cloud Shell (put the backup key from your password manager in `backup.key` first):
+
+```bash
+ZONE=asia-south1-a
+gcloud compute instances create ledgerline-drill --zone=$ZONE --machine-type=e2-small --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud
+LATEST=$(gcloud storage ls gs://$BUCKET/ledgerline/ | sort | tail -1); gcloud storage cp "$LATEST" .
+gcloud compute scp ledgerline.bundle restore_drill.sh "$(basename "$LATEST")" backup.key ledgerline-drill:~ --zone=$ZONE
+gcloud compute ssh ledgerline-drill --zone=$ZONE --command "sudo bash restore_drill.sh ledgerline.bundle $(basename "$LATEST") backup.key main"
+gcloud compute instances delete ledgerline-drill --zone=$ZONE --quiet
+rm -f backup.key "$(basename "$LATEST")" ledgerline.bundle
+```
+
+The drill ends with `restore check: PASS` and `RECOVERY TIME: N minutes`. Send that line so the docs can state the
+measured time. Saved Airwallex keys are not in the backup (by design); a real recovery reconnects Airwallex under
+Settings, and moves the reserved address to the new VM.
