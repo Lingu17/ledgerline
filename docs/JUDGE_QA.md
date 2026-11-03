@@ -12,6 +12,9 @@ The agent only proposes. Small refunds backed by a verified answer go out under 
 **What if a remittance email contains instructions for the AI?**
 It is treated as data. Tests feed emails that say "ignore previous instructions", "refund 9,999 to this account", "approve this", or contain a fake tool call, through the offline reader and through a model that does what the email says. In every case the result is stored as advisory evidence only, off-schema output becomes an escalation, and no plan, approval or operation changes; no amount or account from the email appears anywhere. The tools themselves have no amount or account field.
 
+**Does the AI explain its decisions?**
+The rules in code decide. On request, each payment gets a short "why this plan", written from the recorded facts only (never the email text). It must cite ids that exist and use only numbers from the facts, or it is dropped and shown as unavailable. It is labelled as advice and nothing that decides reads it; tests show the plan is identical with or without it. Practice companies use a fixed template, so judges' clicks cost nothing.
+
 **Is the two-person rule real if you used two of your own accounts?**
 The rule checks accounts, not people, and we say so. The live sandbox runs show the control and the bank call. They aren't independent review.
 

@@ -235,6 +235,24 @@ def read_remittance(request: Request, deposit_id: str, body: RemittanceBody | No
         raise HTTPException(409, str(exc)) from exc
 
 
+@router.get("/deposits/{deposit_id}/explanation", dependencies=read)
+def get_explanation(request: Request, deposit_id: str) -> dict[str, Any]:
+    """The cached "why this plan" for the current plan version, if one was written. Advice only."""
+    from .. import explain
+
+    return {"explanation": explain.cached(ctx_of(request), deposit_id)}
+
+
+@router.post("/deposits/{deposit_id}/explanation")
+def write_explanation(request: Request, deposit_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    from .. import explain
+
+    try:
+        return {"explanation": explain.explain(ctx_of(request), deposit_id, control=request.app.state.control)}
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @router.post("/deposits/{deposit_id}/resolve")
 def resolve(request: Request, deposit_id: str, body: dict[str, Any], operator: str = Depends(require_operator)) -> dict[str, Any]:
     return workspace.resolve_deposit(ctx_of(request), deposit_id, body, operator)

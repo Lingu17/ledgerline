@@ -426,4 +426,9 @@ test("payment detail shows the decision path and accounts for every cent", async
   await expect(path.getByText(/= received amount/)).toBeVisible();
   await page.goto("/#/payments?deposit=DEP-1003");
   await expect(page.getByLabel("Decision path").getByText(/Short by GBP 1,200\.00/)).toBeVisible();
+  // "Why this plan": advice only, written from a template in a practice company, citing the payment.
+  const why = page.getByLabel("Why this plan");
+  await why.getByRole("button", { name: "Explain this decision" }).click();
+  await expect(why.getByText(/Written from a template; the decision was made by rules in code/)).toBeVisible();
+  await expect(why.getByText(/DEP-1003/).first()).toBeVisible();
 });

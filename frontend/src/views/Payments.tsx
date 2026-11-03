@@ -181,6 +181,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
           {x.escalation_reason && x.status === "escalated" && <div className="notice risk"><b>Why this needs review:</b> {x.escalation_reason}</div>}
 
           <DecisionPath x={x} />
+          <WhyThisPlan id={x.id} planVersion={x.plans.length} />
 
           <div className="buckets" aria-label="Where this deposit went">
             <div><span>Applied to invoices</span><b>{money(x.buckets.allocated, x.currency)}</b></div>
@@ -641,5 +642,35 @@ function ImportCsv({ onClose }: { onClose: () => void }) {
         </form>
       )}
     </Modal>
+  );
+}
+
+interface Explanation { available: boolean; sentences?: string[]; cited_ids?: string[]; label?: string; reason?: string; plan_version: number }
+
+/** "Why this plan": written from facts only, cached per plan version, and never read by anything that decides. */
+function WhyThisPlan({ id, planVersion }: { id: string; planVersion: number }) {
+  const ex = useLoad(() => get<{ explanation: Explanation | null }>(`/deposits/${id}/explanation`), [id, planVersion]);
+  const { run, busy } = useAction();
+  const { can } = useAuth();
+  const e = ex.data?.explanation;
+  return (
+    <section aria-label="Why this plan" className="card card-body" style={{ marginTop: 12 }}>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h3 className="section-title" style={{ margin: 0 }}>Why this plan</h3>
+        {!e && can("operator") && (
+          <button className="btn small" disabled={!!busy} onClick={() => run("explain", () => post(`/deposits/${id}/explanation`), "Explanation written")}>Explain this decision</button>
+        )}
+      </div>
+      {e?.available ? (
+        <>
+          {e.sentences!.map((s, i) => <p key={i} className="small" style={{ margin: "6px 0" }}>{s}</p>)}
+          <div className="muted small">{e.label}. Cites: <span className="mono">{e.cited_ids!.join(", ")}</span></div>
+        </>
+      ) : e ? (
+        <div className="muted small">Explanation unavailable: it did not match the recorded facts, so it is not shown.</div>
+      ) : (
+        <div className="muted small">A plain-language explanation of the plan above, on request. Advice only: the decision was made by rules in code.</div>
+      )}
+    </section>
   );
 }
