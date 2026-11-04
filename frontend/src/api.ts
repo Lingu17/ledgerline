@@ -235,6 +235,7 @@ export interface Operation {
 export interface Wallet {
   currency: Ccy;
   cash: number;
+  cash_known: boolean;
   reserve: number;
   customer_credits: number;
   unapplied_held: number;

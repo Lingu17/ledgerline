@@ -387,8 +387,10 @@ def setup_checklist(request: Request, p: Principal = Depends(require_role("viewe
     with p.ctx.conn() as conn:
         n = lambda t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]  # noqa: E731 - fixed table names only
         customers, invoices, bills, deposits = n("customers"), n("invoices"), n("obligations"), n("deposits")
+        openings = n("wallet_opening")
     steps = [
         {"id": "bank", "label": "Connect your Airwallex account", "done": org["bank_mode"] != "local", "page": "settings"},
+        {"id": "opening", "label": "Set opening balances, and reserves in Settings → Policy", "done": openings > 0, "page": "treasury"},
         {"id": "customers", "label": "Add the customers who pay you", "done": customers > 0, "page": "customers"},
         {"id": "invoices", "label": "Add open invoices", "done": invoices > 0, "page": "customers"},
         {"id": "bills", "label": "Add upcoming bills and payroll", "done": bills > 0, "page": "treasury"},

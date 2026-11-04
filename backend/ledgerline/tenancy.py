@@ -143,6 +143,10 @@ class OrgRegistry:
                 run_step(ctx, "deposits", "system")
                 run_step(ctx, "links", "system")
         with ctx.conn() as conn, db.transaction(conn):
+            if not sample:  # a real company sets its own reserves; until then none is assumed
+                from .context import DEFAULT_POLICY
+
+                db.set_setting(conn, "policy", {**DEFAULT_POLICY, "reserve_minor": {c: 0 for c in DEFAULT_POLICY["reserve_minor"]}})
             db.set_setting(conn, "provisioned", True)
             db.set_setting(conn, "workspace_kind", "sample" if sample else "workspace")
         return ctx

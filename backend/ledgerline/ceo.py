@@ -30,7 +30,7 @@ def summary(ctx: AppContext, work_queue: list[dict[str, Any]]) -> dict[str, Any]
             p = pos[ccy]
             mine = [i for i in open_invoices if i.currency == ccy]
             currencies.append({
-                "currency": ccy, "cash": p["cash"], "reserve": p["reserve"], "bills_due": p["obligations_due_in_window"], "free": p["free_after_commitments"],
+                "currency": ccy, "cash": p["cash"], "cash_known": p["cash_known"], "reserve": p["reserve"], "bills_due": p["obligations_due_in_window"], "free": p["free_after_commitments"],
                 "held": p["unapplied_held"], "owed_to_us": sum(i.remaining_minor for i in mine),
                 "overdue": sum(i.remaining_minor for i in mine if parse_iso(i.due_at) <= now),
             })
@@ -42,9 +42,13 @@ def summary(ctx: AppContext, work_queue: list[dict[str, Any]]) -> dict[str, Any]
         lookahead = ctx.policy(conn)["obligation_lookahead_days"]
         offers = db.rows(conn, "SELECT discount_minor, currency FROM early_pay_offers WHERE status = 'paid'")
     short = [b for b in bills if b["decision"] in ("defer", "escalate")]
+    short_cash = [c["currency"] for c in currencies if c["cash_known"] and c["free"] < 0]
     trusted = balanced and chain["ok"] and score["double_payments"] == 0
     if not trusted:
         verdict, headline = "problem", "Stop and check: the records do not reconcile."
+    elif short_cash:
+        waiting = len(work_queue) + len(short)
+        verdict, headline = "attention", f"The books are sound, but cash is short in {' and '.join(short_cash)}." + (f" {_needing(waiting)}" if waiting else "")
     elif short or work_queue:
         verdict, headline = "attention", f"The books are sound. {_needing(len(work_queue) + len(short))}"
     else:

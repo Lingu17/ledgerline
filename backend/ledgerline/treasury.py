@@ -47,9 +47,12 @@ def wallet_position(conn: sqlite3.Connection, ctx: AppContext) -> dict[str, dict
         # In-flight conversions (persisted when booked): the sell side is reserved, the buy side counts as pending cover.
         fx_out_reserved = _sum(conn, "SELECT COALESCE(SUM(amount_minor),0) FROM operations WHERE kind='fx_conversion' AND currency = ? AND status IN ('pending','processing')", (ccy,))
         fx_in_pending = _sum(conn, "SELECT COALESCE(SUM(CAST(json_extract(detail,'$.buy_amount_minor') AS BIGINT)),0) FROM operations WHERE kind='fx_conversion' AND json_extract(detail,'$.buy_currency') = ? AND status IN ('pending','processing')", (ccy,))
+        # Known once an opening balance is set (by hand or from a connected account) or money has moved in this currency.
+        cash_known = bool(db.row(conn, "SELECT 1 FROM journal_lines WHERE account = ? AND currency = ? LIMIT 1", (f"cash:{ccy}", ccy)))
         out[ccy] = {
             "currency": ccy,
             "cash": cash,
+            "cash_known": cash_known,
             "reserve": reserve,
             "ring_fenced": ring_fenced,
             "customer_credits": credits,
