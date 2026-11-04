@@ -6,11 +6,12 @@
 # prints the minutes taken. docs/SERVER_STEPS.md step 6 creates and deletes the VM around it.
 set -euo pipefail
 BUNDLE="$(realpath "${1:?git bundle}")"; BLOB="$(realpath "${2:?backup .tar.gz.enc}")"; KEY="$(realpath "${3:?backup key file}")"; REF="${4:-main}"
+BLOB_IN="$BLOB"; KEY_IN="$KEY"
 [[ $EUID -eq 0 ]] || { echo "run with sudo" >&2; exit 2; }
 [[ -d /var/lib/ledgerline/orgs ]] && { echo "STOP: this machine already has Ledgerline data; use a fresh VM" >&2; exit 2; }
 START=$(date +%s)
-IP=$(curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)
-HOST="${IP//./-}.sslip.io"
+# The drill serves nothing to the outside (local only), so its site name only has to be well formed.
+HOST="drill.invalid"
 cp "$BUNDLE" /srv/ledgerline.bundle
 SETUP=$(mktemp -d); git clone -q /srv/ledgerline.bundle "$SETUP/src" && git -C "$SETUP/src" checkout -q "$REF"
 echo "== install from the bundle as $HOST (local only)"
@@ -18,6 +19,7 @@ LEDGERLINE_LOCAL_ONLY=1 LEDGERLINE_REPO=/srv/ledgerline.bundle bash "$SETUP/src/
 rm -rf "$SETUP"
 systemctl is-enabled ledgerline-backup.timer >/dev/null 2>&1 && { echo "STOP: backups are enabled on the drill VM" >&2; exit 1; }
 grep -q "^LEDGERLINE_WATCH_SECONDS=0" /etc/ledgerline/ledgerline.env || { echo "STOP: background checks are on in the drill VM" >&2; exit 1; }
+echo "ok: backup timer disabled; background checks off (LEDGERLINE_WATCH_SECONDS=0); web server off"
 echo "== restore the backup"
 systemctl stop ledgerline
 NAME="ledgerline/$(basename "$BLOB")"
@@ -43,9 +45,11 @@ with tempfile.TemporaryDirectory(dir=data) as tmp:
 print("restored", sorted(p.name for p in data.iterdir()))
 PY
 systemctl start ledgerline
-for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8000/api/health && break; sleep 2; done
+for _ in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8000/api/health && break; sleep 2; done  # quiet while it starts
 curl -fsS http://127.0.0.1:8000/api/health; echo
 echo "== verify the restored books"
 sudo -u ledgerline env PYTHONPATH=/opt/ledgerline/src/backend /opt/ledgerline/venv/bin/python /opt/ledgerline/src/deploy/vm/restore_check.py "$BLOB" "$KEY" "$NAME"
 rm -rf "$WORK"
-echo "RECOVERY TIME: $(( ($(date +%s) - START + 59) / 60 )) minutes from a fresh VM to a healthy, verified Ledgerline"
+rm -f "$KEY_IN" "$BLOB_IN"  # the copies this script was given: the key and the backup do not stay on the drill VM
+MIN=$(( ($(date +%s) - START + 59) / 60 ))
+echo "RECOVERY TIME: $MIN minute(s) from files on a new VM to a healthy, verified Ledgerline (not counting VM creation, the download, moving the address, the certificate or reconnecting Airwallex)"

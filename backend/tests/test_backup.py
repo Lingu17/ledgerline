@@ -79,7 +79,7 @@ def test_a_real_company_with_a_forged_demo_setting_still_fails(app, settings, ke
     snap = backup.snapshot(Path(settings.data_dir), Path(settings.data_dir) / "backups", 7)
     assert restore_check.check(write_encrypted(snap, key_file, tmp_path), key_file) is False
     out = capsys.readouterr().out
-    assert f"{c.org_id}: books balanced=True, audit chain ok=False" in out and "put back" not in out and "FAIL" in out
+    assert f"Real Books (company, {c.org_id}): books balanced=True, audit chain ok=False" in out and "put back" not in out and "FAIL" in out
 
 
 def test_a_copy_missing_an_organizations_books_fails(snapshot, key_file, tmp_path, capsys):
@@ -111,14 +111,19 @@ def test_a_tampered_copy_a_wrong_key_or_a_renamed_copy_is_refused(snapshot, key_
     tampered = tmp_path / "t" / blob.name
     tampered.parent.mkdir()
     tampered.write_bytes(bytes(data))
-    with pytest.raises(InvalidTag):
+    with pytest.raises(backup.BackupRefused, match="key is wrong, the file was renamed") as refused:
         restore_check.check(tampered, key_file)
+    assert isinstance(refused.value.__cause__, InvalidTag)
     other_key = tmp_path / "other.key"
     other_key.write_text(base64.b64encode(os.urandom(32)).decode())
-    with pytest.raises(InvalidTag):
+    with pytest.raises(backup.BackupRefused):
         restore_check.check(blob, other_key)
-    with pytest.raises(InvalidTag):
+    with pytest.raises(backup.BackupRefused):
         restore_check.check(blob, key_file, "ledgerline/20200101-000000.tar.gz.enc")  # passed off as another night
+    not_a_key = tmp_path / "notakey.key"
+    not_a_key.write_text("hello, this is not base64!")
+    with pytest.raises(backup.BackupRefused, match="not a backup key"):
+        backup.read_key(not_a_key)
     bad = tmp_path / "short.key"
     bad.write_text(base64.b64encode(b"x" * 16).decode())
     with pytest.raises(ValueError):

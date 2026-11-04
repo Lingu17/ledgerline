@@ -3,6 +3,7 @@
 #
 #   sudo bash setup.sh <public-hostname> <frontend-origin|self> [git-ref]
 #   sudo bash setup.sh 203-0-113-7.sslip.io https://ledgerline.vercel.app main   # API behind a Vercel frontend
+#     (not used live; needs LEDGERLINE_EDGE_SECRET and the CSP headers at the edge: docs/DEPLOYMENT.md)
 #   sudo bash setup.sh 34-100-1-2.sslip.io self <commit>                         # single host: site + API + data
 #
 # Result: Ledgerline runs as a systemd service on 127.0.0.1:8000 as an unprivileged user, Caddy serves it on
@@ -44,11 +45,13 @@ if ! swapon --show | grep -q /swapfile; then
   grep -q /swapfile /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 
-echo "== firewall: allow HTTP/HTTPS (Oracle images reject them by default)"
-for port in 80 443; do
-  iptables -C INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport $port -j ACCEPT
-done
-netfilter-persistent save >/dev/null
+if [[ $LOCAL_ONLY != 1 ]]; then  # a local-only machine (the recovery drill) serves nothing outside
+  echo "== firewall: allow HTTP/HTTPS (Oracle images reject them by default)"
+  for port in 80 443; do
+    iptables -C INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport $port -j ACCEPT
+  done
+  netfilter-persistent save >/dev/null
+fi
 
 echo "== user, code, Python $PY"
 id ledgerline >/dev/null 2>&1 || useradd --system --home "$APP" --shell /usr/sbin/nologin ledgerline
@@ -106,12 +109,13 @@ systemctl daemon-reload
 if [[ $LOCAL_ONLY == 1 ]]; then systemctl enable --now ledgerline.service; systemctl disable --now ledgerline-backup.timer 2>/dev/null || true
 else systemctl enable --now ledgerline.service ledgerline-backup.timer; fi
 systemctl restart ledgerline.service
-systemctl reload caddy || systemctl restart caddy
+if [[ $LOCAL_ONLY == 1 ]]; then systemctl disable --now caddy 2>/dev/null || true  # no certificate requests from a drill
+else systemctl reload caddy || systemctl restart caddy; fi
 
 echo "== health (local)"
 ok=0
 for i in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:8000/api/health; then echo; ok=1; break; fi; sleep 2
+  if curl -fs http://127.0.0.1:8000/api/health; then echo; ok=1; break; fi; sleep 2
 done
 if [[ $ok -ne 1 ]]; then
   echo "FAILED: the API did not become healthy on 127.0.0.1:8000" >&2

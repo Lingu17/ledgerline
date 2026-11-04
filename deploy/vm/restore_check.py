@@ -31,7 +31,8 @@ def check(blob_path: Path, key_path: Path, name: str | None = None) -> bool:
             tar.extractall(tmp, filter="data")
         root = next(Path(tmp).iterdir())
         with closing(sqlite3.connect(root / "control.sqlite3")) as c:
-            kinds = dict(c.execute("SELECT id, kind FROM organizations").fetchall())
+            orgs = {r[0]: (r[1], r[2]) for r in c.execute("SELECT id, name, kind FROM organizations")}
+            kinds = {k: v[1] for k, v in orgs.items()}
             org_ids = set(kinds)
             users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         books = sorted(root.glob("orgs/*/ledgerline.sqlite3"))  # each organization's books (not its simulated bank)
@@ -54,10 +55,18 @@ def check(blob_path: Path, key_path: Path, name: str | None = None) -> bool:
                 conn.close()
             ok = ok and balanced and chain["ok"]
             note = f"; practice tamper demo open at event {demo['id']}, checked with it put back" if demo else ""
-            print(f"  {db_path.parent.name}: books balanced={balanced}, audit chain ok={chain['ok']} ({chain['events']} events){note}")
+            name, kind = orgs.get(db_path.parent.name, ("unknown", "?"))
+            label = f"{name} ({'practice' if kind == 'sample' else 'company'}, {db_path.parent.name})"
+            print(f"  {label}: books balanced={balanced}, audit chain ok={chain['ok']} ({chain['events']} events){note}")
     print("restore check:", "PASS" if ok else "FAIL", "(temporary copy deleted)")
     return ok
 
 
 if __name__ == "__main__":
-    sys.exit(0 if check(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3] if len(sys.argv) > 3 else None) else 1)
+    from backup import BackupRefused
+
+    try:
+        sys.exit(0 if check(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3] if len(sys.argv) > 3 else None) else 1)
+    except BackupRefused as exc:
+        print(f"restore check: REFUSED: {exc}", file=sys.stderr)
+        sys.exit(1)

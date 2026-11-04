@@ -155,29 +155,68 @@ the agent running (step 3). Undo: `bash alerts.sh undo`. Uptime checks and alert
 ## 6. Recovery drill: how long a full restore takes (Cloud Shell, about 20 minutes, once)
 
 This proves the off-server copy can bring the whole service back on a new machine, and measures how long it takes.
-It uses a temporary VM with no web access (no http tags) and no cloud identity (no service account), so the restored data is never public and the VM cannot read anything else in your project. Background checks and backups are off on it, so it never calls a customer's agent or a provider. It is deleted afterwards.
+It uses a temporary VM with no cloud identity (no service account) and no web server: Caddy is switched off and ports
+80 and 443 stay closed, so the restored data is never public and the VM cannot read anything else in your project. It
+still has an external address, which it needs to download packages (do not add `--no-address`). Background checks and
+backups are off on it, so it never calls a customer's agent or a provider. It is deleted afterwards.
 
-On your computer, make a bundle of the code and upload it and `deploy/vm/restore_drill.sh` to Cloud Shell:
+On your computer, bundle **the commit the live site runs** (the deploy branch, not `main`), with `HEAD` so the copy has
+its files, and check it is the same commit as the `commit` field of https://35-207-220-110.sslip.io/api/health:
 
 ```bash
-git bundle create ledgerline.bundle main
+git fetch origin
+git branch -f drill-src origin/deploy/vercel-render
+git log --oneline -1 drill-src
+git bundle create ledgerline.bundle HEAD drill-src
 ```
 
-In Cloud Shell (put the backup key from your password manager in `backup.key` first):
+Upload `ledgerline.bundle`, `deploy/vm/restore_drill.sh` and `deploy/vm/backup.py` to Cloud Shell. In Cloud Shell, make the key file without leaving it readable (paste the backup key from your password
+manager, press Enter, then Ctrl-D):
 
 ```bash
+umask 077; cat > backup.key
+```
+
+Then save this as `drill.sh` in Cloud Shell and run `bash drill.sh`. It stops at the first failure, keeps the drill's
+log, and removes the key, the backup and the bundle from Cloud Shell when it ends, however it ends:
+
+```bash
+set -euo pipefail
 ZONE=asia-south1-a
+BUCKET=$(gcloud storage buckets list --format='value(name)' --filter='name~^ledgerline-backups-')
+echo "Bucket: ${BUCKET:-NOT FOUND}"; [ -n "$BUCKET" ] || exit 1
+LATEST=$(gcloud storage ls "gs://$BUCKET/ledgerline/" | sort | tail -1)
+[ -n "$LATEST" ] || { echo "STOP: no backup found in gs://$BUCKET/ledgerline/"; exit 1; }
+FILE=$(basename "$LATEST")
+trap 'rm -f backup.key "$FILE" ledgerline.bundle' EXIT
+gcloud storage cp "$LATEST" .
+# Check the key and the copy here, in seconds, before creating anything.
+pip install --user -q cryptography
+python3 - "$FILE" <<'PY'
+import sys
+from pathlib import Path
+from backup import BackupRefused, decrypt, read_key
+try:
+    decrypt(Path(sys.argv[1]).read_bytes(), read_key(Path("backup.key")), "ledgerline/" + sys.argv[1])
+except BackupRefused as exc:
+    sys.exit(f"STOP: {exc}")
+print("key and copy: OK")
+PY
+date
 gcloud compute instances create ledgerline-drill --zone=$ZONE --machine-type=e2-small --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud --no-service-account --no-scopes
-LATEST=$(gcloud storage ls gs://$BUCKET/ledgerline/ | sort | tail -1); gcloud storage cp "$LATEST" .
-gcloud compute scp ledgerline.bundle restore_drill.sh "$(basename "$LATEST")" backup.key ledgerline-drill:~ --zone=$ZONE
-gcloud compute ssh ledgerline-drill --zone=$ZONE --command "sudo bash restore_drill.sh ledgerline.bundle $(basename "$LATEST") backup.key main"
+until gcloud compute ssh ledgerline-drill --zone=$ZONE --command true; do sleep 10; done   # wait until it accepts SSH
+gcloud compute scp ledgerline.bundle restore_drill.sh "$FILE" backup.key ledgerline-drill:~ --zone=$ZONE
+gcloud compute ssh ledgerline-drill --zone=$ZONE --command "sudo nohup bash restore_drill.sh ledgerline.bundle $FILE backup.key drill-src > drill.log 2>&1; tail -3 drill.log" || true
+gcloud compute scp ledgerline-drill:~/drill.log . --zone=$ZONE
+date
 gcloud compute instances delete ledgerline-drill --zone=$ZONE --quiet
-rm -f backup.key "$(basename "$LATEST")" ledgerline.bundle
+grep -E "restore check:|RECOVERY TIME" drill.log
 ```
 
-The drill ends with `restore check: PASS` and `RECOVERY TIME: N minutes`. Send that line so the docs can state the
-measured time. Saved Airwallex keys are not in the backup (by design); a real recovery reconnects Airwallex under
-Settings, and moves the reserved address to the new VM.
+The drill ends with `restore check: PASS` and `RECOVERY TIME: N minute(s)`, which counts from files on the new VM to a
+healthy, verified Ledgerline. The two `date` lines give the whole time including the VM and the download. Send both
+so the docs can state the measured times; `drill.log` has the full output. Saved Airwallex keys are not in the backup
+(by design); a real recovery also reconnects Airwallex under Settings and moves the reserved address to the new VM.
 
 ## 7. Separate sending service (on the VM, 3 minutes; both services stop and start, a few seconds offline: run it well before judging)
 

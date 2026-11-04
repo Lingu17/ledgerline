@@ -51,8 +51,15 @@ def snapshot(data: Path, dest_root: Path, keep: int) -> Path:
     return dest
 
 
+class BackupRefused(ValueError):
+    """A copy that cannot be opened with this key and name. Said plainly; no traceback is needed to act on it."""
+
+
 def read_key(path: Path) -> bytes:
-    key = base64.b64decode(path.read_text(encoding="ascii").strip(), validate=True)
+    try:
+        key = base64.b64decode(path.read_text(encoding="ascii").strip(), validate=True)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise BackupRefused(f"{path} is not a backup key: it must be 32 random bytes, base64-encoded, on one line") from exc
     if len(key) != 32:
         raise ValueError("backup key must be 32 bytes, base64-encoded")
     return key
@@ -78,8 +85,15 @@ def decrypt(blob: bytes, key: bytes, name: str) -> bytes:
 
     if not blob.startswith(MAGIC):
         raise ValueError("not a Ledgerline backup")
+    from cryptography.exceptions import InvalidTag
+
     nonce = blob[len(MAGIC):len(MAGIC) + 12]
-    return AESGCM(key).decrypt(nonce, blob[len(MAGIC) + 12:], name.encode())
+    try:
+        return AESGCM(key).decrypt(nonce, blob[len(MAGIC) + 12:], name.encode())
+    except InvalidTag as exc:
+        raise BackupRefused(f"cannot decrypt {name}: the backup key is wrong, the file was renamed (the name is checked: pass the "
+                            "original name ledgerline/<date>.tar.gz.enc as the third argument), or the copy is damaged or "
+                            "incomplete") from exc
 
 
 def upload(blob: bytes, bucket: str, name: str, token_url: str = METADATA_TOKEN, upload_url: str = UPLOAD) -> dict:
