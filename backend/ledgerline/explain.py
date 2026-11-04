@@ -1,7 +1,9 @@
 """A plain-language "why this plan" for a payment. Advice only: nothing that decides ever reads it.
 
-The input is facts built by code (the deposit, its current plan, the evidence ids with their check results, the refund
-limit), never the remittance text, so an instruction hidden in an email cannot reach it. Claude answers through one
+The input is structured, code-owned fields only: ids, the plan's category and kind, action types and amounts, invoice
+ids of the INV-0000 form, evidence verdicts and check counts, and the refund limit. No free text goes in: not the plan
+summary or reasons (they can quote a payer name set by whoever sent the money, or a payer agent's own words), not
+the payer name, not the remittance text. Claude answers through one
 strict tool (sentences plus the ids they cite). Every cited id must exist and every number in the text must be one of
 the facts' numbers; otherwise the explanation is dropped and the page says it is unavailable. Practice companies and
 servers without a Claude key get the same kind of explanation from a fixed template, at no cost. Cached per plan
@@ -34,6 +36,7 @@ SYSTEM = ("You explain a payment-matching decision to a finance team in 2 to 4 s
           "already made by rules in code; you only explain it. Use only the facts given. Cite the deposit, plan and "
           "evidence ids you rely on. Do not invent numbers: use only numbers that appear in the facts.")
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+_INVOICE = re.compile(r"^INV-\d{3,6}$")
 
 
 def _key(deposit_id: str, version: int) -> str:
@@ -52,12 +55,20 @@ def facts(conn, ctx: AppContext, deposit_id: str) -> dict[str, Any] | None:
         checks = json.loads(e["checks"] or "[]")
         evidence.append({"id": e["id"], "source": e["source"], "verdict": e["verdict"],
                          "checks_passed": sum(1 for c in checks if c.get("passed")), "checks_total": len(checks)})
-    actions = [{k: (major(v) if k.endswith("amount_minor") else v) for k, v in a.items() if k in ("type", "amount_minor", "invoice_id", "customer_id", "reason")}
-               for a in plan["actions"]]
+    def action(a: dict[str, Any]) -> dict[str, Any]:  # structured fields only; an invoice id must have the INV-0000 form
+        out: dict[str, Any] = {"type": str(a.get("type", ""))[:40]}
+        for k in ("amount_minor", "for_amount_minor"):
+            if isinstance(a.get(k), int):
+                out["amount"] = major(a[k])
+        for k in ("invoice_id", "for_invoice_id", "earmark_invoice_id"):
+            if isinstance(a.get(k), str) and _INVOICE.match(a[k]):
+                out["invoice_id"] = a[k]
+        return out
+    actions = [action(a) for a in plan["actions"]]
     limit = ctx.policy(conn)["refund_auto_limit_minor"].get(ccy)
     return {"deposit": {"id": d["id"], "amount": major(d["amount_minor"]), "currency": ccy, "status": d["status"], "customer_id": d["customer_id"]},
             "plan": {"id": f"{d['id']} plan v{plan['version']}", "version": plan["version"], "kind": plan["kind"],
-                     "category": plan["category"], "summary": plan["summary"], "actions": actions},
+                     "category": plan["category"], "actions": actions},
             "evidence": evidence, "refund_limit": major(limit) if limit is not None else None}
 
 
@@ -101,7 +112,8 @@ def validate(f: dict[str, Any], sentences: Any, cited: Any) -> str | None:
 
 def _template(f: dict[str, Any]) -> dict[str, Any]:
     d, p = f["deposit"], f["plan"]
-    sentences = [f"{d['id']} is {d['amount']} {d['currency']}; under {p['id']} it is {p['category'].replace('_', ' ')}: {p['summary']}"]
+    steps = ", ".join(a["type"].replace("_", " ") + (f" {a['amount']} {d['currency']}" if a.get("amount") else "") for a in p["actions"])
+    sentences = [f"{d['id']} is {d['amount']} {d['currency']}; under {p['id']} it is {p['category'].replace('_', ' ')}, so the plan is: {steps}."]
     cited = [d["id"], p["id"]]
     for e in f["evidence"][-2:]:
         sentences.append(f"Evidence {e['id']} ({e['source'].replace('_', ' ')}) passed {e['checks_passed']} of {e['checks_total']} checks and is {e['verdict']}.")
@@ -156,7 +168,8 @@ def explain(ctx: AppContext, deposit_id: str, control: Any = None) -> dict[str, 
     result = ({"available": False, "reason": problem, "plan_version": f["plan"]["version"]} if problem else
               {"available": True, "sentences": out["sentences"], "cited_ids": out["cited_ids"], "label": label,
                "plan_version": f["plan"]["version"]})
-    with ctx.conn() as conn, db.transaction(conn):
-        result["at"] = iso(ctx.clock.now())
-        db.set_setting(conn, _key(deposit_id, f["plan"]["version"]), result)
+    result["at"] = iso(ctx.clock.now())
+    if result["available"]:  # only a good explanation is kept; a failure can be asked for again by a person
+        with ctx.conn() as conn, db.transaction(conn):
+            db.set_setting(conn, _key(deposit_id, f["plan"]["version"]), result)
     return result
