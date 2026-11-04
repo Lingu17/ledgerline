@@ -1,51 +1,50 @@
-# Resume point (updated 4 Nov 2026)
+# Resume point (updated 4 Nov 2026, paused until after 12:10 at the owner's request)
 
-Branch `deploy/vercel-render`; `main` moves only after the server reports the same commit. Live
-https://35-207-220-110.sslip.io runs `e928861` (deployed and read back on 4 Nov). Submit by 13 Nov 23:59 IST (owner).
-No new features after 9 Nov; fixes only.
+Branch `deploy/vercel-render` (snapshot also on `wip/payer-agent`); `main` moves only after the server reports the same
+commit. **Live: `d22f232`** (read back). Submit by 13 Nov 23:59 IST (owner). Feature freeze 9 Nov; fixes only after.
 
 ## How releases are checked while CI is blocked
 
-GitHub Actions has been blocked by an account billing hold since 3 Nov (run #164 onward). The owner chose to deploy
-on local checks: the full backend suite here (Windows; `--ignore=tests/test_postgres.py`), a second backend run by the
-reviewing session on its own worktree, and the browser suite (`npm run e2e`). **The PostgreSQL suite has not run since
-CI #163.** Do not claim CI green for these deploys. After the repository goes public, Actions minutes are free:
-trigger `ci` (it has a manual trigger) and check every job, PostgreSQL included, before submitting.
+GitHub Actions is blocked by an account billing hold since 3 Nov (#164 onward): deploy on local checks (backend
+`--ignore=tests/test_postgres.py`, `npm run e2e`) plus the reviewing session's own suite run. Never claim CI green.
+The Linux cloud check (branch `linux-check-report`) ran the PostgreSQL suite and Linux-only tests once; after the
+repository goes public, trigger `ci` and check every job.
 
-## Done since e928861 (pushed; deploy after the reviewer's run on the latest hash)
+## Pushed, not deployed (in order)
 
-- `07d0eef`: the judge path at 375 x 812 as a browser test; errors shown as the server's own sentence; test numbers
-  and the blocked-CI wording; Before-submitting gains "CI after public" and "no LICENSE file" (owner's choice).
-- `ab86e26`: `docs/PAYER_AGENT_SPEC.md` + JSON schema + signed test vector (`test_payer_agent_spec.py`);
-  `docs/MEASURED_VALUE.md` (`scripts/measure_value.py`, synthetic, 30.4% decided with no person); Replay this decision
-  (tenant migration 11 `plans.inputs`, `replay.py`, every accuracy run replays every decision); the walkthrough's
-  send step completes itself once the refund exists.
-- `ff10cfa`: Try to tamper (`tamper_demo.py`, `/api/practice/tamper[/restore]`, 403 in real companies, reset clears
-  it, `restore_check.py` checks a mid-demo backup with the change put back); the Show me tour
-  (`frontend/src/components/ShowMe.tsx`, practice only); accuracy rerun 61,063 checks, 8,826 decisions replayed.
-- Next commit, on its own so it can be reverted alone: Sender B (`ledgerline/sender.py`, `@through_sender` on
-  `payouts.execute_refund`, `bill_payments.execute`, `treasury.execute_conversion`, `wrong_currency.convert`;
-  `SenderProxy` for bank reads, `create_transfer`/`create_conversion` never forwarded; `LEDGERLINE_SENDER_SOCKET`,
-  `LEDGERLINE_CONNECTIONS_KEY_PATH`; `deploy/vm/ledgerline-send.service`; `harden.sh sender` / `sender-off`;
-  `update.sh` restarts it; SERVER_STEPS step 7). Ships switched off until the owner runs step 7.
+| Commit | What | Reviewer |
+|---|---|---|
+| `d3821d1` | CSV export of a company's records (zip) | OK |
+| `f02d0a9` | Version, running commit, CHANGELOG.md and #/changelog (version still 0.2.0) | OK |
+| `ebd32f2` | #/help, in-app Page not found, crash screen, "Simulate bank" wording | OK (563 passed) |
+| `9418445` | Policy form merges over the stored policy; approval expiry and planning window fields (audit P1-1, P1-2, P2-9) | not yet |
+| `245da67` | Delete company: pause inside the check's transaction; a held context never recreates a database | not yet |
+| `e2b3725` | Records-only mode for real companies with no bank (audit P1-3) | not yet; full backend suite not yet run |
 
-## Build order still to do
+## Next, in this order
 
-Nothing left from the approved list except deploying and the owner's server step 7 (Claude mode for the reference
-payer agent was skipped by decision). Feature freeze 9 Nov; fixes only after.
-
-After each step: send the hash to the reviewing session before deploying, deploy, read the commit back, move `main`,
-update this note and the `wip/payer-agent` snapshot.
+1. Review and merge `origin/review/systemd-fixes` (`ceb5058`, on d22f232): `_ENV_KEYS` gains LEDGERLINE_SENDER_SOCKET,
+   LEDGERLINE_CONNECTIONS_KEY_PATH, LEDGERLINE_SECURITY_CONTACT (without it the server ignored them), sender `ping`,
+   harden.sh check_sender fixes, test_env_keys.py. Until merged, do not touch config.py, sender.py, harden.sh,
+   test_sender.py. Then run both suites, send hashes, deploy the reviewed tip, confirm `/api/public/info` and
+   `/.well-known/security.txt` (the owner sets LEDGERLINE_SECURITY_CONTACT; until then 404 is correct).
+2. Product audit (`origin/product-audit-report`, docs/archive/PRODUCT_AUDIT_2026-11.md), remaining P1s, one commit
+   each: P1-4 zero default reserves for My company + opening-balance step in the setup checklist and "Opening balance
+   not set" instead of "Short by"; P1-5/P1-9/P2-1 plain-language pass (matching.py:92 "route remittance text…",
+   matching.py:164/170 broken sentence, Settings Integrations internals behind "Technical details", audit codes as
+   sentences); P1-8 own-agent wording (Settings.tsx:189, SUBMISSION_DRAFT.md:49); P1-10 refund proposal confirm step +
+   status; then robots.txt, docs points 2 and 5, P2 items in the audit's order.
+3. Version 1.0.0 only when every check passes; CHANGELOG top section already says 1.0.0.
 
 ## Waiting on the owner
 
-`docs/SERVER_STEPS.md` steps 0 to 7 (bucket and service account, keys in a password manager, harden steps, alerts,
-recovery drill, the sending service), the video upload and README link, the secrets scan, making the repository public, CI after public,
-submission. Production reads need the owner's approval in the session doing them.
+SERVER_STEPS 0-6; step 7 (sending service) NOT until review/systemd-fixes is merged and deployed; the video link;
+the secrets scan; optional LEDGERLINE_SECURITY_CONTACT; making the repository public; CI after public; submission.
 
 ## Access
 
-SSH `ssh -i ~/.ssh/ledgerline_oracle ledgerline-deploy@35.207.220.110` (sometimes times out; retry). Deploy: git
-bundle of `deploy/vercel-render` → `/srv/ledgerline.bundle` → `sudo bash /opt/ledgerline/src/deploy/vm/update.sh
-<sha>`, then read the commit back. Never print `/etc/ledgerline/ledgerline.env` or any key. Commits carry no AI
-attribution line (owner's instruction). No messages in Slack or anywhere on the owner's behalf.
+SSH `ssh -i ~/.ssh/ledgerline_oracle ledgerline-deploy@35.207.220.110`. Deploy:
+`bash <old scratchpad>/deploy.sh <full sha>` (C:/Users/HP/AppData/Local/Temp/claude/C--Users-HP-Desktop-Agentic-Banking-Hackathon/f3619b5a-c050-4883-a228-0413cab0b537/scratchpad/deploy.sh;
+bundles the branch, runs update.sh, reads the commit back, pushes main only on MATCH; accepts any branch ancestor).
+Never print `/etc/ledgerline/ledgerline.env` or any key. No AI attribution in commits. No Slack or other messages on
+the owner's behalf.
