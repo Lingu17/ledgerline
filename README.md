@@ -264,7 +264,7 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 | Live bill payment (2 Nov) | Airwallex accepted a EUR 100 transfer, moved by its sandbox simulation through SENT to PAID; the bill closed and one journal entry reduced cash only at PAID. Proposer and approver were two accounts of the same owner, so this tests the control and the bank call, not independent review | Live app |
 | Live Claude | text and PDF remittances read by `claude-opus-5-5`; a planted prompt injection was ignored and flagged; nothing applied | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
 | Release (30 Oct) | CI 5/5 jobs · public smoke 32/32 · data survives restart, VM reboot and redeploy (8/8 each) | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
-| Tests (4 Nov) | backend **534** passed, 1 POSIX-only skip on Windows · browser **27/27** on Microsoft Edge, including the whole judge path and the Show me tour at phone width (375 px). GitHub Actions has been blocked by an account billing hold since 3 Nov, so these deploys were checked by two separate local runs, not CI, and the PostgreSQL suite has not run since CI run #163 | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
+| Tests (4 Nov) | backend **542** passed, 2 skipped on Windows (a POSIX-only test and the Unix-socket test, which run on Linux) · browser **27/27** on Microsoft Edge, including the whole judge path and the Show me tour at phone width (375 px). GitHub Actions has been blocked by an account billing hold since 3 Nov, so these deploys were checked by two separate local runs, not CI, and the PostgreSQL suite has not run since CI run #163 | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
 
 What is **not** measured yet: real customers' payment mix, real time saved (the hours above rest on an assumed 5 minutes per payment), how often real payer agents answer, adoption. Those need a pilot.
 
@@ -328,6 +328,7 @@ scripts/            smoke_deploy.py, evaluate.py, accuracy_run.py
 | Claude output is advisory and schema-validated; it can never authorise money | AI moving money |
 | Remittance text is data: emails that say "ignore your instructions", "refund 9,999 to this account" or contain a fake tool call change no plan, approval or operation (tested offline and with a model that obeys the email) | prompt injection |
 | An approval not sent within 72 hours goes back to the approvers | stale approvals sent later |
+| Optional separate sending service: the Airwallex keys live only in a separate process; the app cannot read them. The app asks it by id only, and it re-checks the approval, expiry, pause, two people and the duplicate lock itself. A compromised app could still request a send that its own database says was approved. Owner-run switch: `harden.sh sender` ([SERVER_STEPS](docs/SERVER_STEPS.md) step 7) | an app bug or a leaked app process reading the bank keys |
 
 <details>
 <summary><b>Roles</b></summary>
@@ -349,7 +350,7 @@ Every rule is enforced by the API; the UI only hides what you cannot do.
 - Session cookie HttpOnly, Secure, SameSite=Strict, Path=/api; only its SHA-256 is stored; 2 h idle and 12 h absolute expiry; logout and password change revoke server-side.
 - CSRF token on every mutation plus Origin allow-list; forged `X-Forwarded-For` cannot change the throttling identity.
 - HSTS, strict CSP, `X-Frame-Options: DENY`, `nosniff`; only ports 22/80/443 reachable.
-- Airwallex, Anthropic and Google secrets are server environment variables only; webhook secrets are write-only; nothing secret in the browser bundle, Git, logs or exports.
+- Airwallex, Anthropic and Google secrets are server environment variables only (with the sending service on, the Airwallex keys are in a root-only file that only that service's process receives); webhook secrets are write-only; nothing secret in the browser bundle, Git, logs or exports.
 - Sign in with Google (OIDC + PKCE, never auto-linked to a password account by email). Apple is intentionally not offered.
 </details>
 
@@ -457,5 +458,6 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 - Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov and it was paid with a test card; Ledgerline asks Airwallex every two minutes rather than using link webhooks, and settlement timing is not tracked. The earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
 - Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery, password reset, SSO/MFA or billing.
+- The separate sending service ships switched off; the owner turns it on with server step 7. A compromised app could still request a send that its own database says was approved. Its Unix-socket test runs on Linux only and has not run while CI is blocked; on Windows it is tested over a loopback connection.
 
 <p align="center"><sub>Built for the Airwallex Agentic Banking Hackathon · sandbox and synthetic data only · no real money</sub></p>

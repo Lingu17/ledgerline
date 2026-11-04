@@ -215,7 +215,8 @@ def org_settings(request: Request, p: Principal = Depends(require_role("viewer")
         "airwallex_webhook_secret_set": bool(org["airwallex_webhook_secret"]),
         "airwallex_connected": bool(org["airwallex_credentials_enc"]),
         "webhook_path": f"/api/webhooks/airwallex/{org['id']}",
-        "server": {"airwallex_credentials_present": s.airwallex_configured, "claude_key_present": s.claude_configured,
+        "server": {"airwallex_credentials_present": s.airwallex_configured or bool(s.sender_socket),
+                   "airwallex_keys_held_by": "sending service" if s.sender_socket else "app", "claude_key_present": s.claude_configured,
                    "claude_model": s.claude_model, "sandbox_allowed": s.sandbox_allowed(org["id"]),
                    "claude_daily_limit": s.claude_daily_limit},
         "control_audit": _control(request).control_audit(org["id"], 50) if p.role == "owner" else [],
@@ -267,8 +268,13 @@ def connect_airwallex(request: Request, body: ConnectAirwallexBody, p: Principal
     if rotating and accounts != _json.loads(org["airwallex_global_accounts"] or "{}"):
         # New keys for the same account are fine; a different account would mix two sets of balances in one ledger.
         raise HTTPException(409, "these keys belong to a different account; create a new organization to connect it")
-    _control(request).set_airwallex_connection(org["id"], p.session.email, seal(s, org["id"], body.client_id.strip(), body.api_key.strip()),
-                                               accounts, body.webhook_secret.strip())
+    if s.sender_socket:  # only the sending service holds the key that seals stored credentials
+        from ..sender import SenderClient
+
+        sealed = SenderClient(s.sender_socket).call("seal", org["id"], client_id=body.client_id.strip(), api_key=body.api_key.strip())
+    else:
+        sealed = seal(s, org["id"], body.client_id.strip(), body.api_key.strip())
+    _control(request).set_airwallex_connection(org["id"], p.session.email, sealed, accounts, body.webhook_secret.strip())
     request.app.state.orgs.invalidate(org["id"])
     if not rotating:
         from .. import workspace
@@ -323,6 +329,16 @@ def integration_check(request: Request, p: Principal = Depends(require_role("own
             out["airwallex"] = {"status": "ok", "detail": f"your account answered just now; {len(r['global_accounts'])} receiving accounts; available balances: {money}"[:600], **r}
         except Exception as exc:  # noqa: BLE001 - reported to the owner
             out["airwallex"] = {"status": "error", "detail": f"account check failed: {type(exc).__name__}"[:300]}
+    elif s.sender_socket and p.ctx.sandbox is not None:
+        try:
+            r = p.ctx.sandbox.readiness()
+            money = ", ".join(f"{b['currency']} {b['available_amount']}" for b in r["balances"]) or "no balances"
+            out["airwallex"] = {"status": "ok", "detail": f"the sending service reached the sandbox account just now; available balances: {money}"[:600], **r}
+        except Exception as exc:  # noqa: BLE001 - reported to the owner
+            out["airwallex"] = {"status": "error", "detail": f"sandbox check through the sending service failed: {type(exc).__name__}"[:300]}
+    elif s.sender_socket and not s.sandbox_allowed(p.session.org_id):
+        out["airwallex"] = {"status": "restricted", "detail": "the server's Airwallex sandbox account is reserved for operator-approved "
+                                                              "organizations; this organization uses the simulated bank"}
     elif s.airwallex_configured and not s.sandbox_allowed(p.session.org_id):
         out["airwallex"] = {"status": "restricted", "detail": "the server's Airwallex sandbox account is reserved for operator-approved "
                                                               "organizations; this organization uses the simulated bank"}

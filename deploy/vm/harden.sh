@@ -9,6 +9,7 @@
 #   opsagent-off    stop and disable the Google Ops Agent   (undo: opsagent-on)
 #   ssh             PermitRootLogin no, then fail2ban guarding sshd
 #   backup BUCKET   encrypted nightly copy to that Cloud Storage bucket, then one run now
+#   sender          move the Airwallex keys into a separate sending service the app's user cannot read (undo: sender-off)
 #   undo-systemd | undo-files | undo-journald | undo-ssh
 #
 # After every change to the app's unit: daemon-reload, restart, then checks: active, /api/health answers, a signed-out
@@ -36,7 +37,9 @@ main() {
     ssh) ssh_step ;;
     undo-ssh) rm -f /etc/ssh/sshd_config.d/10-ledgerline.conf; sshd -t && systemctl reload-or-restart ssh; echo "PermitRootLogin back to the default (fail2ban left running; 'systemctl disable --now fail2ban' to stop it)" ;;
     backup) backup_step "${2:?bucket name}" ;;
-    *) sed -n '2,15p' "$0"; exit 2 ;;
+    sender) sender_step ;;
+    sender-off) sender_off ;;
+    *) sed -n '2,16p' "$0"; exit 2 ;;
   esac
 }
 
@@ -96,7 +99,8 @@ PY
 status() {
   echo "== hardening score"; systemd-analyze security ledgerline 2>/dev/null | tail -1
   echo "== drop-ins"; ls "$DROPIN" 2>/dev/null || echo "none"
-  echo "== files readable by group or others under /var/lib/ledgerline: $(find /var/lib/ledgerline -type f -perm /044 | wc -l)"
+  echo "== files readable by others under /var/lib/ledgerline: $(find /var/lib/ledgerline -type f -perm /004 | wc -l); by group: $(find /var/lib/ledgerline -type f -perm /040 | wc -l) (expected only while the sending service is on)"
+  echo "== sending service: $(systemctl is-active ledgerline-send 2>/dev/null || true)"
   echo "== journald"; journalctl --disk-usage; cat /etc/systemd/journald.conf.d/ledgerline.conf 2>/dev/null || echo "no cap set"
   echo "== Ops Agent log lines in the last hour: $(journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager | wc -l)"
   echo "== ssh"; sshd -T 2>/dev/null | grep -E "^(permitrootlogin|passwordauthentication) "; systemctl is-active fail2ban 2>/dev/null || true
@@ -196,6 +200,70 @@ backup_step() {
   echo "  sudo cat /etc/ledgerline/backup.key        # decrypts the off-server copies"
   echo "  sudo cat /var/lib/ledgerline/connections.key   # decrypts saved Airwallex keys"
   echo "Undo: sudo rm /etc/ledgerline/backup.env (the next backup is local only again)"
+}
+
+ENVF=/etc/ledgerline/ledgerline.env
+SENV=/etc/ledgerline/sender.env
+KEY_APP=/var/lib/ledgerline/connections.key
+KEY_SEND=/var/lib/ledgerline-send/connections.key
+
+# The sending service (python -m ledgerline.sender) runs as its own user. It alone reads the server's Airwallex keys
+# (root-only sender.env, read by systemd) and the key that seals companies' own credentials. The app asks it over a
+# Unix socket that only the app's group can open, by id only. The two share the companies' databases through group
+# ledgerline, so files become 660 and folders 770 (nobody else, as before); the backups folder stays the app's alone.
+sender_step() {
+  if systemctl is-active --quiet ledgerline-send; then echo "the sending service is already on"; check_sender; return; fi
+  id ledgerline-send >/dev/null 2>&1 || useradd --system --gid ledgerline --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin ledgerline-send
+  install -d -o ledgerline-send -g ledgerline -m 700 /var/lib/ledgerline-send
+  (umask 077
+   { grep -E '^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY)=' "$ENVF" || true
+     echo "LEDGERLINE_CONNECTIONS_KEY_PATH=$KEY_SEND"
+     echo "LEDGERLINE_SENDER_PEER_UID=$(id -u ledgerline)"; } > "$SENV")
+  chown root:root "$SENV"; chmod 600 "$SENV"
+  sed -i -E '/^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY|LEDGERLINE_SENDER_SOCKET)=/d' "$ENVF"
+  echo "LEDGERLINE_SENDER_SOCKET=unix:/run/ledgerline-send/send.sock" >> "$ENVF"
+  chown root:ledgerline "$ENVF"; chmod 640 "$ENVF"
+  if [[ -f $KEY_APP ]]; then mv "$KEY_APP" "$KEY_SEND"; fi
+  if [[ -f $KEY_SEND ]]; then chown ledgerline-send:ledgerline "$KEY_SEND"; chmod 600 "$KEY_SEND"; fi
+  mkdir -p "$DROPIN"; printf '[Service]\nUMask=0007\n' > "$DROPIN/umask.conf"
+  find /var/lib/ledgerline -path /var/lib/ledgerline/backups -prune -o -type d -exec chmod 770 {} +
+  find /var/lib/ledgerline -path /var/lib/ledgerline/backups -prune -o -type f -exec chmod 660 {} +
+  install -m 644 "$SRC/deploy/vm/ledgerline-send.service" /etc/systemd/system/ledgerline-send.service
+  systemctl daemon-reload
+  systemctl enable --now ledgerline-send
+  systemctl restart ledgerline
+  if ! check_app || ! check_sender; then echo "sender: a check failed; turning it back off"; sender_off; exit 1; fi
+  echo "sender: on. The Airwallex keys and connections.key are readable only by the sending service and root."
+  echo "Store the moved key in your password manager if you have not: sudo cat $KEY_SEND   (never paste it into a chat)"
+  echo "Before deploying a commit older than the sending service, run: harden.sh sender-off. Undo: harden.sh sender-off"
+}
+
+check_sender() {
+  local ok=1 out
+  for _ in $(seq 1 15); do [[ -S /run/ledgerline-send/send.sock ]] && break; sleep 1; done
+  systemctl is-active --quiet ledgerline-send || { echo "  CHECK FAILED: ledgerline-send is not active"; ok=0; }
+  if sudo -u ledgerline test -r "$SENV"; then echo "  CHECK FAILED: the app's user can read $SENV"; ok=0; fi
+  if sudo -u ledgerline test -r "$KEY_SEND"; then echo "  CHECK FAILED: the app's user can read $KEY_SEND"; ok=0; fi
+  if grep -qE '^AIRWALLEX_API_KEY=' "$ENVF"; then echo "  CHECK FAILED: the app's settings still hold an Airwallex key"; ok=0; fi
+  out=$(cd "$SRC/backend" && sudo -u ledgerline /opt/ledgerline/venv/bin/python -c 'from ledgerline.sender import SenderClient
+r = SenderClient("unix:/run/ledgerline-send/send.sock", timeout=20).call("server_readiness", "")
+print("SENDER OK" if isinstance(r, dict) else "SENDER BAD")' 2>&1) || true
+  grep -q "SENDER OK" <<<"$out" || { echo "  CHECK FAILED: the app's user could not ask the sending service: $(tail -1 <<<"$out" | cut -c1-200)"; ok=0; }
+  (( ok ))
+}
+
+sender_off() {
+  systemctl disable --now ledgerline-send 2>/dev/null || true
+  sed -i -E '/^LEDGERLINE_SENDER_SOCKET=/d' "$ENVF"
+  if [[ -f $SENV ]]; then grep -E '^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY)=' "$SENV" >> "$ENVF" || true; rm -f "$SENV"; fi
+  chown root:ledgerline "$ENVF"; chmod 640 "$ENVF"
+  if [[ -f $KEY_SEND ]]; then mv "$KEY_SEND" "$KEY_APP"; chown ledgerline:ledgerline "$KEY_APP"; chmod 600 "$KEY_APP"; fi
+  mkdir -p "$DROPIN"; printf '[Service]\nUMask=0077\n' > "$DROPIN/umask.conf"
+  find /var/lib/ledgerline -type f -exec chmod 600 {} +
+  find /var/lib/ledgerline -type d -exec chmod 700 {} +
+  rm -f /etc/systemd/system/ledgerline-send.service
+  reload_restart
+  check_app && echo "sender: off. The app holds the Airwallex keys again, as before. (The ledgerline-send user is left in place.)"
 }
 
 main "$@"; exit

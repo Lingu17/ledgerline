@@ -1,0 +1,49 @@
+[Unit]
+Description=Ledgerline sending service (holds the Airwallex keys; the app asks it by id)
+After=network-online.target
+Wants=network-online.target
+Before=ledgerline.service
+
+[Service]
+# Its own user, so the app's user cannot read its key file or its environment. Group ledgerline only to share the
+# companies' databases and to let the app's user open the socket.
+User=ledgerline-send
+Group=ledgerline
+WorkingDirectory=/opt/ledgerline/src/backend
+# Read by systemd as root: the app's settings, then the keys (root-only file) and the sender's own settings.
+EnvironmentFile=/etc/ledgerline/ledgerline.env
+EnvironmentFile=/etc/ledgerline/sender.env
+Environment=LEDGERLINE_SENDER_LISTEN=unix:/run/ledgerline-send/send.sock
+ExecStart=/opt/ledgerline/venv/bin/python -m ledgerline.sender
+Restart=always
+RestartSec=3
+UMask=0007
+RuntimeDirectory=ledgerline-send
+RuntimeDirectoryMode=0750
+StateDirectory=ledgerline-send
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/ledgerline
+ReadOnlyPaths=/opt/ledgerline
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

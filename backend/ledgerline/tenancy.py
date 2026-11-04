@@ -40,8 +40,18 @@ def build_org_context(settings: Settings, org: dict[str, Any], clock: Clock) -> 
         airwallex_global_account_ids=json.loads(org.get("airwallex_global_accounts") or "{}"),
         provider=org.get("bank_mode", "local"),
     )
-    local_bank = sandbox = None
-    if s.provider == "airwallex_sandbox":
+    local_bank = sandbox = sender = None
+    if s.provider == "airwallex_sandbox" and settings.sender_socket:
+        # The keys live in the sending service; this process gets a proxy that cannot send money by itself.
+        from .control import AuthError
+        from .sender import SenderClient, SenderProxy
+
+        if not org.get("airwallex_credentials_enc") and not settings.sandbox_allowed(org["id"]):
+            raise AuthError(403, "this organization is not authorized to use the server's Airwallex sandbox credentials")
+        sender = SenderClient(settings.sender_socket)
+        provider: Any = SenderProxy(sender, org["id"])
+        sandbox = provider
+    elif s.provider == "airwallex_sandbox":
         from .providers.airwallex import AirwallexSandbox
 
         if org.get("airwallex_credentials_enc"):
@@ -57,11 +67,11 @@ def build_org_context(settings: Settings, org: dict[str, Any], clock: Clock) -> 
             from .control import AuthError
 
             raise AuthError(403, "this organization is not authorized to use the server's Airwallex sandbox credentials")
-        provider: Any = sandbox
+        provider = sandbox
     else:
         local_bank = LocalBank(settings.pg_target("b", org["id"]) if settings.postgres else data_dir / "local_bank.sqlite3", clock)
         provider = local_bank
-    ctx = AppContext(settings=s, clock=clock, provider=provider, local_bank=local_bank, sandbox=sandbox)
+    ctx = AppContext(settings=s, clock=clock, provider=provider, local_bank=local_bank, sandbox=sandbox, sender=sender)
     ctx.org = {k: org[k] for k in ("id", "name", "kind", "bank_mode")}
     ctx.org["own_airwallex"] = bool(org.get("airwallex_credentials_enc"))
     return ctx

@@ -20,6 +20,7 @@ from .payouts import Paused, PayoutError
 from .providers.base import ProviderAmbiguous, ProviderError
 from .reconcile import ESCALATED, deposit_buckets, invoice_views
 from .treasury import TreasuryError
+from .sender import through_sender
 
 _MARGIN = 99  # when the deposit cannot cover the invoice, buy a little less than the indicative rate suggests, so the real quote fits
 
@@ -62,6 +63,7 @@ def options(ctx: AppContext, deposit_id: str) -> dict[str, Any]:
     return {"applies": True, "unapplied_minor": unapplied, "currency": d["currency"], "advice": advice, "why": why, "invoices": rows, "live": live}
 
 
+@through_sender("convert_deposit")
 def convert(ctx: AppContext, deposit_id: str, invoice_id: Any, actor: str) -> dict[str, Any]:
     rates = treasury.decision_rates(ctx)
     with ctx.conn() as conn:

@@ -16,6 +16,7 @@ from .money import CURRENCY_EXPONENT, convert_round, fmt
 from .payouts import Paused, PayoutError
 from .providers.base import ProviderAmbiguous, ProviderError, Quote
 from .providers.local import DEMO_RATES
+from .sender import through_sender
 
 
 class TreasuryError(ValueError):
@@ -425,6 +426,7 @@ def quote_preview(conn: sqlite3.Connection, ctx: AppContext, quote_id: str) -> d
     }
 
 
+@through_sender("execute_conversion")
 def execute_conversion(ctx: AppContext, quote_id: str, actor: str) -> dict[str, Any]:
     """Book a conversion: the quote is consumed and the sell amount reserved in one IMMEDIATE transaction,
     so a second quote for the same shortfall sees the pending cover and cannot book the same money."""

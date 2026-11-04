@@ -19,6 +19,7 @@ from .context import AppContext
 from .money import fmt
 from .payouts import LEASE, REQUEST_NS, Paused, PayoutError, SelfApproval, StaleApproval, approval_expired, same_person
 from .providers.base import ProviderAmbiguous, ProviderError
+from .sender import through_sender
 
 _FINAL_FAIL = ("failed", "cancelled")
 
@@ -164,6 +165,7 @@ def _claim(ctx: AppContext, payment_id: str, actor: str, rates) -> tuple[dict[st
     raise StaleApproval(problem)
 
 
+@through_sender("send_bill_payment")
 def execute(ctx: AppContext, payment_id: str, actor: str) -> dict[str, Any]:
     """Send (or reconcile) the payment. Safe to call repeatedly and concurrently."""
     claimed = _claim(ctx, payment_id, actor, treasury.decision_rates(ctx))

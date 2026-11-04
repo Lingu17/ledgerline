@@ -68,6 +68,7 @@ class AppContext:
     sandbox: Any | None = None
     claude: Any | None = None
     org: dict[str, Any] | None = None
+    sender: Any | None = None  # the sending service's client, for a company connected to Airwallex when one is configured
     _initialised: bool = field(default=False, repr=False)
     _init_lock: Any = field(default_factory=threading.Lock, repr=False)
 

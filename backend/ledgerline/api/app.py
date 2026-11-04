@@ -20,6 +20,7 @@ from ..payouts import Paused, PayoutError, PracticeOnly, SelfApproval, StaleAppr
 from ..providers.base import ProviderError
 from ..providers.local import LocalBank
 from ..reconcile import ReconcileError
+from ..sender import SenderRefused, SenderUnavailable
 from ..tenancy import OrgRegistry
 from ..treasury import TreasuryError
 from ..webhooks import WebhookRejected
@@ -116,6 +117,8 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.add_exception_handler(MoneyError, _err(422))
     app.add_exception_handler(InputError, _err(422))
     app.add_exception_handler(ProviderError, _err(502))
+    app.add_exception_handler(SenderUnavailable, _err(503))
+    app.add_exception_handler(SenderRefused, _err(403))
     app.add_exception_handler(AuthError, auth_error_handler)
 
     @app.exception_handler(WebhookRejected)

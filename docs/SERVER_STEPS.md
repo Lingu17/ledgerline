@@ -178,3 +178,21 @@ rm -f backup.key "$(basename "$LATEST")" ledgerline.bundle
 The drill ends with `restore check: PASS` and `RECOVERY TIME: N minutes`. Send that line so the docs can state the
 measured time. Saved Airwallex keys are not in the backup (by design); a real recovery reconnects Airwallex under
 Settings, and moves the reserved address to the new VM.
+
+## 7. Separate sending service (on the VM, 3 minutes; the app restarts for a few seconds)
+
+After this step the Airwallex keys live only in a separate process; the app cannot read them. The server-wide
+Airwallex keys move from `/etc/ledgerline/ledgerline.env` to a root-only `/etc/ledgerline/sender.env`, and
+`connections.key` (which seals each company's own Airwallex keys) moves to `/var/lib/ledgerline-send/`, readable only by
+the new `ledgerline-send` user. The app asks that service for money-out by id only (an approval, payment or quote id
+and who pressed the button); the service re-runs the approval, expiry, pause, two-person and duplicate checks itself
+against the company's database. It does not stop everything: a compromised app could still request a send that its
+own database says was approved.
+
+```bash
+sudo bash /opt/ledgerline/src/deploy/vm/harden.sh sender
+```
+
+It ends with `sender: on.` after checking: both services active, the app's user cannot read `sender.env` or the moved
+key, the app's settings hold no Airwallex key, and the app's user can reach the service. If any check fails it turns
+itself back off. Undo: `harden.sh sender-off`. Run `sender-off` before ever deploying a commit older than this step.

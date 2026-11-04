@@ -124,6 +124,11 @@ class Settings:
     pg_schema_prefix: str = "ll"
     # Server-side secret (32+ characters) from which the key-encryption key is derived. Required with PostgreSQL.
     secret_key: str | None = None
+    # The sending service (ledgerline.sender). When set, this process holds no Airwallex keys: money-out for a company
+    # connected to Airwallex is asked of the service by id, and bank reads go through it.
+    sender_socket: str | None = None
+    # Where the key that seals companies' own Airwallex credentials lives (default: data_dir/connections.key).
+    connections_key_path: Path | None = None
 
     @property
     def postgres(self) -> bool:
@@ -140,7 +145,8 @@ class Settings:
         return bool(self.airwallex_client_id and self.airwallex_api_key)
 
     def sandbox_allowed(self, org_id: str | None) -> bool:
-        return self.airwallex_configured and bool(org_id) and org_id in self.sandbox_org_ids
+        # With a sending service the keys live there; the allow-list is still checked here and again by the service.
+        return (self.airwallex_configured or bool(self.sender_socket)) and bool(org_id) and org_id in self.sandbox_org_ids
 
     @property
     def claude_configured(self) -> bool:
@@ -238,6 +244,8 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
         AUTO_PREFIXES.append(prefix)  # so a test run can drop exactly the schemas it created
     s.pg_schema_prefix = prefix
     s.secret_key = env.get("LEDGERLINE_SECRET_KEY") or None
+    s.sender_socket = env.get("LEDGERLINE_SENDER_SOCKET", "").strip() or None
+    s.connections_key_path = Path(env["LEDGERLINE_CONNECTIONS_KEY_PATH"]) if env.get("LEDGERLINE_CONNECTIONS_KEY_PATH") else None
     if env.get("LEDGERLINE_REQUIRE_DATABASE", "0").strip().lower() in ("1", "true", "yes") and not env.get("LEDGERLINE_DATABASE_URL"):
         # Hosted deployments set this so a missing database URL stops the service instead of silently
         # writing accounts and money records to an ephemeral local SQLite file.

@@ -33,6 +33,11 @@ healthy() {  # the health route answers, and a signed-out request to a real rout
   return 1
 }
 
+restart_services() {  # the sending service, when the owner turned it on, runs the same code and restarts first
+  if systemctl is-enabled --quiet ledgerline-send 2>/dev/null; then systemctl restart ledgerline-send; fi
+  systemctl restart ledgerline
+}
+
 rollback() {
   if (( BASH_SUBSHELL > 0 )); then exit 1; fi  # let the main shell do the one rollback
   trap - ERR
@@ -61,14 +66,14 @@ main() {
   install_and_build
   trap - ERR
 
-  systemctl restart ledgerline
+  restart_services
   if healthy; then
     rm -f "$CHECKOUT"
     exit 0
   fi
   echo "FAILED: $REF is not healthy after the restart; putting $PREV back" >&2
   journalctl -u ledgerline -n 40 --no-pager >&2 || true
-  if restore && systemctl restart ledgerline && healthy; then
+  if restore && restart_services && healthy; then
     echo "restored $PREV, and it is healthy" >&2
   else
     echo "ROLLBACK FAILED: $PREV is not healthy either; fix it by hand" >&2

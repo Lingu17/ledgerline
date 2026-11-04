@@ -26,9 +26,11 @@ class ConnectionError_(ValueError):
 
 
 def _root_secret(settings: Settings) -> str:
+    if settings.sender_socket:
+        raise ConnectionError_("this process does not hold the connection key; the sending service does")
     if settings.secret_key:
         return settings.secret_key
-    path = Path(settings.data_dir) / "connections.key"
+    path = settings.connections_key_path or Path(settings.data_dir) / "connections.key"
     if not path.is_file():
         path.parent.mkdir(parents=True, exist_ok=True)
         try:

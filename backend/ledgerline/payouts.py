@@ -32,6 +32,7 @@ from .reconcile import (
     ReconcileError,
     deposit_buckets,
 )
+from .sender import through_sender
 
 REQUEST_NS = uuid.UUID("8f1d3c52-7f0e-4a51-9a39-3b6e2f0c9d11")
 LEASE = timedelta(seconds=60)
@@ -202,6 +203,7 @@ def _event(conn, op_id, frm, to, detail, now):
                  (op_id, frm, to, detail, now))
 
 
+@through_sender("send_refund")
 def execute_refund(ctx: AppContext, approval_id: str, actor: str, *, automatic: bool = False) -> dict[str, Any]:
     """Send an approved refund. One the policy approved, now over a lowered limit, goes back to a second person instead."""
     result = _send_refund(ctx, approval_id, actor)

@@ -15,7 +15,7 @@ The owner submits on HackerEarth. Nothing in this repository saves or submits an
 
 **Before submitting (owner), in order:**
 
-1. Server: run `docs/SERVER_STEPS.md` steps 0 to 6 (code live, backups off the server and the two keys in your password manager, owner-only files and sandbox, logs, SSH, email alerts, the recovery drill) well before the deadline, never during judging.
+1. Server: run `docs/SERVER_STEPS.md` steps 0 to 7 (code live, backups off the server and the two keys in your password manager, owner-only files and sandbox, logs, SSH, email alerts, the recovery drill, the separate sending service) well before the deadline, never during judging.
 2. Video: record it, then put its link in the README's top line in place of "3-minute video: coming before 13 Nov" (the comment above that line shows the exact markup).
 3. Secrets: on your computer, scan the whole history and check what is tracked. Both must print nothing:
    `git log -p --all | grep -nE "sk-ant-[A-Za-z0-9]|AIza[0-9A-Za-z_-]{30}|-----BEGIN [A-Z ]*PRIVATE KEY|x-api-key: [A-Za-z0-9]{20}"` and
@@ -33,6 +33,7 @@ The owner submits on HackerEarth. Nothing in this repository saves or submits an
 - Run on the real Airwallex sandbox: signed deposit webhooks, a refund of an unmatched deposit (SENT → PAID, one transfer), a currency conversion, a EUR 100 bill payment (SENT → PAID), a paid early-payment link, beneficiaries and live rates. Tested only on the simulated bank: refunds the agent proposes (including the rule that a different member sends them, and the practice teammate), automatic refunds under the limit, a refund returned to a person after the limit is lowered, failed and timed-out transfers, the pause switch, a paid exact-balance link, and wrong-currency conversion.
 - One person with two emails would pass the two-person rule; it checks accounts, not people. Both live payments out, the refund and the bill payment, were proposed and approved with two accounts that belong to the owner, so they show the control and the bank call, not independent review.
 - In a practice company one person can finish the walkthrough: a labelled practice teammate sends a refund they approved, recorded as `practice-teammate`. It exists only in practice companies, the server refuses it anywhere else, and a real company needs a second real member.
+- Sending service: with server step 7 on, the Airwallex keys live only in a separate process; the app cannot read them, and asks it for money-out by id only. A compromised app could still request a send that its own database says was approved. It ships switched off until the owner runs that step.
 
 **Description**
 
@@ -40,7 +41,7 @@ Small companies that bill in several currencies lose hours every week matching i
 
 Money rules live in code. Approvals are bound to the exact scope; refunds use stable request ids, a per-deposit duplicate lock and treat SENT as not final (only PAID releases the liability); a pause switch stops all money-out. Every currency reconciles to the cent: deposits = applied + credits + refunds + unapplied.
 
-It is a working multi-tenant SaaS: sign-up (email or Google), organizations with owner/operator/viewer roles, four-eyes approvals, CSV import, audit export, isolated data per organization. In the reference scenario 4 of 6 deposits are decided without a person (3 fully closed; a part payment still needs someone to send the balance request), one refund needs an approval, one bad agent claim is escalated with its reason, and there are 0 double payments; a randomized harness checked the rules, with automatic asking switched off, in 51,475 checks across 200 synthetic companies and 25 sample walkthroughs with 0 mismatches.
+It is a working multi-tenant SaaS: sign-up (email or Google), organizations with owner/operator/viewer roles, four-eyes approvals, CSV import, audit export, isolated data per organization. In the reference scenario 4 of 6 deposits are decided without a person (3 fully closed; a part payment still needs someone to send the balance request), one refund needs an approval, one bad agent claim is escalated with its reason, and there are 0 double payments; a randomized harness checked the rules, with automatic asking switched off, in 61,063 checks across 200 synthetic companies and 25 sample walkthroughs with 0 mismatches.
 
 **Honest scope**
 

@@ -52,9 +52,10 @@ def status(request: Request) -> dict[str, Any]:
         "bank": {
             "mode": ctx.provider.name,
             "label": ctx.provider.label,
-            "airwallex_credentials_present": s.airwallex_configured,
+            "airwallex_credentials_present": s.airwallex_configured or bool(s.sender_socket),
+            "airwallex_keys_held_by": "sending service" if s.sender_socket else "app",
             "airwallex_executed_in_this_build": False,
-            "sandbox_available": s.airwallex_configured,
+            "sandbox_available": s.airwallex_configured or bool(s.sender_socket),
             "global_accounts_configured": sorted(s.airwallex_global_account_ids),
         },
         "claude": {
