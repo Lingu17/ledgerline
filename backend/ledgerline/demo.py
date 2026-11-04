@@ -16,7 +16,7 @@ from .scenario import reset_demo, scenario_deposit_payloads
 from .webhooks import build_deposit_event, handle, sign
 
 STEPS = [
-    ("seed", "Reset demo data", "Seed customers, invoices, obligations and opening balances (synthetic)."),
+    ("seed", "Practice data ready", "Made-up customers, invoices, bills and opening balances."),
     ("deposits", "Receive six deposits", "Six signed deposit.settled webhooks run through verification, dedupe and the rules engine."),
     ("links", "Request the short balance", "Publish a payment link for the exact balance, or record an honest draft if links are unavailable."),
     ("agents", "Ask payer agents", "Call explain_payment over MCP, verify the three checks, revise plans."),

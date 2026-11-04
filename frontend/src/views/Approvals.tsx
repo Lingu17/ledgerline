@@ -187,10 +187,14 @@ function ScopeCard({ a, onDecide, busy, canDecide, ownProposal }: { a: Approval;
           </div>
           <dl className="kv">
             <dt>Destination</dt><dd>{a.scope.destination}</dd>
-            <dt>Deposit</dt><dd><a href={`#/payments?deposit=${a.scope.deposit_id}`}>{a.scope.deposit_id}</a> · version {a.scope.deposit_version}</dd>
-            <dt>Evidence</dt><dd>{a.scope.evidence_id ? `${a.scope.evidence_id} (v${a.scope.evidence_version})` : "None: operator decision"}</dd>
-            <dt>Scope hash</dt><dd className="hash">{a.scope_hash}</dd>
+            <dt>Payment</dt><dd><a href={`#/payments?deposit=${a.scope.deposit_id}`}>{a.scope.deposit_id}</a></dd>
+            <dt>Evidence</dt><dd>{a.scope.evidence_id ?? "None: a person's decision"}</dd>
           </dl>
+          <details className="small">
+            <summary>Details</summary>
+            <div className="muted">Bound to payment version {a.scope.deposit_version}{a.scope.evidence_id ? ` and evidence version ${a.scope.evidence_version}` : ""}. If either changes, this approval is void.</div>
+            <div className="hash">Scope hash {a.scope_hash}</div>
+          </details>
           {canDecide && (
             <div className="row">
               <button className="btn primary" disabled={!!busy || ownProposal} title={ownProposal ? "You proposed this; another team member must approve" : undefined} onClick={() => onDecide(true)}>Approve…</button>

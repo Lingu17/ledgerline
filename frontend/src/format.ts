@@ -184,3 +184,15 @@ export function actionLabel(code: string): string {
   const words = code.replace(/[._]/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
+
+const ACCOUNT_LABEL: Record<string, string> = {
+  unapplied_cash: "Received, not yet placed", customer_credit: "Customer credit", refund_payable: "Refunds owed",
+  cash_in_transit: "Cash on its way out", accounts_receivable: "Owed by customers", revenue: "Revenue", opening_equity: "Opening balance",
+  bills_paid: "Bills paid", bank_fee_expense: "Bank fees written off", fx_clearing: "Currency conversion", deposit_converted: "Payment converted",
+};
+
+/** Journal account names for people: "cash:GBP" reads "Cash (GBP)". The code stays in a tooltip. */
+export function accountLabel(account: string): string {
+  if (account.startsWith("cash:")) return `Cash (${account.slice(5)})`;
+  return ACCOUNT_LABEL[account] ?? account.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}

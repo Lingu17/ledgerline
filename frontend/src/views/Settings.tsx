@@ -31,7 +31,7 @@ export function Settings() {
       <div className="grid-2">
         <AccountCard />
         <SignInMethods />
-        {s.data.bank.mode === "local" && <Card title="Reference rates">
+        {s.data.bank.mode === "local" && s.data.org?.kind === "sample" && <Card title="Reference rates">
           <div className="small muted" style={{ marginBottom: 8 }}>{s.data.bank.mode === "local" ? "Fixed synthetic rates used by the local workspace. Not market data." : "Sandbox quotes are fetched per conversion."}</div>
           <table><tbody>{s.data.demo_fx_rates.map((r) => <tr key={r.sell + r.buy}><td>{r.sell} → {r.buy}</td><td className="num">{r.rate}</td></tr>)}</tbody></table>
         </Card>}
@@ -65,8 +65,9 @@ function PauseCard({ st }: { st: Status }) {
         </div>
         {mayToggle ? (
           <div className="row">
-            {!st.paused && <input type="text" aria-label="Reason for pausing" placeholder="Reason (recorded)" value={reason} onChange={(e) => setReason(e.target.value)} />}
-            <button className={`btn ${st.paused ? "primary" : "danger solid"}`} disabled={!!busy}
+            {!st.paused && <input type="text" aria-label="Reason for pausing" placeholder="Why? (recorded)" value={reason} onChange={(e) => setReason(e.target.value)} />}
+            <button className={`btn ${st.paused ? "primary" : "danger solid"}`} disabled={!!busy || (!st.paused && reason.trim().length < 3)}
+              title={!st.paused && reason.trim().length < 3 ? "Say why first; it is recorded" : undefined}
               onClick={() => run("pause", () => post("/settings/pause", { paused: !st.paused, reason }), st.paused ? "Money-out resumed" : "Money-out paused")}>
               {st.paused ? "Resume money-out" : "Pause all money-out"}
             </button>

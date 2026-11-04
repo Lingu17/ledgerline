@@ -291,19 +291,23 @@ function DecisionPath({ x }: { x: DepositDetail }) {
   const accounted = b.allocated + b.credited + b.refund_pending + b.refund_paid + b.unapplied;
   const failed = ev?.checks.filter((c) => !c.passed) ?? [];
   const approver = appr?.decided_by?.startsWith("policy:") ? "policy (within the refund auto-limit)" : appr?.decided_by;
+  const heldRefund = !!last?.actions.some((a) => a.type === "propose_refund") && x.status === "awaiting_evidence";
   const steps: [string, StepState, string][] = [
     ["Received", "done", `${money(x.amount_minor, x.currency)} from ${x.payer_name} · ${SOURCE_LABEL[x.source] ?? x.source}`],
-    ["First plan", first ? "done" : "waiting", first ? first.summary : "Not planned yet"],
+    ["First plan", first ? "done" : "waiting", first ? plainReason(first.summary) : "Not planned yet"],
     ["Evidence", ev ? "done" : x.status === "awaiting_evidence" ? "waiting" : x.status === "escalated" ? "waiting" : "skip",
       ev ? `${ev.source === "mcp_signed" ? "Signed payer-agent claim" : ev.source === "claude_extracted" ? "Remittance read by Claude (advisory)" : "Remittance read by offline rules (advisory)"} · ${ev.id}`
-        : x.status === "matched" ? "Rules were enough; no evidence needed" : "None yet"],
+        : x.status === "awaiting_evidence" ? "Waiting for the payer's agent" : x.status === "escalated" ? "None yet: a person can read the remittance"
+        : "Not needed: the rules decided"],
     ["Checks", !ev ? "skip" : ev.verdict === "verified" ? "done" : ev.verdict === "rejected" ? "failed" : "skip",
       !ev ? "—" : ev.verdict === "advisory" ? "Unsigned text: advisory only, cannot authorise money"
         : failed.length ? `Failed: ${failed.map((c) => c.label).join("; ")}` : `${ev.checks.length}/${ev.checks.length} passed`],
-    ["Decision", x.status === "escalated" ? "waiting" : last ? "done" : "waiting",
-      x.status === "escalated" ? `With a person: ${plainReason(x.escalation_reason) || "needs review"}` : last && last !== first ? `Revised: ${last.summary}` : last ? "First plan stands" : "—"],
-    ["Approval", !appr ? "skip" : appr.status === "approved" || appr.status === "executed" ? "done" : appr.status === "pending" ? "waiting" : "failed",
-      !appr ? "No money leaves, so none needed"
+    ["Decision", x.status === "escalated" || x.status === "awaiting_evidence" ? "waiting" : last ? "done" : "waiting",
+      x.status === "escalated" ? `With a person: ${plainReason(x.escalation_reason) || "needs review"}`
+        : x.status === "awaiting_evidence" ? "Waiting for the payer's agent before deciding"
+        : last && last !== first ? `Revised: ${plainReason(last.summary)}` : last ? "First plan stands" : "—"],
+    ["Approval", !appr ? (heldRefund ? "waiting" : "skip") : appr.status === "approved" || appr.status === "executed" ? "done" : appr.status === "pending" ? "waiting" : "failed",
+      !appr ? (heldRefund ? "A refund is proposed but held until the payer's agent answers" : "No money leaves, so none needed")
         : appr.status === "executed" ? `${appr.id} approved by ${approver}, then executed`
         : `${appr.id} ${appr.status}${approver ? ` by ${approver}` : ""}`],
     ["Settlement", !op ? "skip" : op.status === "paid" ? "done" : op.status === "failed" || op.status === "cancelled" ? "failed" : "waiting",
@@ -515,7 +519,7 @@ function ReadRemittance({ x, onDone }: { x: DepositDetail; onDone: () => void })
   const [pdf, setPdf] = useState<{ name: string; data: string } | null>(null);
   const [pdfErr, setPdfErr] = useState<string | null>(null);
   const submit = async (body: Record<string, string>) => {
-    const r = await run("read", () => post(`/deposits/${x.id}/read-remittance`, body), (res: any) => `Proposal: ${res.proposal.tool.replace(/_/g, " ")}`);
+    const r = await run("read", () => post(`/deposits/${x.id}/read-remittance`, body), (res: any) => `Read. It suggests: ${String(res.proposal.tool).replace(/^propose_/, "").replace(/_/g, " ")}. Decide under Resolve.`);
     if (r) onDone();
   };
   const pick = (f: File | undefined) => {
@@ -639,6 +643,8 @@ function ImportCsv({ onClose }: { onClose: () => void }) {
           <p className="small muted" style={{ marginTop: 0 }}>Paste CSV with the header below. Each line is matched like any received payment, labelled as manually recorded, and skipped if its reference was already recorded.</p>
           <Field id="csv-text" label="CSV" hint="external_ref, received_at (YYYY-MM-DD), currency, amount, payer_name, reference">
             <textarea id="csv-text" rows={8} className="mono" value={text} placeholder={CSV_SAMPLE} onChange={(e) => setText(e.target.value)} />
+            <input type="file" accept=".csv,text/csv" aria-label="Choose a CSV file" style={{ marginTop: 6 }}
+              onChange={async (e) => { const f = e.target.files?.[0]; if (f) setText(await f.text()); }} />
           </Field>
           <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy || !text.trim()}>Import</button></div>
         </form>

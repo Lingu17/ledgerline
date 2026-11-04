@@ -3,11 +3,11 @@ import { download, get, getPage, post, type AuditEvent } from "../api";
 import { useAuth } from "../auth";
 import { Pager } from "../components/Pager";
 import { Card, Empty, ErrorNote, Loading, useLoad, useToast } from "../components/ui";
-import { when, actionLabel } from "../format";
+import { actionLabel, money, when } from "../format";
 import { describe } from "./Inbox";
 
 interface ChainCheck { ok: boolean; events: number; head: string; problem: string | null; broken_at?: number | null }
-interface Tampered { id: number; action: string; field: string; from: number; to: number }
+interface Tampered { id: number; action: string; field: string; from: number; to: number; currency?: string | null }
 
 /** Practice companies only: change one audit event directly, as someone with database access could, and watch the
  * hash chain catch it at that event. Restore puts it back. */
@@ -39,7 +39,7 @@ function TryToTamper({ onChange }: { onChange: () => void }) {
       ) : (
         <div className="stack" style={{ gap: 8 }}>
           <div className={`notice small ${state!.chain.ok ? "" : "risk"}`} role="status">
-            <b>{state!.chain.ok ? "Not caught." : `Caught at event ${state!.chain.broken_at}.`}</b> Event {t.id} ({t.action}) had its recorded amount changed from {t.from} to {t.to} (in cents), with nothing else touched.
+            <b>{state!.chain.ok ? "Not caught." : `Caught at event ${state!.chain.broken_at}.`}</b> Event {t.id} ({t.action}) had its recorded amount changed from {t.currency ? money(t.from, t.currency) : `${t.from} (in cents)`} to {t.currency ? money(t.to, t.currency) : `${t.to} (in cents)`}, with nothing else touched.
             {!state!.chain.ok && <> Checking the log recomputes every event's hash; event {state!.chain.broken_at} no longer matches its own, so the change shows at exactly that row.</>}
           </div>
           <div><button className="btn primary" disabled={busy} onClick={() => act("/practice/tamper/restore")}>{busy ? "Restoring…" : "Restore the original"}</button></div>

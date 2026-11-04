@@ -105,7 +105,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
     <Modal title="Invite a team member" onClose={onClose}>
       {link ? (
         <div className="stack" style={{ gap: 12 }}>
-          <p style={{ margin: 0 }}>Send this one-time link to <b>{email}</b>. It expires in 3 days. Ledgerline does not send email in this build.</p>
+          <p style={{ margin: 0 }}>Copy this link and send it to <b>{email}</b> yourself: Ledgerline sends no email. It works once and expires in 3 days.</p>
           <input type="text" readOnly value={link} aria-label="Invitation link" className="mono" onFocus={(e) => e.target.select()} />
           <div className="form-actions">
             <button className="btn" onClick={() => navigator.clipboard?.writeText(link).then(() => setCopied(true))}>{copied ? "Copied" : "Copy link"}</button>

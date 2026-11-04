@@ -167,6 +167,8 @@ test("full journey as two people", async ({ page, browser }) => {
   });
   await step("pause blocks, owner resumes", async () => {
     await page.goto("/#/settings");
+    await expect(page.getByRole("button", { name: "Pause all money-out" })).toBeDisabled();  // a reason first
+    await page.getByLabel("Reason for pausing").fill("Audit check");
     await page.getByRole("button", { name: "Pause all money-out" }).click();
     const reason = page.getByRole("dialog").locator("input,textarea").first();
     if (await reason.count()) { await reason.fill("Audit check"); await page.getByRole("dialog").getByRole("button", { name: /pause/i }).click(); }

@@ -107,7 +107,8 @@ export function useAction() {
 
 // ---------------------------------------------------------------- small pieces
 export function Pill({ status, label }: { status: string; label?: string }) {
-  return <span className={`pill ${tone(status)}`}>{label ?? STATUS_LABEL[status] ?? status.replace(/_/g, " ")}</span>;
+  const text = label ?? STATUS_LABEL[status] ?? status.replace(/_/g, " ");
+  return <span className={`pill ${tone(status)}`}>{text.charAt(0).toUpperCase() + text.slice(1)}</span>;
 }
 
 export function Money({ minor, ccy, sign }: { minor: number; ccy: string; sign?: boolean }) {

@@ -51,7 +51,8 @@ def status(request: Request) -> dict[str, Any]:
         "demo_epoch": epoch,
         "bank": {
             "mode": ctx.provider.name,
-            "label": ctx.provider.label,
+            # A real company with no bank keeps records only; the simulated bank's name is for practice companies.
+            "label": "No bank connected (you record payments made in your own bank)" if payouts.records_only(ctx) else ctx.provider.label,
             "airwallex_credentials_present": s.airwallex_configured or bool(s.sender_socket),
             "airwallex_keys_held_by": "sending service" if s.sender_socket else "app",
             "airwallex_executed_in_this_build": False,

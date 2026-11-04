@@ -70,3 +70,11 @@ def test_a_missing_file_is_a_real_404_and_app_addresses_still_load(client):
         assert client.get(path).status_code == 404, path
     assert client.get("/robots.txt").text.startswith("User-agent")
     assert "<!doctype html>" in client.get("/somewhere/in/the/app").text.lower()
+
+
+def test_a_visitor_session_probe_is_200_not_401(app, client):
+    from .conftest import new_client
+
+    assert new_client(app).get("/api/auth/session").json() == {"signed_in": False}
+    me = client.get("/api/auth/session").json()
+    assert me["signed_in"] is True and me["user"]["email"] == "owner@northbeam.test" and me["csrf_token"]

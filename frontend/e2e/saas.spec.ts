@@ -361,7 +361,7 @@ test("show me: the guided tour runs the practice story, and a tampered audit row
     await expect(tour.getByText(title)).toBeVisible();
     await expect(tour.getByText("Working…")).toHaveCount(0, { timeout: 30_000 });
   };
-  await next("Six payments arrive");
+  await next("Six payments arrived");
   await next("A suspected duplicate");
   await expect(page.locator(".drawer").getByText("Verified").first()).toBeVisible({ timeout: 25_000 });
   await next("Every answer is checked");

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { get } from "../api";
 import { Card, ErrorNote, Loading, Pill, useLoad } from "../components/ui";
-import { amountOnly, money, when } from "../format";
+import { amountOnly, money, when, accountLabel } from "../format";
 
 interface Cons {
   currency: string; deposits: number; allocated: number; customer_credits: number; refunds_paid: number; refunds_pending: number; unapplied: number; converted: number;
@@ -93,7 +93,7 @@ export function Ledger() {
                   <tr key={`${e.id}-${i}`}>
                     <td className="muted small">{i === 0 ? e.id : ""}</td>
                     <td className="small">{i === 0 ? <><div>{e.memo}</div><div className="secondary">{when(e.at)}</div></> : ""}</td>
-                    <td className="mono small">{x.account}</td>
+                    <td className="small" title={x.account}>{accountLabel(x.account)}</td>
                     <td className="num">{x.debit_minor ? money(x.debit_minor, x.currency) : ""}</td>
                     <td className="num">{x.credit_minor ? money(x.credit_minor, x.currency) : ""}</td>
                   </tr>

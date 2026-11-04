@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS quotes (
 
 class LocalBank:
     name = "local"
-    label = "No bank connected (simulated records, no real money)"
+    label = "Simulated bank (practice: no real money)"
 
     def __init__(self, path: Path, clock: Clock) -> None:
         self.path = path

@@ -16,8 +16,8 @@ async function runUntil(target: string) {
 interface Stop { page: string; params?: Record<string, string>; title: string; text: string; prepare?: () => Promise<unknown> }
 
 const STOPS: Stop[] = [
-  { page: "inbox", title: "A practice company", text: "Made-up customers and invoices in USD, EUR and GBP. Nothing here touches a real bank. Six payments are about to arrive." },
-  { page: "payments", title: "Six payments arrive", prepare: () => runUntil("deposits"),
+  { page: "inbox", title: "A practice company", text: "Made-up customers and invoices in USD, EUR and GBP. Nothing here touches a real bank. Six payments have just arrived." },
+  { page: "payments", title: "Six payments arrived", prepare: () => runUntil("deposits"),
     text: "Rules in code made the first plan for each. Clean matches closed at once, a small bank fee was written off within tolerance, and the unclear ones are waiting." },
   { page: "payments", params: { deposit: "DEP-1005" }, title: "A suspected duplicate",
     prepare: async () => {

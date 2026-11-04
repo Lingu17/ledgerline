@@ -87,7 +87,7 @@ export function Inbox() {
             <div className="card wallet" key={w.currency}>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <span className="ccy">{w.currency} WALLET</span>
-                <Pill status={o.conservation[w.currency] ? "matched" : "escalated"} label={o.conservation[w.currency] ? "Reconciled" : "Out of balance"} />
+                <Pill status={o.conservation[w.currency] ? "matched" : "escalated"} label={o.conservation[w.currency] ? "Books balance" : "Out of balance"} />
               </div>
               <div className="cash">{money(w.cash, w.currency)}</div>
               <dl>

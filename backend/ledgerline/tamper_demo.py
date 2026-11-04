@@ -27,6 +27,22 @@ def _practice(ctx: AppContext) -> None:
         raise PracticeOnly("Try to tamper exists only in practice companies; a real company's audit log is never edited")
 
 
+def _currency(obj: Any) -> str | None:
+    if isinstance(obj, dict):
+        if isinstance(obj.get("currency"), str):
+            return obj["currency"]
+        for v in obj.values():
+            found = _currency(v)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = _currency(v)
+            if found:
+                return found
+    return None
+
+
 def _bump(obj: Any) -> tuple[int, int] | None:
     """Raise the first amount in the event's detail, in place. Returns (from, to)."""
     if isinstance(obj, dict):
@@ -68,6 +84,7 @@ def tamper(ctx: AppContext) -> dict[str, Any]:
         changed = json.dumps(detail, sort_keys=True)
         conn.execute("UPDATE audit_events SET detail = ? WHERE id = ?", (changed, e["id"]))
         record = {"id": e["id"], "action": e["action"], "field": "amount_minor", "from": found[0], "to": found[1],
+                  "currency": _currency(json.loads(e["detail"])),
                   "original": e["detail"], "changed": changed}
         db.set_setting(conn, SETTING, record)
         chain = audit.verify_chain(conn)

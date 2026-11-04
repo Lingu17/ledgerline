@@ -158,7 +158,7 @@ def record_manual_payment(ctx: AppContext, body: dict[str, Any], actor: str) -> 
             day = None if "T" in str(received) else date.fromisoformat(str(received))
             received_dt = parse_iso(received) if day is None else datetime.combine(day, time(12), tzinfo=timezone.utc)
         except ValueError as exc:
-            raise InputError("received_at must be an ISO date or timestamp") from exc
+            raise InputError("received_at must be a date written as YYYY-MM-DD, for example 2026-11-04") from exc
         if day is not None:
             # A statement date is a calendar day in the operator's time zone, up to 14 h ahead
             # of UTC. Accept today there, and never record a time later than now.

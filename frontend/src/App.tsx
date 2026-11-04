@@ -218,7 +218,7 @@ function Shell({ me }: { me: Me }) {
             <a className="btn small ghost" href={`#/help?topic=${page}`}>Help</a>
             {isSample && !tour && <button className="btn small" onClick={() => setTour(true)}>Show me</button>}
             {s?.paused && (
-              <a className="badge paused" href="#/settings" title={s.pause_info?.reason || "Money-out paused"}><b>Money-out paused</b></a>
+              <a className="badge paused" href="#/settings" title={s.pause_info ? `Paused by ${s.pause_info.by}${s.pause_info.reason ? `: ${s.pause_info.reason}` : ""}` : "Money-out paused"}><b>Money-out paused</b></a>
             )}
             {me.role === "viewer" && <span className="badge" title="You can view and export, but not change anything"><b>Read-only</b></span>}
             {s && (

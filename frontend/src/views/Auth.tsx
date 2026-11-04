@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ApiError, get, post, type Me } from "../api";
-import { useAuth } from "../auth";
+import { ApiError, get, post, type Me, type Role } from "../api";
+import { ROLE_LABEL, useAuth } from "../auth";
 import { Field } from "../components/ui";
 import { hashParam, OAuthButtons, oauthErrorText } from "../components/OAuthButtons";
 
@@ -134,7 +134,7 @@ export function AcceptInvite({ token }: { token: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    get<typeof info>(`/invitations/${encodeURIComponent(token)}`).then(setInfo).catch((e) => setLoadErr(e.message));
+    get<typeof info>(`/invitations/${encodeURIComponent(token)}`).then(setInfo).catch((e) => setLoadErr(friendly(e as Error)));
   }, [token]);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,7 +168,7 @@ export function AcceptInvite({ token }: { token: string }) {
   if (signedInAsInvitee) {
     return (
       <AuthFrame title={`Join ${info.org_name}`}>
-        <p className="muted small" style={{ marginTop: 0 }}>Invited as <b>{info.role}</b> · signed in as {me.user.email}</p>
+        <p className="muted small" style={{ marginTop: 0 }}>Invited as <b>{ROLE_LABEL[info.role as Role] ?? info.role}</b> · signed in as {me.user.email}</p>
         {err && <div className="notice risk small" role="alert" style={{ marginBottom: 12 }}>{err}</div>}
         <button className="btn primary" style={{ height: 36, width: "100%" }} disabled={busy} onClick={joinSignedIn}>{busy ? "Joining…" : "Join organization"}</button>
       </AuthFrame>
@@ -176,7 +176,7 @@ export function AcceptInvite({ token }: { token: string }) {
   }
   return (
     <AuthFrame title={`Join ${info.org_name}`}>
-      <p className="muted small" style={{ marginTop: 0 }}>Invited as <b>{info.role}</b> · {info.email}</p>
+      <p className="muted small" style={{ marginTop: 0 }}>Invited as <b>{ROLE_LABEL[info.role as Role] ?? info.role}</b> · {info.email}</p>
       {me && <div className="notice small" style={{ marginBottom: 12 }}>You are signed in as {me.user.email}, but this invitation is for {info.email}.</div>}
       {!me && <OAuthButtons returnTo={`/#/invite?token=${token}`} />}
       <form onSubmit={submit} noValidate className="stack" style={{ gap: 12 }}>

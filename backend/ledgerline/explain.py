@@ -116,16 +116,34 @@ def validate(f: dict[str, Any], sentences: Any, cited: Any) -> str | None:
     return None
 
 
+_STEP = {
+    "allocate": "apply {m} to {inv}", "credit": "hold {m} as customer credit", "propose_refund": "propose refunding {m}",
+    "cancel_proposed_refund": "drop the proposed refund", "escalate": "pass it to a person", "hold_unapplied": "hold {m} until it is placed",
+    "ask_payer_agent": "ask the payer's agent", "request_refund_approval": "ask a person to approve refunding {m}",
+    "writeoff": "write off a {m} bank fee", "payment_link": "request the remaining {m}",
+}
+_SOURCE = {"mcp_signed": "a signed answer from the payer's agent", "claude_extracted": "a remittance read by Claude",
+           "fixture_extracted": "a remittance read by the built-in rules"}
+
+
 def _template(f: dict[str, Any]) -> dict[str, Any]:
     d, p = f["deposit"], f["plan"]
-    steps = ", ".join(a["type"].replace("_", " ") + (f" {a['amount']} {d['currency']}" if a.get("amount") else "") for a in p["actions"])
-    sentences = [f"{d['id']} is {d['amount']} {d['currency']}; under {p['id']} it is {p['category'].replace('_', ' ')}, so the plan is: {steps}."]
+    m = lambda amount: f"{d['currency']} {Decimal(amount):,}"  # noqa: E731 - the app's own money format, e.g. USD 1,200.00
+
+    def step(a: dict[str, Any]) -> str:
+        text = _STEP.get(a["type"], a["type"].replace("_", " "))
+        return text.format(m=m(a["amount"]) if a.get("amount") else "the amount", inv=a.get("invoice_id", "the invoice"))
+    parts = [step(a) for a in p["actions"]]
+    steps = ", ".join(parts[:-1]) + " and " + parts[-1] if len(parts) > 1 else "".join(parts) or "take no action yet"
+    sentences = [f"{d['id']} is a payment of {m(d['amount'])}. Under {p['id']} the rules treat it as {p['category'].replace('_', ' ')}, "
+                 f"so they {steps}."]
     cited = [d["id"], p["id"]]
     for e in f["evidence"][-2:]:
-        sentences.append(f"Evidence {e['id']} ({e['source'].replace('_', ' ')}) passed {e['checks_passed']} of {e['checks_total']} checks and is {e['verdict']}.")
+        sentences.append(f"Evidence {e['id']}, {_SOURCE.get(e['source'], e['source'].replace('_', ' '))}, passed {e['checks_passed']} of "
+                         f"{e['checks_total']} checks and is {e['verdict']}.")
         cited.append(e["id"])
-    if any(a["type"] in ("propose_refund", "refund") for a in p["actions"]) and f["refund_limit"]:
-        sentences.append(f"Refunds above {f['refund_limit']} {d['currency']} need a person to approve them.")
+    if any(a["type"] in ("propose_refund", "refund", "request_refund_approval") for a in p["actions"]) and f["refund_limit"]:
+        sentences.append(f"A refund above {m(f['refund_limit'])} needs a person to approve it.")
     return {"sentences": sentences[:4], "cited_ids": cited}
 
 

@@ -94,6 +94,16 @@ def logout(request: Request, response: Response) -> dict[str, Any]:
     return {"signed_out": True}
 
 
+@router.get("/auth/session")
+def session_probe(request: Request) -> dict[str, Any]:
+    """Like /auth/me, but a visitor who is not signed in gets 200 {"signed_in": false}, not a 401 in their console."""
+    try:
+        _, token = require_session(request, mutating=False)
+    except (AuthError, HTTPException):
+        return {"signed_in": False}
+    return {"signed_in": True, **_me(request, token)}
+
+
 @router.get("/auth/me")
 def me(request: Request) -> dict[str, Any]:
     _, token = require_session(request, mutating=False)

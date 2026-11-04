@@ -24,7 +24,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
   const refresh = useCallback(async () => {
     try {
-      setMe(await get<Me>("/auth/me"));
+      const s = await get<Me & { signed_in: boolean }>("/auth/session");  // 200 either way: no 401 for a visitor
+      setMe(s.signed_in ? s : null);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setMe(null);
       else throw e;
