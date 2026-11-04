@@ -816,6 +816,17 @@ def audit_export(request: Request) -> Response:
                     headers={"Content-Disposition": 'attachment; filename="ledgerline-evidence-export.json"', "Cache-Control": "no-store"})
 
 
+@router.get("/export/csv", dependencies=read)
+def export_csv(request: Request) -> Response:
+    """The company's records as CSV files in one zip (customers, invoices, payments, plans, approvals, transfers, bills,
+    the audit log). Nothing secret is included."""
+    from .. import export_csv as export
+
+    body, filename = export.build(ctx_of(request), request.state.principal.actor)
+    return Response(body, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
+
+
 # --------------------------------------------------------------------------- settings
 class PauseBody(BaseModel):
     paused: bool

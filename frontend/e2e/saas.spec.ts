@@ -433,6 +433,9 @@ test("account basics: a reset link from an owner, a new name, and deleting the c
   await fresh.close();
 
   await nav(page, "Settings");
+  const zip = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV files" }).click();
+  expect((await zip).suggestedFilename()).toBe("ledgerline-export.zip");
   await page.getByRole("button", { name: "Change", exact: true }).click();
   await page.getByLabel("Your name").fill("Renamed Owner");
   await page.getByRole("button", { name: "Save name" }).click();

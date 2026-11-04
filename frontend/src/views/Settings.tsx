@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { del, get, post, type Ccy, type Customer, type Me, type Policy, type Status } from "../api";
+import { del, download, get, post, type Ccy, type Customer, type Me, type Policy, type Status } from "../api";
 import { useAuth } from "../auth";
 import { Card, ErrorNote, Field, Loading, Modal, Pill, useAction, useLoad, useToast } from "../components/ui";
 import { majorString, parseMajor, when } from "../format";
@@ -491,6 +491,7 @@ function SignInMethods() {
 function LeaveOrDelete({ org }: { org: OrgSettings }) {
   const { me, can, setMe } = useAuth();
   const { run, busy } = useAction();
+  const toast = useToast();
   const [dialog, setDialog] = useState<"org" | "account" | null>(null);
   const [typed, setTyped] = useState("");
   const refreshMe = async () => setMe(await get<Me>("/auth/me"));
@@ -498,6 +499,10 @@ function LeaveOrDelete({ org }: { org: OrgSettings }) {
   return (
     <Card title="Leave or delete">
       <div className="stack" style={{ gap: 12 }}>
+        <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span className="small">Take a copy first: every customer, invoice, payment, approval, transfer, bill and audit entry as CSV files.</span>
+          <button className="btn small" onClick={() => download("/export/csv", "ledgerline-export.zip").catch((e) => toast((e as Error).message, "error"))}>Download CSV files</button>
+        </div>
         <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <span className="small">Leave <b>{org.name}</b>. You lose access at once; your past actions stay in its records.</span>
           <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("leave", () => post("/auth/leave-organization"), `You left ${org.name}`)) await refreshMe(); }}>Leave organization</button>

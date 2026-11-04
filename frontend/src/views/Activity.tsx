@@ -80,6 +80,9 @@ export function Activity() {
         <button className="btn" onClick={() => download("/audit/export", "ledgerline-evidence-export.json").catch((e) => toast(e.message, "error"))}>
           Download evidence JSON
         </button>
+        <button className="btn" onClick={() => download("/export/csv", "ledgerline-export.zip").catch((e) => toast(e.message, "error"))}>
+          Download CSV files
+        </button>
       </div>
       {chain && (
         <div className={`notice small ${chain.ok ? "" : "risk"}`} role="status">
