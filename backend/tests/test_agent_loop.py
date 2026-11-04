@@ -14,6 +14,7 @@ def real_company(ctx):
     # A real company with a bank connected (the bank behind this test context is still the simulated one): with no bank
     # it would keep records only and send nothing by itself (test_records_only.py).
     ctx.org = {"id": "org_x", "name": "X", "kind": "workspace", "bank_mode": "airwallex_sandbox"}
+    assert not payouts.records_only(ctx)  # every test using this sends through the bank, end to end
     return ctx
 
 
