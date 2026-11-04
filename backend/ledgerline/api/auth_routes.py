@@ -166,12 +166,22 @@ def delete_account(request: Request, response: Response, body: ConfirmBody) -> d
 @router.post("/organization/delete")
 def delete_org(request: Request, body: ConfirmBody, p: Principal = Depends(require_role("owner"))) -> dict[str, Any]:
     """Delete this organization and all its data, once nothing is being sent. Practice or real alike; no undo."""
+    from .. import db
+    from ..clock import iso
     from ..tenancy import delete_org_storage
 
-    with p.ctx.conn() as conn:
+    # Pause money-out in the same transaction as the check: a send that starts after this sees the pause and stops,
+    # and one that started before has already written the transfer this check counts.
+    with p.ctx.conn() as conn, db.transaction(conn):
+        was = (db.get_setting(conn, "money_out_paused", False), db.get_setting(conn, "money_out_pause_info", None))
+        db.set_setting(conn, "money_out_paused", True)
+        db.set_setting(conn, "money_out_pause_info", {"by": p.session.email, "at": iso(p.ctx.clock.now()), "reason": "organization being deleted"})
         busy = conn.execute("SELECT COUNT(*) FROM operations WHERE status IN ('processing','sent')").fetchone()[0] + \
             conn.execute("SELECT COUNT(*) FROM bill_payments WHERE status IN ('processing','sent')").fetchone()[0]
     if busy:
+        with p.ctx.conn() as conn, db.transaction(conn):  # nothing is deleted, so the pause goes back to what it was
+            db.set_setting(conn, "money_out_paused", was[0])
+            db.set_setting(conn, "money_out_pause_info", was[1])
         raise HTTPException(409, "money is still being sent from this organization; wait until every transfer is paid or failed")
     org_id = p.session.org_id
     gone = _control(request).delete_org(org_id, p.session.email, body.confirm)

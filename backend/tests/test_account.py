@@ -65,6 +65,19 @@ def test_only_an_owner_deletes_and_never_while_money_is_being_sent(client, app):
                      "VALUES ('OP-X','refund','req-x',100,'USD','acct','processing','2026-11-04T00:00:00Z','2026-11-04T00:00:00Z')")
     r = client.post("/api/organization/delete", json={"confirm": name})
     assert r.status_code == 409 and "still being sent" in r.text
+    assert client.get("/api/status").json()["paused"] is False  # refused, so the pause it took is undone
+
+
+def test_a_context_held_during_deletion_never_recreates_the_database(client, app):
+    import pytest
+
+    held = app.state.orgs.get(client.org_id)  # as a background round would hold it
+    name = client.get("/api/organization").json()["name"]
+    assert client.post("/api/organization/delete", json={"confirm": name}).status_code == 200
+    with pytest.raises(RuntimeError, match="no longer exists"):
+        with held.conn():
+            pass
+    assert not (app.state.settings.data_dir / "orgs" / client.org_id).exists()
 
 
 def test_leave_then_delete_my_account(client, app):

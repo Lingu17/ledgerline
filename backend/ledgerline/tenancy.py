@@ -93,8 +93,12 @@ def delete_org_storage(settings: Settings, org_id: str) -> None:
     import shutil
 
     path = org_dir(settings.data_dir, org_id)
+    for _ in range(3):  # a background round that held this organization's context could write once more; remove again
+        if not path.exists():
+            return
+        shutil.rmtree(path, ignore_errors=True)
     if path.exists():
-        shutil.rmtree(path)
+        raise RuntimeError(f"could not remove {path}")
 
 
 class OrgRegistry:
