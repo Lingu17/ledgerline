@@ -189,6 +189,11 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--re
 .neg { color: var(--red); }
 .pos { color: var(--teal-strong); }
 
+/* ---------------------------------------------------------------- show me tour (practice companies) */
+.showme { position: fixed; right: 16px; bottom: 16px; z-index: 30; width: min(380px, calc(100vw - 32px)); background: var(--surface);
+  border: 1px solid var(--line-strong); border-left: 4px solid var(--teal); border-radius: var(--radius); padding: 12px 14px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18); }
+
 /* ---------------------------------------------------------------- drawer & modal */
 .scrim { position: fixed; inset: 0; background: rgba(15, 27, 45, 0.32); z-index: 20; }
 .drawer {

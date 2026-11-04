@@ -17,6 +17,7 @@ import { Walkthrough } from "./views/Walkthrough";
 import { AcceptInvite, NoOrganization, SignIn, friendly } from "./views/Auth";
 import { Landing } from "./views/Landing";
 import { Architecture } from "./views/Architecture";
+import { ShowMe } from "./components/ShowMe";
 
 export type Route = { page: string; params: URLSearchParams };
 
@@ -145,6 +146,7 @@ function Shell({ me }: { me: Me }) {
   const route = useRoute();
   const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tour, setTour] = useState(false);
   useEffect(() => setMenuOpen(false), [route.page]);
   const status = useLoad(() => get<Status>("/status"), [me.organization?.id]);
   const counts = useLoad(() => get<{ work_queue: { kind: string }[]; deposit_counts: Record<string, number> }>("/overview"), [me.organization?.id]);
@@ -203,6 +205,7 @@ function Shell({ me }: { me: Me }) {
             </div>
           </div>
           <div className="topbar-right">
+            {isSample && !tour && <button className="btn small" onClick={() => setTour(true)}>Show me</button>}
             {s?.paused && (
               <a className="badge paused" href="#/settings" title={s.pause_info?.reason || "Money-out paused"}><b>Money-out paused</b></a>
             )}
@@ -215,6 +218,7 @@ function Shell({ me }: { me: Me }) {
             )}
           </div>
         </header>
+        {tour && isSample && <ShowMe onClose={() => setTour(false)} />}
         <main className="content" id="main" tabIndex={-1}>
           {page === "ceo" && <Ceo />}
           {page === "inbox" && <Inbox />}

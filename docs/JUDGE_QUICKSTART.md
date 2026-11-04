@@ -6,12 +6,14 @@
 
 1. Open the link and click **Get started**.
 2. Enter any name, organization and email (nothing is emailed) and a password of 12+ characters with upper- and lower-case letters and a digit. Choose **Practice company**. It waits for you to press **Ask payer's agent** so you can watch; **Payments → Receive an unclear payment** shows the agent acting with no click, as it does in a real company. That payment is built to match the simulated agent's table. You get your own isolated organization; other judges cannot see it.
+   Short on time? Press **Show me** at the top right: a seven-stop tour that runs the practice story and explains each screen. It runs practice steps only and never approves or sends money.
 3. **Inbox**: cash by currency and the payments that need a decision.
-4. **Payments → DEP-1005** (Dunmore, looks like a duplicate) → **Ask payer's agent**. The payer's agent answers over MCP with an Ed25519-signed claim; all three checks pass (signature, bound to this deposit and fresh, our records agree) and the plan is revised: the money becomes **advance credit** instead of a refund. No money moved.
+4. **Payments → DEP-1005** (Dunmore, looks like a duplicate) → **Ask payer's agent**. The payer's agent answers over MCP with an Ed25519-signed claim; all three checks pass (signature, bound to this deposit and fresh, our records agree) and the plan is revised: the money becomes **advance credit** instead of a refund. No money moved. Press **Replay this decision** on any plan in its history: the same rules run again on the inputs stored with that plan and give the same plan.
 5. **Payments → DEP-1004** (Fjord) → **Ask payer's agent**. The agent claims another customer's invoice; the signature verifies but the records check fails, so the claim is **rejected** and the case goes to a person with the reason.
 6. Optional: on DEP-1004 click **Read remittance…** and paste any remittance email (or upload a PDF). Claude reads it and must answer through a typed tool; the result is stored as **advisory evidence** and checked against the records, never applied by itself. Each organization has a small daily Claude budget.
 7. **Practice steps** runs the rest of the story: balance request for the short payment, FX for the EUR bill, the over-limit refund: you approve it (Approvals → Approve…) and a different member sends it. Alone, press **Send as practice teammate**: a labelled stand-in that exists only in practice companies and is refused by the server anywhere else; a real company needs a second real member. Then bank SENT (liability kept) then PAID (released), and the scorecard: 6 deposits, 4 decided without a person and 3 of those fully closed, 1 approval, 1 escalation with its reason, 0 double payments, ledger balanced.
 8. **Ledger**: deposits = applied + credits + refunds + not yet placed, per currency, to the cent.
+   **Activity → Try to tamper** (practice companies only): it changes one recorded amount directly in the database, as an insider could; the hash chain catches it at exactly that row. **Restore the original** puts it back and records that the demo was tried.
 
 9. **CEO view**: the whole company on one screen.
 

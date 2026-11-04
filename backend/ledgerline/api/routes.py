@@ -716,6 +716,31 @@ def audit_verify(request: Request) -> dict[str, Any]:
         return audit.verify_chain(conn)
 
 
+@router.get("/practice/tamper", dependencies=read)
+def practice_tamper_status(request: Request) -> dict[str, Any]:
+    from .. import tamper_demo
+
+    return tamper_demo.status(ctx_of(request))
+
+
+@router.post("/practice/tamper")
+def practice_tamper(request: Request, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    """Practice companies only: change one audit event directly and show where the chain catches it."""
+    from .. import tamper_demo
+
+    try:
+        return tamper_demo.tamper(ctx_of(request))
+    except tamper_demo.TamperError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/practice/tamper/restore")
+def practice_tamper_restore(request: Request, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    from .. import tamper_demo
+
+    return tamper_demo.restore(ctx_of(request), operator)
+
+
 class EarlyPayBody(BaseModel):
     discount_bps: StrictInt
 

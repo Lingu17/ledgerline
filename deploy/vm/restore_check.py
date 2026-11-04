@@ -21,7 +21,7 @@ from backup import decrypt, read_key  # noqa: E402
 
 
 def check(blob_path: Path, key_path: Path, name: str | None = None) -> bool:
-    from ledgerline import audit, ledger
+    from ledgerline import audit, ledger, tamper_demo
 
     name = name or f"ledgerline/{blob_path.name}"
     plain = decrypt(blob_path.read_bytes(), read_key(key_path), name)
@@ -44,11 +44,15 @@ def check(blob_path: Path, key_path: Path, name: str | None = None) -> bool:
             conn.row_factory = sqlite3.Row
             try:
                 balanced = ledger.conservation(conn)["all_balanced"]
+                # A practice company's open "Try to tamper" demo is put back in this temporary copy first, so the
+                # check still proves that the demo's one change is the only one.
+                demo = tamper_demo.undo(conn)
                 chain = audit.verify_chain(conn)
             finally:
                 conn.close()
             ok = ok and balanced and chain["ok"]
-            print(f"  {db_path.parent.name}: books balanced={balanced}, audit chain ok={chain['ok']} ({chain['events']} events)")
+            note = f"; practice tamper demo open at event {demo['id']}, checked with it put back" if demo else ""
+            print(f"  {db_path.parent.name}: books balanced={balanced}, audit chain ok={chain['ok']} ({chain['events']} events){note}")
     print("restore check:", "PASS" if ok else "FAIL", "(temporary copy deleted)")
     return ok
 

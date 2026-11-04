@@ -83,6 +83,7 @@ def reset_demo(conn: sqlite3.Connection, data_dir, now: datetime) -> None:
             conn.execute(f"DELETE FROM {table}")
         conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('journal_entries','journal_lines','audit_events','plans','allocations','writeoffs','credits','operation_events')")
         db.set_setting(conn, "demo_epoch", iso(now))
+        conn.execute("DELETE FROM settings WHERE key = 'practice_tamper'")  # the audit rows it pointed at are gone
         for cid, name, country, payers, dest in CUSTOMERS:
             reg = registry.get(cid, {})
             conn.execute(

@@ -347,6 +347,39 @@ test("phone width: a judge can do the whole three-step path at 375 px", async ({
   await ctx.close();
 });
 
+test("show me: the guided tour runs the practice story, and a tampered audit row is caught and restored", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await ctx.newPage();
+  await signUp(page, { org: `Tour ${uniq()}`, email: `tour-${uniq()}@e2e.test`, sample: true });
+  await page.getByRole("button", { name: "Show me" }).click();
+  const tour = page.getByRole("region", { name: "Show me tour" });
+  const next = async (title: string) => {
+    await tour.getByRole("button", { name: "Next" }).click();
+    await expect(tour.getByText(title)).toBeVisible();
+    await expect(tour.getByText("Working…")).toHaveCount(0, { timeout: 30_000 });
+  };
+  await next("Six payments arrive");
+  await next("A suspected duplicate");
+  await expect(page.locator(".drawer").getByText("Verified").first()).toBeVisible({ timeout: 25_000 });
+  await next("Every answer is checked");
+  await next("Two people for money out");
+  await expect(page.getByRole("button", { name: "Approve…" })).toBeVisible();
+  await next("A log that shows tampering");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Change one audit row" }).click();
+  await expect(page.getByText(/^Caught at event \d+\.$/)).toBeVisible();
+  await page.getByRole("button", { name: "Restore the original" }).click();
+  await expect(page.getByRole("button", { name: "Change one audit row" })).toBeVisible();
+  await page.getByRole("button", { name: "Verify log integrity" }).click();
+  await expect(page.getByText("Log intact.")).toBeVisible();
+  await expect(page.getByText("practice.tamper_tried").first()).toBeVisible();
+  await next("Every cent accounted for");
+  await tour.getByRole("button", { name: "Practice steps" }).click();
+  await expect(page).toHaveURL(/#\/walkthrough/);
+  await expect(tour).toHaveCount(0);
+  await ctx.close();
+});
+
 test("own agent: an owner points a practice customer at its own payer agent, and the answer says where it came from", async ({ page }) => {
   // The reference agent runs as its own process (see playwright.config.ts); read its public key from its own key file.
   const py = resolve(process.cwd(), "..", "backend", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");

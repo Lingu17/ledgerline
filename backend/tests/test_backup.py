@@ -48,6 +48,16 @@ def test_an_encrypted_copy_restores_and_verifies(snapshot, key_file, tmp_path, c
     assert "books balanced=True, audit chain ok=True" in out and "PASS" in out and "1 organizations" in out
 
 
+def test_a_copy_taken_during_a_practice_tamper_demo_checks_clean_with_the_change_put_back(client, app, settings, key_file, tmp_path, capsys):
+    client.post("/api/demo/step", json={"step": "deposits"})
+    event = client.post("/api/practice/tamper").json()["changed"]["id"]
+    snap = backup.snapshot(Path(settings.data_dir), Path(settings.data_dir) / "backups", 7)
+    assert restore_check.check(write_encrypted(snap, key_file, tmp_path), key_file) is True
+    out = capsys.readouterr().out
+    assert f"practice tamper demo open at event {event}, checked with it put back" in out and "PASS" in out
+    assert client.get("/api/audit/verify").json()["broken_at"] == event  # the live company is untouched by the check
+
+
 def test_a_copy_missing_an_organizations_books_fails(snapshot, key_file, tmp_path, capsys):
     next(snapshot.glob("orgs/*/ledgerline.sqlite3")).unlink()
     assert restore_check.check(write_encrypted(snapshot, key_file, tmp_path), key_file) is False

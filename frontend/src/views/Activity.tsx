@@ -1,11 +1,53 @@
 import { Fragment, useEffect, useState } from "react";
-import { download, get, getPage, type AuditEvent } from "../api";
+import { download, get, getPage, post, type AuditEvent } from "../api";
+import { useAuth } from "../auth";
 import { Pager } from "../components/Pager";
 import { Card, Empty, ErrorNote, Loading, useLoad, useToast } from "../components/ui";
 import { when } from "../format";
 import { describe } from "./Inbox";
 
-interface ChainCheck { ok: boolean; events: number; head: string; problem: string | null }
+interface ChainCheck { ok: boolean; events: number; head: string; problem: string | null; broken_at?: number | null }
+interface Tampered { id: number; action: string; field: string; from: number; to: number }
+
+/** Practice companies only: change one audit event directly, as someone with database access could, and watch the
+ * hash chain catch it at that event. Restore puts it back. */
+function TryToTamper({ onChange }: { onChange: () => void }) {
+  const [state, setState] = useState<{ changed: Tampered | null; chain: ChainCheck } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  useEffect(() => { get<{ changed: Tampered | null; chain: ChainCheck }>("/practice/tamper").then(setState).catch(() => setState(null)); }, []);
+  const act = async (path: string) => {
+    setBusy(true);
+    try {
+      await post(path);
+      setState(await get("/practice/tamper"));
+      onChange();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const t = state?.changed;
+  return (
+    <Card title="Try to tamper (practice only)">
+      {!t ? (
+        <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span className="small muted">Change one recorded amount straight in the database, the way an insider could, and see whether the log notices. Only this practice company is touched.</span>
+          <button className="btn" disabled={busy} onClick={() => act("/practice/tamper")}>{busy ? "Changing…" : "Change one audit row"}</button>
+        </div>
+      ) : (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className={`notice small ${state!.chain.ok ? "" : "risk"}`} role="status">
+            <b>{state!.chain.ok ? "Not caught." : `Caught at event ${state!.chain.broken_at}.`}</b> Event {t.id} ({t.action}) had its recorded amount changed from {t.from} to {t.to} (in cents), with nothing else touched.
+            {!state!.chain.ok && <> Checking the log recomputes every event's hash; event {state!.chain.broken_at} no longer matches its own, so the change shows at exactly that row.</>}
+          </div>
+          <div><button className="btn primary" disabled={busy} onClick={() => act("/practice/tamper/restore")}>{busy ? "Restoring…" : "Restore the original"}</button></div>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export function Activity() {
   const [q, setQ] = useState("");
@@ -22,8 +64,10 @@ export function Activity() {
   const rows = a.data ?? [];
   const [chain, setChain] = useState<ChainCheck | null>(null);
   const [checking, setChecking] = useState(false);
+  const { me } = useAuth();
   return (
     <div className="stack">
+      {me?.organization?.kind === "sample" && <TryToTamper onChange={() => { setChain(null); page.reload(); }} />}
       <div className="toolbar">
         <div className="field" style={{ flex: "1 1 260px" }}>
           <label htmlFor="act-q">Filter</label>
