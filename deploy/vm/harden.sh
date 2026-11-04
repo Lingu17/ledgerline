@@ -47,7 +47,7 @@ reload_restart() { systemctl daemon-reload; systemctl restart ledgerline; }
 
 check_app() {
   local ok=1 i
-  for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8000/api/health && break; sleep 2; done
+  for i in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8000/api/health && break; sleep 2; done
   systemctl is-active --quiet ledgerline || { echo "  CHECK FAILED: service not active"; ok=0; }
   curl -fsS -o /dev/null http://127.0.0.1:8000/api/health || { echo "  CHECK FAILED: /api/health"; ok=0; }
   [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/deposits) == 401 ]] || { echo "  CHECK FAILED: signed-out /api/deposits is not 401"; ok=0; }
@@ -241,7 +241,10 @@ sender_step() {
   find /var/lib/ledgerline -path /var/lib/ledgerline/backups -prune -o -type f -exec chmod 660 {} +
   install -m 644 "$SRC/deploy/vm/ledgerline-send.service" /etc/systemd/system/ledgerline-send.service
   systemctl daemon-reload
-  systemctl enable --now ledgerline-send
+  systemctl enable ledgerline-send
+  systemctl start ledgerline-send  # a failed start exits non-zero here and reaches the trap (enable --now does not)
+  for _ in $(seq 1 15); do [[ -S /run/ledgerline-send/send.sock ]] && break; sleep 1; done
+  [[ -S /run/ledgerline-send/send.sock ]]  # no socket: the trap turns it back off before the app restarts
   systemctl restart ledgerline
   trap - ERR
   if ! check_app || ! check_sender; then echo "sender: a check failed; turning it back off"; sender_off; exit 1; fi
@@ -257,10 +260,23 @@ check_sender() {
   if sudo -u ledgerline test -r "$SENV"; then echo "  CHECK FAILED: the app's user can read $SENV"; ok=0; fi
   if sudo -u ledgerline test -r "$KEY_SEND"; then echo "  CHECK FAILED: the app's user can read $KEY_SEND"; ok=0; fi
   if grep -qE '^AIRWALLEX_API_KEY=' "$ENVF"; then echo "  CHECK FAILED: the app's settings still hold an Airwallex key"; ok=0; fi
+  if [[ -e $KEY_APP ]]; then echo "  CHECK FAILED: the app has its own $KEY_APP while the sending service is on"; ok=0; fi
+  # What the app and the service see under their own environment files, exactly as systemd starts them.
+  out=$(systemd-run --quiet --wait --collect --pipe --uid=ledgerline --gid=ledgerline -p WorkingDirectory="$SRC/backend"     -p EnvironmentFile="$ENVF" /opt/ledgerline/venv/bin/python -c 'from ledgerline.config import load_settings
+s = load_settings(); print("APP USES SENDER" if s.sender_socket and not s.airwallex_api_key else "APP DOES NOT USE SENDER")' 2>&1) || true
+  grep -q "APP USES SENDER" <<<"$out" || { echo "  CHECK FAILED: the app's own settings do not point at the sending service: $(tail -1 <<<"$out" | cut -c1-200)"; ok=0; }
+  out=$(systemd-run --quiet --wait --collect --pipe --uid=ledgerline-send --gid=ledgerline -p WorkingDirectory="$SRC/backend"     -p EnvironmentFile="$ENVF" -p EnvironmentFile="$SENV" /opt/ledgerline/venv/bin/python -c 'from ledgerline.config import load_settings
+s = load_settings(); print("SENDER KEY OK" if str(s.connections_key_path) == "'"$KEY_SEND"'" else "SENDER KEY WRONG")' 2>&1) || true
+  grep -q "SENDER KEY OK" <<<"$out" || { echo "  CHECK FAILED: the sending service does not use $KEY_SEND: $(tail -1 <<<"$out" | cut -c1-200)"; ok=0; }
+  # The socket answers (never leaves the machine), then, only as a warning, whether Airwallex accepts the server keys.
   out=$(cd "$SRC/backend" && sudo -u ledgerline /opt/ledgerline/venv/bin/python -c 'from ledgerline.sender import SenderClient
-r = SenderClient("unix:/run/ledgerline-send/send.sock", timeout=20).call("server_readiness", "")
-print("SENDER OK" if isinstance(r, dict) else "SENDER BAD")' 2>&1) || true
-  grep -q "SENDER OK" <<<"$out" || { echo "  CHECK FAILED: the app's user could not ask the sending service: $(tail -1 <<<"$out" | cut -c1-200)"; ok=0; }
+r = SenderClient("unix:/run/ledgerline-send/send.sock", timeout=20).call("ping", "")
+print("SENDER OK" if r == {"pong": True} else "SENDER BAD")' 2>&1) || true
+  grep -q "SENDER OK" <<<"$out" || { echo "  CHECK FAILED: the app's user could not reach the sending service: $(tail -1 <<<"$out" | cut -c1-200)"; ok=0; }
+  out=$(cd "$SRC/backend" && sudo -u ledgerline /opt/ledgerline/venv/bin/python -c 'from ledgerline.sender import SenderClient
+r = SenderClient("unix:/run/ledgerline-send/send.sock", timeout=30).call("server_readiness", "")
+print("BANK OK" if isinstance(r, dict) else "BANK BAD")' 2>&1) || true
+  grep -q "BANK OK" <<<"$out" || echo "  WARNING (not undone): Airwallex did not answer for the server keys just now: $(tail -1 <<<"$out" | cut -c1-200)"
   (( ok ))
 }
 
@@ -277,7 +293,7 @@ sender_off() {
   fi
   chown root:ledgerline "$ENVF" || true; chmod 640 "$ENVF" || true
   if [[ -f $KEY_SEND && ! -f $KEY_APP ]]; then mv "$KEY_SEND" "$KEY_APP"
-  elif [[ -f $KEY_SEND ]]; then echo "WARNING: both $KEY_SEND and $KEY_APP exist; left both in place, compare them by hand" >&2; fi
+  elif [[ -f $KEY_SEND ]]; then echo "WARNING: both $KEY_SEND and $KEY_APP exist; left both in place, compare them by hand" >&2; two_keys=1; fi
   if [[ -f $KEY_APP ]]; then chown ledgerline:ledgerline "$KEY_APP" || true; chmod 600 "$KEY_APP" || true; fi
   rmdir /var/lib/ledgerline-send 2>/dev/null || true  # only if empty: a key left there (the WARNING above) stays
   mkdir -p "$DROPIN"; printf '[Service]\nUMask=0077\n' > "$DROPIN/umask.conf"
@@ -286,7 +302,8 @@ sender_off() {
   find /var/lib/ledgerline -type d -exec chmod 700 {} + || true
   rm -f /etc/systemd/system/ledgerline-send.service
   reload_restart || true
-  check_app && echo "sender: off. The app holds the Airwallex keys again, as before. (The ledgerline-send user is left in place.)"
+  if [[ ${two_keys:-0} == 1 ]]; then echo "sender: off, but two connections.key files need comparing by hand (see the WARNING above)" >&2; check_app || true; return 1; fi
+  check_app && echo "sender: off. The app holds the Airwallex keys again. (The ledgerline-send user is left in place.)"
 }
 
 main "$@"; exit
