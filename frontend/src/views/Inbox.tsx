@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { get, type AuditEvent, type Wallet } from "../api";
 import { Card, Empty, ErrorNote, Loading, Money, Pill, useLoad } from "../components/ui";
-import { CATEGORY_LABEL, money, relativeDays, when } from "../format";
+import { CATEGORY_LABEL, money, plainReason, relativeDays, when, actionLabel } from "../format";
 import { go } from "../App";
 
 interface Overview {
@@ -96,7 +96,9 @@ export function Inbox() {
                 <dt>Bills due soon</dt><dd>{money(w.obligations_due_in_window, w.currency)}</dd>
                 {w.fx_out_reserved > 0 && (<><dt>Reserved for FX out</dt><dd>{money(w.fx_out_reserved, w.currency)}</dd></>)}
                 {w.fx_in_pending > 0 && (<><dt>Pending FX in (forecast)</dt><dd>{money(w.fx_in_pending, w.currency)}</dd></>)}
-                {w.free_after_commitments < 0 ? (
+                {!w.cash_known ? (
+                  <><dt className="free">Opening balance</dt><dd className="free"><a href="#/treasury">Not set yet</a></dd></>
+                ) : w.free_after_commitments < 0 ? (
                   <><dt className="free" title="Commitments exceed cash in this currency">Short by</dt>
                     <dd className="free neg">{money(-w.free_after_commitments, w.currency)}</dd></>
                 ) : (
@@ -125,7 +127,7 @@ export function Inbox() {
                       onKeyDown={(e) => e.key === "Enter" && (w.kind === "deposit" ? go("payments", { deposit: w.id }) : go("approvals"))}>
                       <td>
                         <div className="primary-text">{w.kind === "deposit" ? w.payer_name : w.kind === "approval" ? `${w.id.startsWith("PAY-") ? "Bill payment" : "Refund"} to ${w.payer_name}` : `Operation ${w.id}`}</div>
-                        <div className="secondary mono">{w.id}{w.reason ? ` · ${w.reason}` : ""}</div>
+                        <div className="secondary"><span className="mono">{w.id}</span>{w.reason ? ` · ${plainReason(w.reason)}` : ""}</div>
                       </td>
                       <td><Pill status={w.status} /></td>
                       <td className="num"><Money minor={w.amount_minor} ccy={w.currency} /></td>
@@ -184,7 +186,7 @@ export function Inbox() {
                 {activity.data.map((a) => (
                   <tr key={a.id}>
                     <td className="nowrap muted small">{when(a.at)}</td>
-                    <td className="mono small">{a.action}</td>
+                    <td className="small" title={a.action}>{actionLabel(a.action)}</td>
                     <td className="small">{describe(a)}</td>
                     <td className="small muted hide-sm">{a.actor}</td>
                   </tr>

@@ -122,3 +122,65 @@ export function tone(status: string): "ok" | "warn" | "risk" | "info" | "muted" 
       return "muted";
   }
 }
+
+/** The rules' reasons, said for a finance team. The stored text stays as the rules wrote it (Replay compares it). */
+const PLAIN: [RegExp, string][] = [
+  [/no registered payer agent; route remittance text to evidence reader \/ operator/i,
+    "This customer has no payer agent: read their remittance email (Read remittance…) or decide yourself"],
+  [/^unidentified payer$/i, "The payer is not one of your customers"],
+  [/^reference names another customer's invoice$/i, "The reference names another customer's invoice"],
+  [/^currency mismatch between deposit and invoice$/i, "Paid in a different currency from the invoice"],
+  [/references (.+), which every referenced invoice is already settled\./i, "references $1, and every invoice it names is already paid."],
+  [/references (.+), which references a not-yet-issued invoice\./i, "references $1, an invoice that has not been issued yet."],
+  [/every referenced invoice is already settled/i, "every invoice it names is already paid"],
+  [/payer agent returned '(\w+)': /i, "the payer's agent answered \"$1\": "],
+];
+
+export function plainReason(text: string | null | undefined): string {
+  let t = text ?? "";
+  for (const [re, plain] of PLAIN) t = t.replace(re, plain);
+  return t;
+}
+
+/** Audit event codes as sentences. The code itself stays in the log, the export and a tooltip. */
+const ACTION_LABEL: Record<string, string> = {
+  "deposit.received": "Payment received", "deposit.settled": "Payment settled", "deposit.resolved_by_operator": "Resolved by a person",
+  "deposit.conversion_requested": "Conversion requested", "payment.recorded_manually": "Payment recorded by hand",
+  "plan.initial": "Matched by the rules", "plan.revised": "Plan revised", "plan.operator": "Decided by a person",
+  "evidence.received": "Payer's agent answered", "evidence.extracted": "Remittance read", "agent.asked_automatically": "Payer's agent asked automatically",
+  "allocation.created": "Applied to an invoice", "credit.created": "Held as customer credit", "writeoff.created": "Bank fee written off",
+  "payment_link.drafted": "Balance request drafted", "approval.created": "Approval requested", "approval.approved": "Approved",
+  "approval.rejected": "Rejected", "approval.invalidated": "Approval voided (something changed)", "approval.expired": "Approval expired",
+  "approval.returned_to_person": "Returned to a person (over the limit)", "refund.created": "Refund sent to the bank",
+  "refund.recorded_outside": "Refund recorded as paid outside", "refund.ambiguous": "Refund outcome unknown: checking",
+  "refund.processing": "Refund processing", "refund.sent": "Refund sent", "refund.paid": "Refund paid", "refund.failed": "Refund failed",
+  "refund.cancelled": "Refund cancelled", "practice_teammate.sent": "Practice teammate sent the refund",
+  "bill_payment.proposed": "Bill payment proposed", "bill_payment.approved": "Bill payment approved", "bill_payment.rejected": "Bill payment rejected",
+  "bill_payment.invalidated": "Bill payment voided", "bill_payment.approval_expired": "Bill payment approval expired",
+  "bill_payment.submitting": "Bill payment sent to the bank", "bill_payment.processing": "Bill payment processing", "bill_payment.sent": "Bill payment sent",
+  "bill_payment.paid": "Bill paid", "bill_payment.failed": "Bill payment failed", "bill_payment.ambiguous": "Bill payment outcome unknown: checking",
+  "obligation.created": "Bill added", "obligation.paid": "Bill marked paid", "obligation.deferred": "Bill deferred",
+  "treasury.decision": "Bill plan decided", "treasury.plan_run": "Bills re-planned", "fx.quote": "Conversion quote received",
+  "early_pay.offered": "Early-payment offer made", "early_pay.paid": "Early payment received",
+  "customer.created": "Customer added", "customer.updated": "Customer updated", "customer.payer_agent_registered": "Customer's own agent connected",
+  "customer.payer_agent_removed": "Customer's own agent removed", "invoice.created": "Invoice added", "invoice.updated": "Invoice updated",
+  "invoice.adjusted": "Invoice adjusted", "invoice.voided": "Invoice voided", "beneficiary.created": "Payee added",
+  "wallet.opening_balance_set": "Opening balance set", "wallet.opening_balance_from_account": "Opening balance taken from the bank",
+  "webhook.accepted": "Bank notification received", "webhook.duplicate_ignored": "Repeated bank notification ignored",
+  "money_out.paused": "Money-out paused", "money_out.resumed": "Money-out resumed", "policy.updated": "Policy changed",
+  "practice.tamper_tried": "Try to tamper: caught and restored", "practice.cash_squeeze_added": "Practice: cash squeeze added",
+  "practice.unclear_payment_added": "Practice: unclear payment added", "practice.wrong_currency_added": "Practice: wrong-currency payment added",
+  "demo.reset": "Practice data reset", "user.signup": "Signed up", "user.renamed": "Name changed", "user.password_changed": "Password changed",
+  "user.password_reset": "Password reset with a link", "user.deleted": "Account deleted", "login.succeeded": "Signed in", "login.failed": "Failed sign-in",
+  "member.invited": "Member invited", "member.joined": "Member joined", "member.left": "Member left", "member.removed": "Member removed",
+  "member.role_changed": "Role changed", "member.invitation_revoked": "Invitation revoked", "member.reset_link_issued": "Reset link created",
+  "invitation.authentication_failed": "Wrong password when joining", "org.created": "Organization created", "org.settings_updated": "Settings changed",
+  "org.airwallex_connected": "Airwallex connected", "org.airwallex_disconnected": "Airwallex disconnected", "organization.deleted": "Organization deleted",
+  "identity.linked": "Google sign-in linked", "identity.unlinked": "Google sign-in removed",
+};
+
+export function actionLabel(code: string): string {
+  if (ACTION_LABEL[code]) return ACTION_LABEL[code];
+  const words = code.replace(/[._]/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}

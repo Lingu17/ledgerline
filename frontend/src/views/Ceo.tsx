@@ -1,10 +1,10 @@
 import { get } from "../api";
 import { Card, ErrorNote, Loading, Money, Pill, useLoad } from "../components/ui";
-import { day, money } from "../format";
+import { day, money, plainReason } from "../format";
 
 interface Summary {
   verdict: "ok" | "attention" | "problem"; headline: string; lookahead_days: number; paused: boolean;
-  currencies: { currency: string; cash: number; reserve: number; bills_due: number; free: number; held: number; owed_to_us: number; overdue: number }[];
+  currencies: { currency: string; cash: number; cash_known: boolean; reserve: number; bills_due: number; free: number; held: number; owed_to_us: number; overdue: number }[];
   agent: { payments: number; settled_without_person: number; refunds_avoided: number; false_claims_caught: number; early_cash_offers_paid: number; estimated_minutes_saved: number; minutes_per_payment_assumed: number };
   needs_you: { kind: string; id: string; status: string; currency: string; amount_minor: number; payer_name: string; reason: string | null }[];
   needs_you_total: number;
@@ -52,7 +52,7 @@ export function Ceo() {
                   <td className="primary-text">{c.currency}</td>
                   <td className="num"><Money minor={c.cash} ccy={c.currency} /></td>
                   <td className="num"><Money minor={c.bills_due} ccy={c.currency} /></td>
-                  <td className={`num ${c.free < 0 ? "neg" : ""}`}><Money minor={c.free} ccy={c.currency} /></td>
+                  <td className={`num ${c.cash_known && c.free < 0 ? "neg" : ""}`}>{c.cash_known ? <Money minor={c.free} ccy={c.currency} /> : <span className="muted small">Opening balance not set</span>}</td>
                   <td className="num"><Money minor={c.owed_to_us} ccy={c.currency} /></td>
                   <td className={`num ${c.overdue > 0 ? "neg" : ""}`}><Money minor={c.overdue} ccy={c.currency} /></td>
                 </tr>
@@ -74,7 +74,7 @@ export function Ceo() {
               ))}
               {needs_you.map((w) => (
                 <div key={w.id} className="small">
-                  <a href={link(w.kind, w.id)}><b>{w.id}</b></a>: {money(w.amount_minor, w.currency)}, {w.payer_name}.{" "}{w.reason ?? NEXT_STEP[w.status] ?? ""}
+                  <a href={link(w.kind, w.id)}><b>{w.id}</b></a>: {money(w.amount_minor, w.currency)}, {w.payer_name}.{" "}{w.reason ? plainReason(w.reason) : NEXT_STEP[w.status] ?? ""}
                 </div>
               ))}
               {needs_you_total > needs_you.length && <a className="small" href="#/inbox">{needs_you_total - needs_you.length} more in the Inbox</a>}

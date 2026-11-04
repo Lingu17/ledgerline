@@ -3,7 +3,7 @@ import { get, getPage, post, type AuditEvent, type Customer, type Invoice } from
 import { useAuth } from "../auth";
 import { Card, CsvImport, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { PAGE_SIZE, Pager } from "../components/Pager";
-import { day, money, parseMajor, plainAmount, when } from "../format";
+import { day, money, parseMajor, plainAmount, when, actionLabel } from "../format";
 import { go, type Route } from "../App";
 
 function useDebounced(v: string, ms = 200) {
@@ -211,7 +211,7 @@ function InvoiceDrawer({ id, onClose }: { id: string; onClose: () => void }) {
           )}
           <section>
             <h3 className="section-title">Audit</h3>
-            <table><tbody>{x.audit.map((a) => <tr key={a.id}><td className="small muted nowrap">{when(a.at)}</td><td className="mono small">{a.action}</td><td className="small">{a.actor}</td></tr>)}</tbody></table>
+            <table><tbody>{x.audit.map((a) => <tr key={a.id}><td className="small muted nowrap">{when(a.at)}</td><td className="small" title={a.action}>{actionLabel(a.action)}</td><td className="small">{a.actor}</td></tr>)}</tbody></table>
           </section>
         </>
       )}

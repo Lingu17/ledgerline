@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { del, download, get, post, type Ccy, type Customer, type Me, type Policy, type Status } from "../api";
 import { useAuth } from "../auth";
 import { Card, ErrorNote, Field, Loading, Modal, Pill, useAction, useLoad, useToast } from "../components/ui";
-import { majorString, parseMajor, when } from "../format";
+import { majorString, parseMajor, when, actionLabel } from "../format";
 import { hashParam, oauthErrorText, PROVIDER_LABEL, ProviderLogo, startUrl, type ProviderId } from "../components/OAuthButtons";
 
 const CCYS: Ccy[] = ["USD", "EUR", "GBP"];
@@ -40,7 +40,7 @@ export function Settings() {
       {org.data.control_audit.length > 0 && (
         <Card title="Organization changes" pad={false}>
           <div className="table-wrap"><table><tbody>{org.data.control_audit.map((a) => (
-            <tr key={a.id}><td className="small muted nowrap">{when(a.at)}</td><td className="mono small">{a.action}</td><td className="small">{a.actor}</td></tr>
+            <tr key={a.id}><td className="small muted nowrap">{when(a.at)}</td><td className="small" title={a.action}>{actionLabel(a.action)}</td><td className="small">{a.actor}</td></tr>
           ))}</tbody></table></div>
         </Card>
       )}
@@ -162,7 +162,7 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
         <table className="integrations">
           <tbody>
             <tr>
-              <td style={{ width: "28%" }}><b>Bank</b><div className="secondary">{st.bank.label}</div></td>
+              <td style={{ width: "28%" }}><b>Bank</b><div className="secondary">{org.kind !== "sample" && org.bank_mode === "local" ? "None connected: you record payments made in your own bank" : st.bank.label}</div></td>
               <td>
                 {owner && org.server.sandbox_allowed && !org.airwallex_connected ? (
                   <select aria-label="Bank mode" value={org.bank_mode} disabled={!!busy}
@@ -178,28 +178,31 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
               </td>
             </tr>
             <tr>
-              <td><b>Evidence reader</b><div className="secondary">{st.claude.label}</div></td>
-              <td>{st.claude.mode === "claude_api" ? <Pill status="matched" label="Claude API key set" /> : <Pill status="muted" label="Offline rules" />}</td>
-              <td className="small">Reads remittance text into a typed proposal. Advisory only: never signed, cannot move money.
+              <td><b>Remittance reading</b><div className="secondary">{st.claude.mode === "claude_api" ? "Claude reads emails and PDFs" : "Built-in rules (AI reading is not enabled on this server)"}</div></td>
+              <td>{st.claude.mode === "claude_api" ? <Pill status="matched" label="Claude on" /> : <Pill status="muted" label="Rules only" />}</td>
+              <td className="small">Turns a remittance email or PDF into a suggestion for a person. Advice only: it cannot approve or move money.
                 {check?.claude && <div style={{ marginTop: 4 }}><Pill status={tone(check.claude.status)} label={check.claude.status.replace("_", " ")} /> {check.claude.detail}</div>}
               </td>
             </tr>
             <tr>
-              <td><b>Payer agents</b><div className="secondary">{st.payer_agents.label}</div></td>
-              <td><Pill status="muted" label={st.payer_agents.transport} /></td>
+              <td><b>Payer agents</b><div className="secondary">{org.kind === "sample" ? "Built-in simulated agents" : "A customer's own agent, where connected"}</div></td>
+              <td><Pill status="muted" label={org.kind === "sample" ? "Practice" : "Per customer"} /></td>
               <td className="small">Ledgerline asks a payer's agent what a payment was for, and uses a signed answer only if it passes three checks. Practice companies ask built-in simulated agents. An owner can connect a customer's own agent under Customers → Payer agent…; no outside company runs one yet.</td>
             </tr>
             <tr>
               <td><b>Webhooks</b><div className="secondary">This organization's endpoint</div></td>
               <td colSpan={2} className="small">
                 <input type="text" readOnly className="mono" value={webhookUrl} aria-label="Webhook URL" style={{ width: "100%" }} onFocus={(e) => e.target.select()} />
-                <div style={{ marginTop: 6 }}>HMAC-SHA256 over x-timestamp + raw body, {st.policy.webhook_tolerance_seconds}s skew limit, event ids deduplicated. Signing secret: {st.security.webhook_secret_source}.</div>
+                <div style={{ marginTop: 6 }}>Give this address to Airwallex for payment notifications. Each one is checked and booked once.</div>
+                <details style={{ marginTop: 6 }}><summary>Technical details</summary>
+                  HMAC-SHA256 over x-timestamp + raw body, {st.policy.webhook_tolerance_seconds}s clock limit, event ids deduplicated. Signing secret: {st.security.webhook_secret_source}. Payer agents: {st.payer_agents.label} ({st.payer_agents.transport}).
+                </details>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      {owner && (
+      {owner && org.bank_mode === "airwallex_sandbox" && (
         <form className="form-grid" style={{ marginTop: 14 }} onSubmit={(e) => {
           e.preventDefault();
           const body: Record<string, unknown> = { airwallex_global_accounts: ga };
@@ -207,7 +210,7 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
           run("aw", () => post("/organization", body, "PUT"), "Airwallex settings saved").then(() => setSecret(""));
         }}>
           {CCYS.map((c) => (
-            <Field key={c} id={`ga-${c}`} label={`${c} global account id`} hint="Used for sandbox deposit simulation">
+            <Field key={c} id={`ga-${c}`} label={`${c} global account id`} hint="The Airwallex account that receives this currency">
               <input id={`ga-${c}`} type="text" className="mono" value={ga[c] ?? ""} onChange={(e) => setGa({ ...ga, [c]: e.target.value })} />
             </Field>
           ))}

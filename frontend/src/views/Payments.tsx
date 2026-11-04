@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { get, getPage, post, type Approval, type AuditEvent, type Customer, type Deposit, type Evidence, type Invoice, type Operation, type Plan } from "../api";
 import { Card, Checks, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
-import { CATEGORY_LABEL, SOURCE_LABEL, STATUS_LABEL, money, parseMajor, plainAmount, majorString, when, day } from "../format";
+import { CATEGORY_LABEL, SOURCE_LABEL, STATUS_LABEL, money, parseMajor, plainAmount, plainReason, majorString, when, day, actionLabel } from "../format";
 import { go, type Route } from "../App";
 import { describe } from "./Inbox";
 import { useAuth } from "../auth";
@@ -178,7 +178,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
           </div>
           <div className="notice small"><b>Next:</b> {nextStep(x, bank.data?.org?.kind === "sample")}</div>
           {x.source === "manual_import" && <div className="notice warn">Manually recorded by an operator. Not verified against a bank statement feed.</div>}
-          {x.escalation_reason && x.status === "escalated" && <div className="notice risk"><b>Why this needs review:</b> {x.escalation_reason}</div>}
+          {x.escalation_reason && x.status === "escalated" && <div className="notice risk"><b>Why this needs review:</b> {plainReason(x.escalation_reason)}</div>}
 
           <DecisionPath x={x} />
           <WhyThisPlan id={x.id} planVersion={x.plans.length} />
@@ -263,7 +263,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
               <tbody>
                 {x.audit.map((a) => (
                   <tr key={a.id}>
-                    <td className="nowrap small muted">{when(a.at)}<div className="mono">{a.action}</div></td>
+                    <td className="nowrap small muted">{when(a.at)}<div title={a.action}>{actionLabel(a.action)}</div></td>
                     <td className="small">{describe(a)}</td>
                   </tr>
                 ))}
@@ -301,7 +301,7 @@ function DecisionPath({ x }: { x: DepositDetail }) {
       !ev ? "—" : ev.verdict === "advisory" ? "Unsigned text: advisory only, cannot authorise money"
         : failed.length ? `Failed: ${failed.map((c) => c.label).join("; ")}` : `${ev.checks.length}/${ev.checks.length} passed`],
     ["Decision", x.status === "escalated" ? "waiting" : last ? "done" : "waiting",
-      x.status === "escalated" ? `With a person: ${x.escalation_reason ?? "needs review"}` : last && last !== first ? `Revised: ${last.summary}` : last ? "First plan stands" : "—"],
+      x.status === "escalated" ? `With a person: ${plainReason(x.escalation_reason) || "needs review"}` : last && last !== first ? `Revised: ${last.summary}` : last ? "First plan stands" : "—"],
     ["Approval", !appr ? "skip" : appr.status === "approved" || appr.status === "executed" ? "done" : appr.status === "pending" ? "waiting" : "failed",
       !appr ? "No money leaves, so none needed"
         : appr.status === "executed" ? `${appr.id} approved by ${approver}, then executed`
@@ -337,7 +337,7 @@ const ACTION_TEXT: Record<string, (a: any, ccy: string) => string> = {
   cancel_proposed_refund: () => "Drop the proposed refund before any money moves",
   credit: (a, c) => `Hold ${money(a.amount_minor, c)} as credit${a.earmark_invoice_id ? ` toward ${a.earmark_invoice_id}` : ""}`,
   request_refund_approval: (a, c) => `Request approval to refund ${money(a.amount_minor, c)}`,
-  escalate: (a) => `Escalate: ${a.reason}`,
+  escalate: (a) => `A person decides: ${plainReason(a.reason)}`,
 };
 
 export function PlanCard({ plan, ccy }: { plan: Plan; ccy: string }) {
@@ -348,7 +348,7 @@ export function PlanCard({ plan, ccy }: { plan: Plan; ccy: string }) {
         <span className="pill plain muted">{CATEGORY_LABEL[plan.category] ?? plan.category}</span>
         <span className="muted small" style={{ fontWeight: 400 }}>{when(plan.created_at)}</span>
       </h4>
-      <div className="small">{plan.summary}</div>
+      <div className="small">{plainReason(plan.summary)}</div>
       <ul>{plan.actions.map((a, i) => <li key={i}>{(ACTION_TEXT[a.type] ?? (() => a.type))(a, ccy)}</li>)}</ul>
     </div>
   );
