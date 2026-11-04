@@ -18,6 +18,7 @@ import { AcceptInvite, NoOrganization, SignIn, friendly } from "./views/Auth";
 import { Landing } from "./views/Landing";
 import { Architecture } from "./views/Architecture";
 import { ShowMe } from "./components/ShowMe";
+import { Privacy, Security, Terms } from "./views/Legal";
 
 export type Route = { page: string; params: URLSearchParams };
 
@@ -232,6 +233,9 @@ function Shell({ me }: { me: Me }) {
           {page === "team" && <Team />}
           {page === "settings" && <Settings />}
           {page === "walkthrough" && <Walkthrough />}
+          <footer className="app-footer small muted">
+            <a href="#/privacy">Privacy</a> · <a href="#/terms">Terms</a> · <a href="#/security">Security</a>
+          </footer>
         </main>
       </div>
     </div>
@@ -245,6 +249,9 @@ function Gate() {
   if (loading) return <div className="auth-page"><div className="skeleton" style={{ width: 240 }} aria-label="Loading" /></div>;
   if (route.page === "home") return <Landing />;
   if (route.page === "architecture") return <Architecture />;
+  if (route.page === "privacy") return <Privacy />;
+  if (route.page === "terms") return <Terms />;
+  if (route.page === "security") return <Security />;
   if (!me) {
     if (route.page === "signup") return <SignIn key="signup" initialMode="signup" />;
     if (route.page === "signin") return <SignIn key="signin" />;

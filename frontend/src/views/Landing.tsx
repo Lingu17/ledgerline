@@ -3,7 +3,7 @@ import { useAuth } from "../auth";
 import { Globe } from "../components/Globe";
 import "../landing.css";
 
-function Logo() {
+export function Logo() {
   return (
     <a className="lp-logo" href="#/home" aria-label="Ledgerline home">
       <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
@@ -302,6 +302,9 @@ export function Landing() {
             <a href="#how">How it works</a>
             <a href="#faq">FAQ</a>
             <a href="#/architecture">Architecture</a>
+            <a href="#/privacy">Privacy</a>
+            <a href="#/terms">Terms</a>
+            <a href="#/security">Security</a>
             <a href={signedIn ? "#/inbox" : "#/signin"}>{signedIn ? "Workspace" : "Sign in"}</a>
           </nav>
         </div>

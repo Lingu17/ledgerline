@@ -109,6 +109,11 @@ export function SignIn({ initialMode = "signin" }: { initialMode?: "signin" | "s
           </fieldset>
         )}
         {err && <div className="notice risk small" role="alert">{err}</div>}
+        {mode === "signup" && (
+          <p className="small muted" style={{ margin: 0 }}>
+            By creating an organization you agree to the <a href="#/terms">Terms</a>. The <a href="#/privacy">Privacy</a> page says what is stored and how to delete it.
+          </p>
+        )}
         <button className="btn primary" disabled={busy} style={{ height: 36 }}>
           {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create organization"}
         </button>

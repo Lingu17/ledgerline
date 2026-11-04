@@ -373,3 +373,6 @@ main.content:focus { outline: none; }
 .path-state.skip { color: var(--ink-3); }
 .path-text { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .path li { grid-template-columns: 1fr auto; } .path-text { grid-column: 1 / -1; } }
+
+.app-footer { margin-top: 32px; padding: 16px 0 8px; border-top: 1px solid var(--line); text-align: center; }
+.app-footer a { color: inherit; }

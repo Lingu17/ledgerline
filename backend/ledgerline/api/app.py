@@ -4,10 +4,11 @@ from __future__ import annotations
 import logging
 import os
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..clock import Clock
@@ -139,6 +140,22 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         if supplied.startswith("$"):
             return "invalid: unsubstituted placeholder"  # the edge sent its variable name, not its value
         return "invalid" if len(supplied) == len(settings.edge_secret) else "invalid: length differs"
+
+    @app.get("/api/public/info", include_in_schema=False)
+    def public_info() -> JSONResponse:
+        """What any visitor may see: the version, and where to report a security problem (if the operator set one)."""
+        return JSONResponse({"version": app.version, "security_contact": settings.security_contact}, headers={"Cache-Control": "no-store"})
+
+    @app.get("/.well-known/security.txt", include_in_schema=False)
+    def security_txt(request: Request) -> PlainTextResponse:
+        # RFC 9116. Without a contact chosen by the operator there is nothing honest to publish.
+        if not settings.security_contact:
+            return PlainTextResponse("no security contact has been published for this server\n", status_code=404)
+        expires = (datetime.now(timezone.utc) + timedelta(days=180)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        local = request.url.hostname in ("localhost", "127.0.0.1", "::1")
+        base = f"{'http' if local else 'https'}://{request.url.netloc}"  # behind the proxy the app itself sees http
+        return PlainTextResponse(f"Contact: {settings.security_contact}\nExpires: {expires}\nPreferred-Languages: en\n"
+                                 f"Canonical: {base}/.well-known/security.txt\nPolicy: {base}/#/security\n")
 
     @app.get("/api/health", include_in_schema=False)
     def health(request: Request) -> JSONResponse:

@@ -93,6 +93,8 @@ class Settings:
     airwallex_global_account_ids: dict[str, str] = field(default_factory=dict)
     anthropic_api_key: str | None = None
     claude_model: str = "claude-opus-5-5"
+    # Where to report a security problem: a mailto: or https: address the operator chooses (served in security.txt).
+    security_contact: str | None = None
     # Sign in with Google / Apple (see oidc.py). public_url is the origin users reach this server on;
     # OAuth redirect URIs are built from it and must be registered with each provider exactly.
     public_url: str = ""
@@ -221,6 +223,10 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.airwallex_global_account_ids = ga_ids
     s.anthropic_api_key = env.get("ANTHROPIC_API_KEY") or None
     s.claude_model = env.get("LEDGERLINE_CLAUDE_MODEL") or s.claude_model
+    contact = env.get("LEDGERLINE_SECURITY_CONTACT", "").strip()
+    if contact and not (contact.startswith("mailto:") or contact.startswith("https://")):
+        raise ValueError("LEDGERLINE_SECURITY_CONTACT must start with mailto: or https://")
+    s.security_contact = contact or None
     s.public_url = (env.get("LEDGERLINE_PUBLIC_URL") or f"http://localhost:{s.port}").rstrip("/")
     s.google_client_id = env.get("GOOGLE_CLIENT_ID") or None
     s.google_client_secret = env.get("GOOGLE_CLIENT_SECRET") or None

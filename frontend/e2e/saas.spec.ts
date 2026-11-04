@@ -380,6 +380,23 @@ test("show me: the guided tour runs the practice story, and a tampered audit row
   await ctx.close();
 });
 
+test("privacy, terms and security are real pages, linked from the home page, sign-up and the app", async ({ page }) => {
+  await page.goto("/#/home");
+  await page.getByRole("navigation", { name: "Footer" }).getByRole("link", { name: "Privacy" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
+  await expect(page.getByText(/Mumbai region/)).toBeVisible();
+  await page.getByRole("navigation", { name: "Footer" }).getByRole("link", { name: "Terms" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Terms" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Footer" }).getByRole("link", { name: "Security" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Security" })).toBeVisible();
+  await expect(page.getByText(/has not published a reporting address yet/)).toBeVisible();
+  await page.goto("/#/signup");
+  await expect(page.getByRole("link", { name: "Terms" })).toBeVisible();
+  await signUp(page, { org: `Legal ${uniq()}`, email: `legal-${uniq()}@e2e.test`, sample: true });
+  await page.locator(".app-footer").getByRole("link", { name: "Privacy" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
+});
+
 test("own agent: an owner points a practice customer at its own payer agent, and the answer says where it came from", async ({ page }) => {
   // The reference agent runs as its own process (see playwright.config.ts); read its public key from its own key file.
   const py = resolve(process.cwd(), "..", "backend", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
