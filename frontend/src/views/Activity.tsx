@@ -3,7 +3,7 @@ import { download, get, getPage, post, type AuditEvent } from "../api";
 import { useAuth } from "../auth";
 import { Pager } from "../components/Pager";
 import { Card, Empty, ErrorNote, Loading, useLoad, useToast } from "../components/ui";
-import { actionLabel, money, when } from "../format";
+import { actionLabel, money, when, actorLabel, whenUtc } from "../format";
 import { describe } from "./Inbox";
 
 interface ChainCheck { ok: boolean; events: number; head: string; problem: string | null; broken_at?: number | null }
@@ -103,8 +103,8 @@ export function Activity() {
                   <Fragment key={e.id}>
                     <tr className="clickable" tabIndex={0} aria-expanded={open === e.id}
                       onClick={() => setOpen(open === e.id ? null : e.id)} onKeyDown={(k) => k.key === "Enter" && setOpen(open === e.id ? null : e.id)}>
-                      <td className="nowrap small muted">{when(e.at)}</td>
-                      <td className="small">{e.actor}</td>
+                      <td className="nowrap small muted" title={whenUtc(e.at)}>{when(e.at)}</td>
+                      <td className="small" title={e.actor}>{actorLabel(e.actor)}</td>
                       <td className="small" title={e.action}>{actionLabel(e.action)}<div className="mono muted" style={{ fontSize: 11 }}>{e.action}</div></td>
                       <td className="small">{describe(e)}</td>
                       <td className="mono small hide-sm">{e.operation_id ?? ""}</td>

@@ -31,13 +31,22 @@ export function majorString(minor: number): string {
   return `${Math.floor(minor / 100)}.${String(minor % 100).padStart(2, "0")}`;
 }
 
-const dtf = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+// Times read in the viewer's own time zone, with its short name ("05 Nov, 10:22 GMT+5:30"); whenUtc gives the
+// same moment in UTC for tooltips. Calendar dates (day) stay as written: a due date is a day, not a moment.
+const dtf = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
+const utc = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 const df = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 
 export function when(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : `${dtf.format(d)} UTC`;
+  return isNaN(d.getTime()) ? iso : dtf.format(d);
+}
+
+export function whenUtc(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? undefined : `${utc.format(d)} UTC`;
 }
 
 export function day(iso: string | null | undefined): string {
@@ -86,6 +95,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
 export const SOURCE_LABEL: Record<string, string> = {
   local_simulated_webhook: "Simulated webhook",
   manual_import: "Manually recorded",
+  csv_import: "Imported from CSV",
   airwallex_sandbox_simulation: "Sandbox simulation",
   airwallex_sandbox_webhook: "Sandbox webhook",
   airwallex_payment_link: "Airwallex payment link",
@@ -195,4 +205,17 @@ const ACCOUNT_LABEL: Record<string, string> = {
 export function accountLabel(account: string): string {
   if (account.startsWith("cash:")) return `Cash (${account.slice(5)})`;
   return ACCOUNT_LABEL[account] ?? account.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+const ACTOR_LABEL: Record<string, string> = {
+  rules: "Rules", system: "Ledgerline", "system:watcher": "Ledgerline (watcher)", "agent:auto": "Ledgerline (asks payer agents)",
+  provider: "Bank", webhook: "Bank notification", manual_import: "Typed in by a person", csv_import: "CSV import",
+  "practice-teammate": "Practice teammate", "policy:auto_limit": "Policy (refund auto-limit)",
+};
+
+/** Who did it, for people: "payer_agent:CUST-FJORD" reads "Payer's agent (CUST-FJORD)". Emails stay as they are. */
+export function actorLabel(actor: string): string {
+  if (ACTOR_LABEL[actor]) return ACTOR_LABEL[actor];
+  if (actor.startsWith("payer_agent:")) return `Payer's agent (${actor.slice(12)})`;
+  return actor;
 }

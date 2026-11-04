@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { get, post, type Operation, type Wallet } from "../api";
 import { Card, CsvImport, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { useAuth } from "../auth";
-import { parseMajor, plainAmount } from "../format";
+import { parseMajor, plainAmount, whenUtc } from "../format";
 import { money, when, day } from "../format";
 
 interface Obligation { id: string; payee: string; currency: string; amount_minor: number; due_at: string; description: string; status: string }
@@ -329,7 +329,7 @@ function PlanHistory() {
               const res = results[r.id];
               return (
                 <tr key={r.id}>
-                  <td className="nowrap small muted">{when(r.at)}<div className="mono">{r.id}</div></td>
+                  <td className="nowrap small muted" title={whenUtc(r.at)}>{when(r.at)}<div className="mono">{r.id}</div></td>
                   <td className="small">{r.trigger}</td>
                   <td className="small">{r.counts.fund} fund · {r.counts.convert} convert · {r.counts.defer} defer · {r.counts.escalate} escalate</td>
                   <td className="num small">

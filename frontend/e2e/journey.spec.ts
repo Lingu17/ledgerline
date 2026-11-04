@@ -76,7 +76,11 @@ test("full journey as two people", async ({ page, browser }) => {
     const drawer = page.locator(".drawer");
     await drawer.locator("textarea").first().fill("Hello, we paid EUR 1,750 for invoice INV-2253 for Brightwave as their reseller.");
     await drawer.getByRole("button", { name: "Read text" }).click();
-    await expect(drawer.getByText(/advisory|proposes/i).first()).toBeVisible({ timeout: 20_000 });
+    await expect(drawer.getByText(/advisory|suggests/i).first()).toBeVisible({ timeout: 20_000 });
+    // Resolve starts from what the reading suggested (or says why it cannot); nothing is recorded until a person does it.
+    await drawer.getByRole("button", { name: "Resolve…" }).click();
+    await expect(drawer.getByText(/remittance reading \(EV-DEP-1004-/).first()).toBeVisible();
+    await drawer.getByRole("button", { name: "Cancel" }).click();
   });
   await step("balance request email draft on DEP-1003", async () => {
     await page.goto("/#/payments?deposit=DEP-1003");

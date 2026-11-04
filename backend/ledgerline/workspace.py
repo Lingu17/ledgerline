@@ -128,15 +128,18 @@ def create_invoice(ctx: AppContext, body: dict[str, Any], actor: str) -> dict[st
 _REF_RE = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
-def record_manual_payment(ctx: AppContext, body: dict[str, Any], actor: str) -> dict[str, Any]:
+def record_manual_payment(ctx: AppContext, body: dict[str, Any], actor: str, *, source: str = "manual_import") -> dict[str, Any]:
     """Record a received payment typed in or imported by an operator (local workspace only).
 
-    It is labelled manual_import (not bank-verified) and is idempotent on the
+    It is labelled manual_import when typed in and csv_import when it came from a CSV file; neither is
+    bank-verified. It is idempotent on the
     external reference: the same reference with the same details returns the
     existing deposit; with different details it is refused.
     """
     if ctx.local_bank is None:
         raise InputError("manual payment entry is only available in the local workspace; sandbox deposits arrive via webhook")
+    if source not in ("manual_import", "csv_import"):
+        raise ValueError(f"unknown manual source {source!r}")
     ref = body.get("external_ref")
     if not isinstance(ref, str) or not _REF_RE.match(ref):
         raise InputError("external_ref must be 1-64 characters of letters, digits and . _ : -")
@@ -180,9 +183,10 @@ def record_manual_payment(ctx: AppContext, body: dict[str, Any], actor: str) -> 
             if not same:
                 raise ReconcileError(f"external_ref {ref} was already recorded with different details ({existing['id']})")
             return {"deposit_id": existing["id"], "created": False}
-        dep_id, created = ingest_deposit(conn, ctx, fields, source="manual_import")
+        dep_id, created = ingest_deposit(conn, ctx, fields, source=source)
         audit.record(conn, iso(now), actor, "payment.recorded_manually", "deposit", dep_id,
-                     {"external_ref": ref, "note": "manually recorded, not bank-verified"})
+                     {"external_ref": ref, "note": "imported from a CSV file, not bank-verified" if source == "csv_import"
+                      else "manually recorded, not bank-verified"})
         return {"deposit_id": dep_id, "created": created}
 
 
@@ -446,7 +450,7 @@ def import_payments_csv(ctx: AppContext, text: Any, actor: str) -> dict[str, Any
             raise InputError("at most 500 rows per import")
         body = {k: (row.get(k) or "").strip() for k in _CSV_COLUMNS}
         try:
-            r = record_manual_payment(ctx, body, actor)
+            r = record_manual_payment(ctx, body, actor, source="csv_import")
             results.append({"line": n, "external_ref": body["external_ref"], "status": "created" if r["created"] else "duplicate",
                             "deposit_id": r["deposit_id"]})
         except (InputError, ReconcileError) as exc:

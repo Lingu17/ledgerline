@@ -75,6 +75,7 @@ class Dep:
     allocated: int = 0
     credited: int = 0
     has_credit: bool = False
+    source: str = "manual_import"
 
     @property
     def unapplied(self) -> int:
@@ -351,9 +352,10 @@ class Scenario:
                 "currency": ccy, "amount": major(amount, rng.randint(0, 2)), "payer_name": payer, "reference": reference,
                 "_minor": amount, "_refs": refs}
 
-    def _record_expected(self, p: dict[str, Any], dep_id: str) -> None:
+    def _record_expected(self, p: dict[str, Any], dep_id: str, source: str = "manual_import") -> None:
         payer_upper = p["payer_name"].strip().upper()
         d = self.m.predict(dep_id, p["currency"], p["_minor"], payer_upper, p["_refs"])
+        d.source = source
         self.m.deposits[dep_id] = d
         self.m.statement_refs[p["external_ref"]] = (p["currency"], p["_minor"], payer_upper, p["reference"])
         self.m.ref_to_dep[p["external_ref"]] = dep_id
@@ -427,7 +429,7 @@ class Scenario:
         for i in order:
             if i < len(rows):
                 p = rows[i]
-                self._record_expected(p, by_ref[p["external_ref"]]["deposit_id"])
+                self._record_expected(p, by_ref[p["external_ref"]]["deposit_id"], "csv_import")
         for line in replay:
             self.expect(by_ref[line["external_ref"]]["deposit_id"] == self.m.ref_to_dep[line["external_ref"]], "replay mapped to a new deposit")
         self.count("csv_imports")
@@ -499,7 +501,7 @@ class Scenario:
             actual = (g["category"], g["status"], g.get("customer_id"), b["allocated"], b["credited"], b["unapplied"], g["amount_minor"], g["currency"])
             expected = (d.category, d.status, d.cust, d.allocated, d.credited, d.unapplied, d.amount, d.ccy)
             self.expect(actual == expected, f"{did}: API {actual} expected {expected}")
-            self.expect(g["source"] == "manual_import", f"{did}: source {g['source']}")
+            self.expect(g["source"] == d.source, f"{did}: source {g['source']} expected {d.source}")
             for p in g["plans"]:  # every rules decision replays to the same plan; a person's decision is not replayed
                 r = self.c.get(f"/api/deposits/{did}/plans/{p['version']}/replay").json()
                 self.expect(r["ok"] if r["replayable"] else r["kind"] == "operator", f"{did} v{p['version']}: replay {r}")

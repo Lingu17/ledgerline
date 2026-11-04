@@ -103,7 +103,7 @@ export function SignIn({ initialMode = "signin" }: { initialMode?: "signin" | "s
           <fieldset className="choice">
             <legend>Start with</legend>
             <label><input type="radio" name="start" checked={f.start_with === "empty"} onChange={() => setF({ ...f, start_with: "empty" })} />
-              <span><b>My company</b><small>Connect your account, then add customers, invoices and bills.</small></span></label>
+              <span><b>My company</b><small>Connect your account, then add customers, invoices and bills. Works in USD, EUR and GBP.</small></span></label>
             <label><input type="radio" name="start" checked={f.start_with === "sample"} onChange={() => setF({ ...f, start_with: "sample" })} />
               <span><b>Practice company</b><small>Made-up customers and six payments, to learn it safely first.</small></span></label>
           </fieldset>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { get, type AuditEvent, type Wallet } from "../api";
 import { Card, Empty, ErrorNote, Loading, Money, Pill, useLoad } from "../components/ui";
-import { CATEGORY_LABEL, money, plainReason, relativeDays, when, actionLabel } from "../format";
+import { CATEGORY_LABEL, money, plainReason, relativeDays, when, actionLabel, actorLabel, whenUtc } from "../format";
 import { go } from "../App";
 
 interface Overview {
@@ -122,7 +122,7 @@ export function Inbox() {
                 </thead>
                 <tbody>
                   {o.work_queue.map((w) => (
-                    <tr key={w.kind + w.id} className="clickable" tabIndex={0}
+                    <tr key={w.kind + w.id} className="clickable" tabIndex={0} aria-label={w.kind === "deposit" ? `Open payment ${w.id} from ${w.payer_name}` : `Open ${w.id}`}
                       onClick={() => (w.kind === "deposit" ? go("payments", { deposit: w.id }) : go(w.kind === "approval" ? "approvals" : "approvals"))}
                       onKeyDown={(e) => e.key === "Enter" && (w.kind === "deposit" ? go("payments", { deposit: w.id }) : go("approvals"))}>
                       <td>
@@ -185,10 +185,10 @@ export function Inbox() {
               <tbody>
                 {activity.data.map((a) => (
                   <tr key={a.id}>
-                    <td className="nowrap muted small">{when(a.at)}</td>
+                    <td className="nowrap muted small" title={whenUtc(a.at)}>{when(a.at)}</td>
                     <td className="small" title={a.action}>{actionLabel(a.action)}</td>
                     <td className="small">{describe(a)}</td>
-                    <td className="small muted hide-sm">{a.actor}</td>
+                    <td className="small muted hide-sm" title={a.actor}>{actorLabel(a.actor)}</td>
                   </tr>
                 ))}
               </tbody>

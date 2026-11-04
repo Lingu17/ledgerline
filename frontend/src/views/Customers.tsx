@@ -3,7 +3,7 @@ import { get, getPage, post, type AuditEvent, type Customer, type Invoice } from
 import { useAuth } from "../auth";
 import { Card, CsvImport, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { PAGE_SIZE, Pager } from "../components/Pager";
-import { day, money, parseMajor, plainAmount, when, actionLabel } from "../format";
+import { day, money, parseMajor, plainAmount, when, actionLabel, actorLabel, whenUtc } from "../format";
 import { go, type Route } from "../App";
 
 function useDebounced(v: string, ms = 200) {
@@ -86,7 +86,7 @@ export function Customers({ route }: { route: Route }) {
                 <thead><tr><th>Invoice</th><th>Customer</th><th>Due</th><th className="num">Amount</th><th className="num">Outstanding</th><th className="hide-sm">Status</th></tr></thead>
                 <tbody>
                   {invoices.data.items.map((i) => (
-                    <tr key={i.id} className="clickable" tabIndex={0} onClick={() => go("customers", { invoice: i.id })} onKeyDown={(e) => e.key === "Enter" && go("customers", { invoice: i.id })}>
+                    <tr key={i.id} className="clickable" tabIndex={0} aria-label={`Open invoice ${i.id}`} onClick={() => go("customers", { invoice: i.id })} onKeyDown={(e) => e.key === "Enter" && go("customers", { invoice: i.id })}>
                       <td style={{ minWidth: 140 }}><div className="mono nowrap">{i.id}</div><div className="secondary">{i.description}</div></td>
                       <td className="small" style={{ minWidth: 110 }}>{i.customer_name}</td>
                       <td className="nowrap small">{day(i.due_at)}</td>
@@ -211,7 +211,7 @@ function InvoiceDrawer({ id, onClose }: { id: string; onClose: () => void }) {
           )}
           <section>
             <h3 className="section-title">Audit</h3>
-            <table><tbody>{x.audit.map((a) => <tr key={a.id}><td className="small muted nowrap">{when(a.at)}</td><td className="small" title={a.action}>{actionLabel(a.action)}</td><td className="small">{a.actor}</td></tr>)}</tbody></table>
+            <table><tbody>{x.audit.map((a) => <tr key={a.id}><td className="small muted nowrap" title={whenUtc(a.at)}>{when(a.at)}</td><td className="small" title={a.action}>{actionLabel(a.action)}</td><td className="small" title={a.actor}>{actorLabel(a.actor)}</td></tr>)}</tbody></table>
           </section>
         </>
       )}
@@ -258,12 +258,16 @@ function CustomerForm({ onClose, existing }: { onClose: () => void; existing?: C
           <Field id="nc-ben" label="Refund account" wide hint={existing ? "Changing this invalidates any refund approval bound to the old account" : "Where refunds go"}>
             <input id="nc-ben" type="text" value={f.refund_beneficiary} onChange={set("refund_beneficiary")} />
           </Field>
-          {!existing?.agent_url && (
+        </div>
+        {!existing?.agent_url && (
+          <details className="small" style={{ marginTop: 12 }} open={!!f.agent_public_key}>
+            <summary>Advanced: the customer's payer agent</summary>
+            <p className="muted" style={{ margin: "6px 0" }}>Only if this customer runs an agent that answers questions about its payments. Most customers do not; leave it empty.</p>
             <Field id="nc-key" label={existing ? "Replace payer agent public key (optional)" : "Payer agent public key (optional)"} wide hint="Base64 raw Ed25519 key their agent signs explain_payment answers with">
               <input id="nc-key" type="text" className="mono" value={f.agent_public_key} onChange={set("agent_public_key")} />
             </Field>
-          )}
-        </div>
+          </details>
+        )}
         {err && <div className="notice risk small" role="alert" style={{ marginTop: 12 }}>{err}</div>}
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy}>{existing ? "Save changes" : "Create customer"}</button></div>
       </form>

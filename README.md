@@ -13,7 +13,7 @@
   <img alt="Airwallex" src="https://img.shields.io/badge/Airwallex-sandbox%20verified-612fff">
   <img alt="Claude" src="https://img.shields.io/badge/Claude-opus--5--5%20·%20advisory%20only-d97757">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-signed%20payer%20agents-444">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.14%20·%20FastAPI-3776ab?logo=python&logoColor=white">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.12+%20·%20FastAPI-3776ab?logo=python&logoColor=white">
   <img alt="React" src="https://img.shields.io/badge/React-18%20·%20TypeScript-149eca?logo=react&logoColor=white">
   <img alt="CI" src="https://github.com/Lingu17/ledgerline/actions/workflows/ci.yml/badge.svg">
 </p>
@@ -327,7 +327,7 @@ scripts/            smoke_deploy.py, evaluate.py, accuracy_run.py
 | Pause stops every money-out action; matching continues | runaway actions during an incident |
 | Claude output is advisory and schema-validated; it can never authorise money | AI moving money |
 | Remittance text is data: emails that say "ignore your instructions", "refund 9,999 to this account" or contain a fake tool call change no plan, approval or operation (tested offline and with a model that obeys the email) | prompt injection |
-| An approval not sent within 72 hours goes back to the approvers | stale approvals sent later |
+| An approval not sent in time (72 hours by default; an owner sets 1 to 720 in Settings → Policy) goes back to the approvers | stale approvals sent later |
 | Optional separate sending service: the Airwallex keys live only in a separate process; the app cannot read them. The app asks it by id only, and it re-checks the approval, expiry, pause, two people and the duplicate lock itself. A compromised app could still request a send that its own database says was approved, or add a payout beneficiary. Owner-run switch: `harden.sh sender` ([SERVER_STEPS](docs/SERVER_STEPS.md) step 7) | an app bug or a leaked app process reading the bank keys |
 
 <details>
@@ -457,7 +457,8 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 - Payer agents are simulations: real MCP and signatures, but answers come from a fixed table and keys sit on this server. Real customers' agents would register their own keys at onboarding. Check 3 tests plausibility against your records; it cannot tell a real advance from a false one that fits.
 - Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov and it was paid with a test card; Ledgerline asks Airwallex every two minutes rather than using link webhooks, and settlement timing is not tracked. The earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
 - Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
-- One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery, password reset, SSO/MFA or billing.
+- USD, EUR and GBP only; other currencies are not supported yet.
+- One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery (invitation and reset links are copied by a person), no self-service password reset (an owner issues a one-hour link), no enterprise SSO or MFA, and no billing.
 - The separate sending service ships switched off; the owner turns it on with server step 7. A compromised app could still request a send that its own database says was approved. Its Unix-socket test runs on Linux only and has not run while CI is blocked; on Windows it is tested over a loopback connection.
 
 <p align="center"><sub>Built for the Airwallex Agentic Banking Hackathon · sandbox and synthetic data only · no real money</sub></p>

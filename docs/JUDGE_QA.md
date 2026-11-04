@@ -40,7 +40,7 @@ Compared with the design rules in Airwallex's public AWS reference builds ([awx-
 |:--|:--|
 | The model only reads and proposes; no tool input names an account, tenant or request id | Yes. Claude reads documents through typed tools and cannot state an amount; payer agents only answer questions |
 | Code computes every amount and re-checks the policy before anything runs | Yes. Rules in code set amounts; the approved scope is re-checked under a lock before sending |
-| An approval is bound to the exact proposal, comes from someone other than the proposer, and arrives before it expires | Yes. Bound to a scope hash, proposer ≠ approver, and an approval expires after 72 hours. In addition, the approver of an agent-proposed refund cannot also send it |
+| An approval is bound to the exact proposal, comes from someone other than the proposer, and arrives before it expires | Yes. Bound to a scope hash, proposer ≠ approver, and an approval expires after 72 hours by default (an owner can set 1 to 720 hours in Settings → Policy). In addition, the approver of an agent-proposed refund cannot also send it |
 | A few low-risk actions run without approval, within policy limits | Yes. Refunds under the limit with a verified answer; the pause switch stops them |
 | Every write is idempotent; after an unknown outcome, read back before sending again | Yes. One request id per refund or bill payment, looked up before any retry, one live refund per payment |
 | Tenants are resolved on the server, never from model output | Yes. Every request is bound to the signed-in member's organization; each organization has its own database file |

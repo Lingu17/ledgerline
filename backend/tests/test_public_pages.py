@@ -75,6 +75,23 @@ def test_a_missing_file_is_a_real_404_and_app_addresses_still_load(client):
 def test_a_visitor_session_probe_is_200_not_401(app, client):
     from .conftest import new_client
 
-    assert new_client(app).get("/api/auth/session").json() == {"signed_in": False}
-    me = client.get("/api/auth/session").json()
+    visitor = new_client(app).get("/api/auth/session")
+    assert visitor.json() == {"signed_in": False} and visitor.headers["cache-control"] == "no-store"
+    r = client.get("/api/auth/session")
+    me = r.json()
     assert me["signed_in"] is True and me["user"]["email"] == "owner@northbeam.test" and me["csrf_token"]
+    assert r.headers["cache-control"] == "no-store"  # it carries the CSRF token
+
+
+def test_a_deploy_reaches_returning_visitors_and_built_files_are_cached(client):
+    from ledgerline.api.app import FRONTEND_DIST
+
+    if not FRONTEND_DIST.is_dir():
+        pytest.skip("frontend not built")
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert client.get("/some/app/address").headers["cache-control"] == "no-cache"
+    asset = next((FRONTEND_DIST / "assets").glob("index-*.js")).name
+    assert client.get(f"/assets/{asset}").headers["cache-control"] == "public, max-age=31536000, immutable"
+    missing = client.get("/assets/index-missing.js")
+    assert missing.status_code == 404 and "immutable" not in missing.headers.get("cache-control", "")
+    assert client.get("/api/health").headers["cache-control"] == "no-store"

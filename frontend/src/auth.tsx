@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await post("/auth/logout");
     } finally {
       setMe(null);
-      window.location.hash = "/inbox";
+      window.location.hash = "/signin";
     }
   }, [setMe]);
   const switchOrg = useCallback(

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { del, download, get, post, type Ccy, type Customer, type Me, type Policy, type Status } from "../api";
 import { useAuth } from "../auth";
 import { Card, ErrorNote, Field, Loading, Modal, Pill, useAction, useLoad, useToast } from "../components/ui";
-import { majorString, parseMajor, when, actionLabel } from "../format";
+import { majorString, parseMajor, when, actionLabel, actorLabel, whenUtc } from "../format";
 import { hashParam, oauthErrorText, PROVIDER_LABEL, ProviderLogo, startUrl, type ProviderId } from "../components/OAuthButtons";
 
 const CCYS: Ccy[] = ["USD", "EUR", "GBP"];
@@ -40,7 +40,7 @@ export function Settings() {
       {org.data.control_audit.length > 0 && (
         <Card title="Organization changes" pad={false}>
           <div className="table-wrap"><table><tbody>{org.data.control_audit.map((a) => (
-            <tr key={a.id}><td className="small muted nowrap">{when(a.at)}</td><td className="small" title={a.action}>{actionLabel(a.action)}</td><td className="small">{a.actor}</td></tr>
+            <tr key={a.id}><td className="small muted nowrap" title={whenUtc(a.at)}>{when(a.at)}</td><td className="small" title={a.action}>{actionLabel(a.action)}</td><td className="small" title={a.actor}>{actorLabel(a.actor)}</td></tr>
           ))}</tbody></table></div>
         </Card>
       )}
@@ -440,7 +440,7 @@ function AccountCard() {
           </form>
         )}</dd>
         <dt>Email</dt><dd>{me?.user.email}</dd>
-        <dt>Session ends</dt><dd>{when(me?.session_expires_at)} at the latest; after 2 hours idle</dd>
+        <dt>Session ends</dt><dd title={whenUtc(me?.session_expires_at)}>{when(me?.session_expires_at)} at the latest; after 2 hours idle</dd>
       </dl>
       {ids.data && !ids.data.has_password ? (
         <p className="muted small" style={{ margin: 0 }}>You sign in with {ids.data.identities.map((i) => PROVIDER_LABEL[i.provider]).join(" or ")}. This account has no Ledgerline password.</p>

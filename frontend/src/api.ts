@@ -1,5 +1,5 @@
 // Thin client for the Ledgerline backend. The session lives in an HttpOnly cookie the
-// browser sends automatically; this module only holds the CSRF token returned by /auth/me.
+// browser sends automatically; this module only holds the CSRF token returned by /auth/session.
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

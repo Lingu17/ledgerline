@@ -103,6 +103,12 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
                      (time.perf_counter() - started) * 1000,
                      principal.session.org_id if principal else "-", principal.session.email if principal else "-")
             response.headers.setdefault("Cache-Control", "no-store")
+        elif request.url.path.startswith("/assets/") and response.status_code == 200:
+            # Built file names carry a content hash, so a file never changes under the same name.
+            response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+        else:
+            # The page itself: check for a new build on every load, so a deploy reaches returning visitors at once.
+            response.headers.setdefault("Cache-Control", "no-cache")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "same-origin")
         response.headers.setdefault("X-Frame-Options", "DENY")

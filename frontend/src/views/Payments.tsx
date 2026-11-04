@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { get, getPage, post, type Approval, type AuditEvent, type Customer, type Deposit, type Evidence, type Invoice, type Operation, type Plan } from "../api";
 import { Card, Checks, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
-import { CATEGORY_LABEL, SOURCE_LABEL, STATUS_LABEL, money, parseMajor, plainAmount, plainReason, majorString, when, day, actionLabel } from "../format";
+import { CATEGORY_LABEL, SOURCE_LABEL, STATUS_LABEL, money, parseMajor, plainAmount, plainReason, majorString, when, day, actionLabel, whenUtc } from "../format";
 import { go, type Route } from "../App";
 import { describe } from "./Inbox";
 import { useAuth } from "../auth";
@@ -73,7 +73,7 @@ export function Payments({ route }: { route: Route }) {
               </thead>
               <tbody>
                 {list.data.map((d) => (
-                  <tr key={d.id} className={`clickable ${selected === d.id ? "selected" : ""}`} tabIndex={0}
+                  <tr key={d.id} className={`clickable ${selected === d.id ? "selected" : ""}`} tabIndex={0} aria-label={`Open ${d.id} from ${d.payer_name}`}
                     onClick={() => go("payments", { deposit: d.id })}
                     onKeyDown={(e) => e.key === "Enter" && go("payments", { deposit: d.id })}>
                     <td className="nowrap"><div>{day(d.received_at)}</div><div className="secondary mono">{d.id}</div></td>
@@ -177,7 +177,8 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
             <span className="muted small">Reference: <span className="mono">{x.reference || "none"}</span></span>
           </div>
           <div className="notice small"><b>Next:</b> {nextStep(x, bank.data?.org?.kind === "sample")}</div>
-          {x.source === "manual_import" && <div className="notice warn">Manually recorded by an operator. Not verified against a bank statement feed.</div>}
+          {(x.source === "manual_import" || x.source === "csv_import") && <div className="notice warn">
+            {x.source === "csv_import" ? "Imported from a CSV file by a person." : "Typed in by a person."} Not verified against a bank statement feed.</div>}
           {x.escalation_reason && x.status === "escalated" && <div className="notice risk"><b>Why this needs review:</b> {plainReason(x.escalation_reason)}</div>}
 
           <DecisionPath x={x} />
@@ -194,7 +195,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
 
           {x.category === "wrong_currency" && x.status === "escalated" && <WrongCurrency id={x.id} canAct={can("operator")} run={run} busy={busy} />}
 
-          <DepositActions x={x} run={run} busy={busy} />
+          <DepositActions key={x.id} x={x} run={run} busy={busy} />
 
           <section>
             <h3 className="section-title">Decision history</h3>
@@ -263,7 +264,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
               <tbody>
                 {x.audit.map((a) => (
                   <tr key={a.id}>
-                    <td className="nowrap small muted">{when(a.at)}<div title={a.action}>{actionLabel(a.action)}</div></td>
+                    <td className="nowrap small muted" title={whenUtc(a.at)}>{when(a.at)}<div title={a.action}>{actionLabel(a.action)}</div></td>
                     <td className="small">{describe(a)}</td>
                   </tr>
                 ))}
@@ -365,6 +366,19 @@ export function AgentSource({ transport }: { transport: string | null }) {
     : <Pill status="muted" label="Simulated agent" />;
 }
 
+/** A remittance reading's proposal in words; the tool call stays in a tooltip. */
+function proposalText(p: { tool: string; input?: Record<string, unknown> }): string {
+  const i = p.input ?? {};
+  switch (p.tool) {
+    case "propose_invoice_match": return `apply it to ${i.invoice_id}${i.paid_on_behalf_of ? `, paid for ${i.paid_on_behalf_of}` : ""}`;
+    case "propose_customer_credit": return `hold it as credit${i.for_invoice_id ? ` towards ${i.for_invoice_id}` : ""}`;
+    case "propose_refund": return "return it to the sender";
+    case "propose_conversion": return `convert it to settle ${i.for_invoice_id}`;
+    case "escalate": return "a person should look at it";
+    default: return p.tool.replace(/^propose_/, "").replace(/_/g, " ");
+  }
+}
+
 export function EvidenceBlock({ e }: { e: Evidence }) {
   const claim = e.envelope?.claim;
   const proposal = e.envelope?.proposal;
@@ -393,7 +407,8 @@ export function EvidenceBlock({ e }: { e: Evidence }) {
           <>
             <dl className="kv">
               <dt>Mode</dt><dd>{e.envelope.mode}</dd>
-              <dt>Proposes</dt><dd className="mono">{proposal.tool} {JSON.stringify(proposal.input)}</dd>
+              <dt>Suggests</dt><dd title={`${proposal.tool} ${JSON.stringify(proposal.input)}`}>{proposalText(proposal)}</dd>
+              {(proposal.input?.rationale || proposal.input?.reason) && <><dt>Because</dt><dd>{String(proposal.input.rationale ?? proposal.input.reason)}</dd></>}
             </dl>
             <details><summary className="small">Source text</summary><pre className="mono" style={{ whiteSpace: "pre-wrap" }}>{e.envelope.document}</pre></details>
           </>
@@ -442,11 +457,22 @@ function DepositActions({ x, run, busy }: { x: DepositDetail; run: ReturnType<ty
   );
 }
 
+/** The latest remittance reading, when it points somewhere a person can apply. A suggestion only: it fills the form. */
+function readerSuggestion(x: DepositDetail): { evidence: string; action: "allocate" | "credit"; invoice: string } | null {
+  const e = [...x.evidence].reverse().find((v) => v.verdict === "advisory" && v.envelope?.proposal);
+  const p = e?.envelope.proposal;
+  if (!e || !p) return null;
+  if (p.tool === "propose_invoice_match" && p.input?.invoice_id) return { evidence: e.id, action: "allocate", invoice: String(p.input.invoice_id).toUpperCase() };
+  if (p.tool === "propose_customer_credit") return { evidence: e.id, action: "credit", invoice: "" };
+  return null;
+}
+
 function ResolveForm({ x, onDone }: { x: DepositDetail; onDone: () => void }) {
   const invoices = useLoad(() => get<Invoice[]>("/invoices"), []);
   const customers = useLoad(() => get<Customer[]>("/customers"), []);
   const { run, busy } = useAction();
-  const [action, setAction] = useState<"allocate" | "credit">("allocate");
+  const suggestion = useMemo(() => readerSuggestion(x), [x]);
+  const [action, setAction] = useState<"allocate" | "credit">(suggestion?.action ?? "allocate");
   const [customer, setCustomer] = useState(x.customer_id ?? "");
   const [invoice, setInvoice] = useState("");
   const [amount, setAmount] = useState(majorString(x.buckets.unapplied));
@@ -456,6 +482,21 @@ function ResolveForm({ x, onDone }: { x: DepositDetail; onDone: () => void }) {
     () => (invoices.data ?? []).filter((i) => i.customer_id === customer && i.currency === x.currency && i.status === "open" && i.remaining_minor > 0),
     [invoices.data, customer, x.currency],
   );
+  // Fill in what the remittance suggested, once, if it is one of this payer's open invoices in this currency.
+  const [suggested, setSuggested] = useState<"" | "filled" | string>("");
+  useEffect(() => {
+    if (suggested || !suggestion || !invoices.data) return;
+    if (suggestion.action === "credit") return setSuggested("filled");
+    const inv = invoices.data.find((i) => i.id === suggestion.invoice);
+    if (!inv) return setSuggested("which is not one of your invoices");
+    if (inv.currency !== x.currency) return setSuggested(`which is in ${inv.currency}, not ${x.currency}`);
+    if (inv.status !== "open" || inv.remaining_minor <= 0) return setSuggested("which has nothing left to pay");
+    if (x.customer_id && inv.customer_id !== x.customer_id) return setSuggested(`which belongs to ${inv.customer_name ?? inv.customer_id}, not this payer`);
+    if (!x.customer_id) setCustomer(inv.customer_id);
+    setInvoice(inv.id);
+    setAmount(majorString(Math.min(x.buckets.unapplied, inv.remaining_minor)));
+    setSuggested("filled");
+  }, [suggestion, invoices.data, suggested, x]);
   // Nothing to apply to: offer only what can succeed instead of an empty invoice list.
   const noInvoices = !!customer && !!invoices.data && eligible.length === 0;
   useEffect(() => {
@@ -481,10 +522,15 @@ function ResolveForm({ x, onDone }: { x: DepositDetail; onDone: () => void }) {
           <button type="button" aria-pressed={action === "credit"} onClick={() => setAction("credit")}>Hold as credit</button>
         </div>
       </div>
+      {suggestion && suggested === "filled" && <div className="notice small" style={{ marginBottom: 10 }}>
+        Filled in from the remittance reading ({suggestion.evidence}): {suggestion.action === "credit" ? "hold as the customer's credit" : `apply to ${suggestion.invoice}`}.
+        Check it, add your note, and record the decision. Nothing happens until you do.</div>}
+      {suggestion && suggested && suggested !== "filled" && <div className="notice warn small" style={{ marginBottom: 10 }}>
+        The remittance reading ({suggestion.evidence}) names {suggestion.invoice}, {suggested}. Choose yourself.</div>}
       {noInvoices && <p className="small muted" style={{ margin: "0 0 10px" }}>This customer has no open {x.currency} invoices, so the money can be held as their credit (or returned with <i>Propose return to sender</i>).</p>}
       <div className="form-grid">
         <Field id="rs-cust" label="Paying customer" hint={x.customer_id ? "Identified from the remitter name; cannot be changed" : "The remitter is unknown: identify who paid"}>
-          <select id="rs-cust" value={customer} disabled={!!x.customer_id} onChange={(e) => setCustomer(e.target.value)}>
+          <select id="rs-cust" value={customer} disabled={!!x.customer_id} onChange={(e) => { setCustomer(e.target.value); setInvoice(""); }}>
             <option value="">Select…</option>
             {customers.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -519,7 +565,7 @@ function ReadRemittance({ x, onDone }: { x: DepositDetail; onDone: () => void })
   const [pdf, setPdf] = useState<{ name: string; data: string } | null>(null);
   const [pdfErr, setPdfErr] = useState<string | null>(null);
   const submit = async (body: Record<string, string>) => {
-    const r = await run("read", () => post(`/deposits/${x.id}/read-remittance`, body), (res: any) => `Read. It suggests: ${String(res.proposal.tool).replace(/^propose_/, "").replace(/_/g, " ")}. Decide under Resolve.`);
+    const r = await run("read", () => post(`/deposits/${x.id}/read-remittance`, body), (res: any) => `Read. It suggests: ${proposalText(res.proposal)}.${x.status === "escalated" ? " Resolve is filled in with it for you to check." : ""}`);
     if (r) onDone();
   };
   const pick = (f: File | undefined) => {

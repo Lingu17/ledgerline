@@ -304,6 +304,11 @@ def test_csv_import_is_idempotent_per_row(client):
     r = client.post("/api/payments/import", json={"csv": csv}).json()
     assert (r["created"], r["duplicates"], r["errors"]) == (1, 1, 1)
     assert client.post("/api/payments/import", json={"csv": "a,b\n1,2"}).status_code == 422
+    # A line from a file says so; a payment typed in says that instead. Neither is bank-verified.
+    imported = client.get(f"/api/deposits/{r['results'][0]['deposit_id']}").json()
+    typed = client.get("/api/deposits/" + client.post("/api/payments", json={
+        "external_ref": "B-9", "currency": "USD", "amount": "10.00", "payer_name": "ACME ROBOTICS INC"}).json()["deposit_id"]).json()
+    assert (imported["source"], typed["source"]) == ("csv_import", "manual_import")
 
 
 def test_customer_edit_invalidates_bound_approval(client):
