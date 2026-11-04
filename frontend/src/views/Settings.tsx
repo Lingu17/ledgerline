@@ -187,7 +187,7 @@ function IntegrationsCard({ st, org }: { st: Status; org: OrgSettings }) {
             <tr>
               <td><b>Payer agents</b><div className="secondary">{st.payer_agents.label}</div></td>
               <td><Pill status="muted" label={st.payer_agents.transport} /></td>
-              <td className="small">explain_payment is called over MCP. In this version the customer agents run on this server with their own signing keys; a customer's own hosted agent cannot be connected yet.</td>
+              <td className="small">Ledgerline asks a payer's agent what a payment was for, and uses a signed answer only if it passes three checks. Practice companies ask built-in simulated agents. An owner can connect a customer's own agent under Customers → Payer agent…; no outside company runs one yet.</td>
             </tr>
             <tr>
               <td><b>Webhooks</b><div className="secondary">This organization's endpoint</div></td>

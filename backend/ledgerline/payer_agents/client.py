@@ -47,6 +47,7 @@ ROUND_BUDGET = 30.0
 BACKOFF_AFTER, BACKOFF_SECONDS = 3, 600
 _failures: dict[tuple[str, str], tuple[int, float]] = {}  # keyed by (organization, URL): one cannot back off another
 _failures_lock = threading.Lock()
+_STDIO_SLOTS = threading.BoundedSemaphore(3)
 
 
 def _backed_off(url: tuple[str, str]) -> float | None:
@@ -90,7 +91,10 @@ def ask_agents(ctx, questions: list[dict[str, Any]], simulated=None) -> list[tup
             by_url.setdefault(urls[q["customer_id"]], []).append(i)
     local = [i for i, q in enumerate(questions) if q["customer_id"] not in urls]
     if local:
-        answers, label = simulated(key_location(ctx.settings), [questions[i] for i in local], ctx.settings.payer_mcp_transport)
+        # Practice companies ask the simulated agents in-process over the same MCP protocol: a process per question
+        # capped the server at about 30 judges at once. Real companies keep the separate process.
+        transport = "memory" if (ctx.org or {}).get("kind") == "sample" else ctx.settings.payer_mcp_transport
+        answers, label = simulated(key_location(ctx.settings), [questions[i] for i in local], transport)
         for i, a in zip(local, answers):
             out[i] = (questions[i], a, label, None)
     started = time.monotonic()
@@ -146,4 +150,6 @@ def explain_payments(
             env, args = None, ["-m", "ledgerline.payer_agents.server", "--data-dir", str(data_dir)]
         target = StdioServerParameters(command=sys.executable, args=args, cwd=str(BACKEND_DIR), env=env)
         label = "mcp/stdio"
+        with _STDIO_SLOTS:  # each call starts a process (about 1 s of CPU and 50 MB): at most three at once
+            return anyio.run(_call_all, target, requests), label
     return anyio.run(_call_all, target, requests), label

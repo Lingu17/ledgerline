@@ -214,3 +214,22 @@ def test_multi_use_provider_quote_is_accepted():
     fake.quote_usage = "MULTI_USE"
     q = _adapter(fake).create_quote(sell_currency="USD", buy_currency="EUR", buy_amount_minor=451_500)
     assert q.provider_quote_id == "q1" and q.buy_amount_minor == 451_500
+
+
+def test_a_practice_company_asks_in_process_even_when_the_server_uses_stdio(tmp_path):
+    """A separate process per question capped the server at about 30 judges at once; practice companies ask in-process."""
+    from fastapi.testclient import TestClient
+
+    from ledgerline.api.app import create_app
+    from ledgerline.config import load_settings
+
+    from .conftest import signup
+
+    app = create_app(load_settings({"LEDGERLINE_DATA_DIR": str(tmp_path), "LEDGERLINE_PAYER_MCP_TRANSPORT": "stdio",
+                                    "GOOGLE_CLIENT_ID": "", "APPLE_CLIENT_ID": "", "ANTHROPIC_API_KEY": ""}))
+    c = TestClient(app)
+    signup(c, email="judge@practice.test", start_with="sample")
+    c.post("/api/demo/step", json={"step": "deposits"})
+    assert c.post("/api/deposits/DEP-1005/ask-agent").json()["verification"]["verdict"] == "verified"
+    ev = next(r for r in c.get("/api/evidence").json() if r["deposit"]["id"] == "DEP-1005")["evidence"][-1]
+    assert ev["transport"] == "mcp/in-memory"
