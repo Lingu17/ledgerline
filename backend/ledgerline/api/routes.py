@@ -392,9 +392,13 @@ def opening_balance(request: Request, body: dict[str, Any], owner: str = Depends
     return workspace.set_opening_balance(ctx_of(request), body, owner)
 
 
+class ReturnBody(BaseModel):
+    note: str = Field("", max_length=200)
+
+
 @router.post("/deposits/{deposit_id}/return-to-sender")
-def return_to_sender(request: Request, deposit_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
-    return _loads(payouts.operator_return_to_sender(ctx_of(request), deposit_id, operator), "scope")
+def return_to_sender(request: Request, deposit_id: str, operator: str = Depends(require_operator), body: ReturnBody | None = None) -> dict[str, Any]:
+    return _loads(payouts.operator_return_to_sender(ctx_of(request), deposit_id, operator, note=body.note if body else None), "scope")
 
 
 @router.get("/invoices", dependencies=read)

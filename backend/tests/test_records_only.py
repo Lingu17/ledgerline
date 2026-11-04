@@ -62,3 +62,18 @@ def test_bill_payments_and_conversions_are_refused(real, app):
 
     with pytest.raises(TreasuryError, match="no bank is connected"):
         treasury.execute_conversion(app.state.orgs.get(c.org_id), "Q-NOPE", "owner@records.test")
+
+
+def test_proposing_a_return_names_what_and_whom_and_moves_the_status(app):
+    c = new_client(app)
+    signup(c, email="owner@return.test", org="Return Co", start_with="empty")
+    c.post("/api/customers", json={"name": "Orchard Tea Co", "country": "GB", "payer_names": ["ORCHARD TEA"],
+                                   "refund_beneficiary": "Orchard Tea Co - GB29 NWBK 6016 1331 9268 19"})
+    dep = c.post("/api/payments", json={"external_ref": "S-9", "currency": "GBP", "amount": "40.00", "payer_name": "ORCHARD TEA",
+                                        "reference": ""}).json()["deposit_id"]
+    ap = c.post(f"/api/deposits/{dep}/return-to-sender", json={"note": "paid twice; confirmed by phone"}).json()
+    assert ap["reason"] == "return payment with no reference to Orchard Tea Co: paid twice; confirmed by phone"
+    assert c.get(f"/api/deposits/{dep}").json()["status"] == "refund_awaiting_approval"
+    second = _invite_and_join(c, app, "second@return.test", "operator")
+    assert second.post(f"/api/approvals/{ap['id']}/reject", json={"scope_hash": ap["scope_hash"]}).status_code == 200
+    assert c.get(f"/api/deposits/{dep}").json()["status"] == "escalated"  # rejected: back with a person

@@ -132,17 +132,27 @@ def create_refund_approval(conn: sqlite3.Connection, ctx: AppContext, deposit_id
     return db.row(conn, "SELECT * FROM approvals WHERE id = ?", (approval_id,))
 
 
-def operator_return_to_sender(ctx: AppContext, deposit_id: str, actor: str) -> dict[str, Any]:
+_RETURN_WHAT = {"apparent_duplicate": "suspected duplicate", "overpayment": "overpayment", "unidentified_payer": "unidentified funds",
+                "unknown_reference": "payment with no reference", "unknown_invoice": "payment for an unknown invoice",
+                "wrong_currency": "wrong-currency payment", "reference_conflict": "payment naming another customer's invoice"}
+
+
+def operator_return_to_sender(ctx: AppContext, deposit_id: str, actor: str, note: str | None = None) -> dict[str, Any]:
     """Human decision on an escalated deposit: propose returning it to the remitter (still needs approval)."""
     with ctx.conn() as conn, db.transaction(conn):
         d = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (deposit_id,))
         if d is None or d["status"] != ESCALATED:
             raise PayoutError("only escalated deposits can be returned to sender")
-        a = create_refund_approval(conn, ctx, deposit_id, amount_minor=d["amount_minor"],
-                                   evidence_id=None, reason="operator: return unidentified funds to sender", actor=actor)
+        who = db.row(conn, "SELECT name FROM customers WHERE id = ?", (d["customer_id"],)) if d["customer_id"] else None
+        reason = f"return {_RETURN_WHAT.get(d['category'], 'payment')} to {who['name'] if who else d['payer_name']}"
+        if note and note.strip():
+            reason += f": {note.strip()[:200]}"
+        a = create_refund_approval(conn, ctx, deposit_id, amount_minor=d["amount_minor"], evidence_id=None, reason=reason, actor=actor)
         # Operator-initiated refunds always need an explicit approval, never the auto limit.
         if a["status"] == "approved" and a["decided_by"] == "policy:auto_limit":
             conn.execute("UPDATE approvals SET status='pending', decided_by=NULL, decided_at=NULL WHERE id = ?", (a["id"],))
+        # The payment now waits on that approval, not on a decision: say so (a rejection puts it back to escalated).
+        conn.execute("UPDATE deposits SET status = ? WHERE id = ? AND status = ?", (REFUND_APPROVAL, deposit_id, ESCALATED))
         return db.row(conn, "SELECT * FROM approvals WHERE id = ?", (a["id"],))
 
 

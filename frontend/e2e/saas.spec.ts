@@ -466,6 +466,21 @@ test("account basics: a reset link from an owner, a new name, and deleting the c
   await expect(page.getByText(`${org} was deleted`)).toBeVisible();
 });
 
+test("proposing a return asks why and shows what goes back, then waits for approval", async ({ page }) => {
+  await signUp(page, { org: `Return ${uniq()}`, email: `ret-${uniq()}@e2e.test`, sample: true });
+  await page.goto("/#/payments?deposit=DEP-1004");
+  await page.getByRole("button", { name: /Ask payer's agent/ }).first().click();
+  const drawer = page.locator(".drawer");
+  await drawer.getByRole("button", { name: "Propose return to sender…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Propose returning this payment" });
+  await expect(dialog.getByText(/Return EUR 1,750\.00 from/)).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Propose return" })).toBeDisabled();
+  await dialog.getByLabel("Why return it?").fill("Claimed another customer's invoice; customer asked for it back");
+  await dialog.getByRole("button", { name: "Propose return" }).click();
+  await expect(page.getByText("Return proposed; it is waiting on the Approvals page")).toBeVisible();
+  await expect(drawer.getByText("Refund for approval").first()).toBeVisible();
+});
+
 test("own agent: an owner points a practice customer at its own payer agent, and the answer says where it came from", async ({ page }) => {
   // The reference agent runs as its own process (see playwright.config.ts); read its public key from its own key file.
   const py = resolve(process.cwd(), "..", "backend", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");

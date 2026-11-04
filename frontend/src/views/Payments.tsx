@@ -403,7 +403,7 @@ export function EvidenceBlock({ e }: { e: Evidence }) {
 }
 
 function DepositActions({ x, run, busy }: { x: DepositDetail; run: ReturnType<typeof useAction>["run"]; busy: string | null }) {
-  const [panel, setPanel] = useState<"" | "resolve" | "read">("");
+  const [panel, setPanel] = useState<"" | "resolve" | "read" | "return">("");
   const { can } = useAuth();
   if (!can("operator")) return null;
   if (x.status === "awaiting_evidence") {
@@ -424,14 +424,15 @@ function DepositActions({ x, run, busy }: { x: DepositDetail; run: ReturnType<ty
             <button className="btn primary" aria-expanded={panel === "resolve"} onClick={() => setPanel(panel === "resolve" ? "" : "resolve")}>Resolve…</button>
             <button className="btn danger" disabled={!!busy || !x.customer_id}
               title={x.customer_id ? "Creates a refund approval; nothing is sent until a person approves" : "Identify the payer first"}
-              onClick={() => run("rts", () => post(`/deposits/${x.id}/return-to-sender`), "Return proposed; it is waiting on the Approvals page")}>
-              Propose return to sender
+              onClick={() => setPanel("return")}>
+              Propose return to sender…
             </button>
           </>
         )}
         <button className="btn" aria-expanded={panel === "read"} onClick={() => setPanel(panel === "read" ? "" : "read")}>Read remittance…</button>
       </div>
       {panel === "resolve" && <ResolveForm x={x} onDone={() => setPanel("")} />}
+      {panel === "return" && <ProposeReturn x={x} onClose={() => setPanel("")} />}
       {panel === "read" && <ReadRemittance x={x} onDone={() => setPanel("")} />}
     </div>
   );
@@ -716,5 +717,29 @@ function WhyThisPlan({ id, planVersion }: { id: string; planVersion: number }) {
         <div className="muted small">A plain-language explanation of the plan above, on request. Advice only: the decision was made by rules in code.</div>
       )}
     </section>
+  );
+}
+
+/** Proposing a refund is a money decision: show what would go back, to whom, and ask why. Nothing is sent here. */
+export function ProposeReturn({ x, onClose }: { x: DepositDetail; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const [note, setNote] = useState("");
+  return (
+    <Modal title="Propose returning this payment" onClose={onClose}>
+      <p style={{ marginTop: 0 }}>
+        Return <b>{money(x.amount_minor, x.currency)}</b> from {x.payer_name} to the refund account on their customer record.
+        This only asks for approval: a second person approves the exact amount and account on the Approvals page, and nothing is
+        sent before that.
+      </p>
+      <Field id="rts-note" label="Why return it?" hint="Shown to the approver and kept in the audit trail">
+        <input id="rts-note" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. paid twice; confirmed with the customer" />
+      </Field>
+      <div className="form-actions">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn danger solid" disabled={!!busy || note.trim().length < 3} onClick={async () => {
+          if (await run("rts", () => post(`/deposits/${x.id}/return-to-sender`, { note: note.trim() }), "Return proposed; it is waiting on the Approvals page")) onClose();
+        }}>Propose return</button>
+      </div>
+    </Modal>
   );
 }
