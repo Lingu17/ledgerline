@@ -14,7 +14,7 @@ import { Customers } from "./views/Customers";
 import { Settings } from "./views/Settings";
 import { Team } from "./views/Team";
 import { Walkthrough } from "./views/Walkthrough";
-import { AcceptInvite, NoOrganization, SignIn, friendly } from "./views/Auth";
+import { AcceptInvite, NoOrganization, ResetPassword, SignIn, friendly } from "./views/Auth";
 import { Landing } from "./views/Landing";
 import { Architecture } from "./views/Architecture";
 import { ShowMe } from "./components/ShowMe";
@@ -246,6 +246,7 @@ function Gate() {
   const { me, loading } = useAuth();
   const route = useRoute();
   if (route.page === "invite" && route.params.get("token")) return <AcceptInvite token={route.params.get("token")!} />;
+  if (route.page === "reset" && route.params.get("token")) return <ResetPassword token={route.params.get("token")!} />;
   if (loading) return <div className="auth-page"><div className="skeleton" style={{ width: 240 }} aria-label="Loading" /></div>;
   if (route.page === "home") return <Landing />;
   if (route.page === "architecture") return <Architecture />;

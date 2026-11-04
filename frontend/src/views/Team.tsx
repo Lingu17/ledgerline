@@ -17,6 +17,7 @@ export function Team() {
   const { run, busy } = useAction();
   const [inviting, setInviting] = useState(false);
   const [removing, setRemoving] = useState<TeamData["members"][number] | null>(null);
+  const [resetFor, setResetFor] = useState<TeamData["members"][number] | null>(null);
   const owner = can("owner");
   if (t.error) return <ErrorNote error={t.error} onRetry={t.reload} />;
   if (!t.data) return <div className="card"><Loading /></div>;
@@ -40,7 +41,10 @@ export function Team() {
                     ) : ROLE_LABEL[m.role]}
                   </td>
                   <td className="hide-sm small">{day(m.created_at)}</td>
-                  <td className="num">{owner && m.user_id !== d.you && <button className="btn small danger" onClick={() => setRemoving(m)}>Remove</button>}</td>
+                  <td className="num nowrap">{owner && m.user_id !== d.you && <>
+                    <button className="btn small" onClick={() => setResetFor(m)}>Reset link…</button>{" "}
+                    <button className="btn small danger" onClick={() => setRemoving(m)}>Remove</button>
+                  </>}</td>
                 </tr>
               ))}
             </tbody>
@@ -74,6 +78,7 @@ export function Team() {
       </Card>
 
       {inviting && <InviteModal onClose={() => setInviting(false)} />}
+      {resetFor && <ResetLinkModal member={resetFor} onClose={() => setResetFor(null)} />}
       {removing && (
         <Modal title="Remove member" onClose={() => setRemoving(null)}>
           <p style={{ marginTop: 0 }}>{removing.name} ({removing.email}) will lose access to this organization immediately. Their past actions stay in the audit trail.</p>
@@ -123,6 +128,42 @@ function InviteModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={!!busy}>Create invitation</button></div>
         </form>
+      )}
+    </Modal>
+  );
+}
+
+/** Ledgerline sends no email, so a member who forgot their password gets a one-hour link from an Owner, shown once. */
+function ResetLinkModal({ member, onClose }: { member: TeamData["members"][number]; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const [link, setLink] = useState<{ url: string; expires_at: string } | null>(null);
+  return (
+    <Modal title={`Reset link for ${member.name}`} onClose={onClose}>
+      {!link ? (
+        <>
+          <p style={{ marginTop: 0 }}>
+            This makes a single-use link, valid for one hour, that lets {member.email} choose a new password. Every place they are
+            signed in is signed out. Give it to them directly; anyone holding it can set the password. It is recorded in the
+            organization's changes.
+          </p>
+          <div className="form-actions">
+            <button className="btn" onClick={onClose}>Cancel</button>
+            <button className="btn primary" disabled={!!busy} onClick={async () => {
+              const r = await run("reset", () => post<{ path: string; expires_at: string }>(`/team/members/${member.user_id}/reset-link`), "Reset link created");
+              if (r) setLink({ url: `${window.location.origin}/${r.path}`, expires_at: r.expires_at });
+            }}>Create link</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <Field id="reset-url" label="Reset link" hint={`Valid until ${when(link.expires_at)}. It is shown only now.`}>
+            <input id="reset-url" readOnly value={link.url} onFocus={(e) => e.currentTarget.select()} />
+          </Field>
+          <div className="form-actions">
+            <button className="btn" onClick={() => navigator.clipboard?.writeText(link.url)}>Copy</button>
+            <button className="btn primary" onClick={onClose}>Done</button>
+          </div>
+        </>
       )}
     </Modal>
   );

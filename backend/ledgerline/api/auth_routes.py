@@ -116,6 +116,77 @@ class PasswordBody(BaseModel):
     new_password: str = Field(max_length=256)
 
 
+class NameBody(BaseModel):
+    name: str = Field(max_length=80)
+
+
+@router.put("/auth/me")
+def rename(request: Request, body: NameBody) -> dict[str, Any]:
+    info, token = require_session(request, mutating=True)
+    _control(request).rename_user(info.user_id, body.name)
+    return _me(request, token)
+
+
+class ResetBody(BaseModel):
+    password: str = Field(max_length=256)
+
+
+@router.get("/auth/reset/{token}")
+def reset_info(request: Request, token: str) -> dict[str, Any]:
+    return _control(request).reset_info(token)
+
+
+@router.post("/auth/reset/{token}")
+def reset_password(request: Request, response: Response, token: str, body: ResetBody) -> dict[str, Any]:
+    """Set a new password with an Owner's reset link. Every other session of that account is signed out."""
+    _check_origin(request)
+    session_token = _control(request).complete_reset(token, body.password, user_agent=_ua(request))
+    set_session_cookie(request, response, session_token)
+    return _me(request, session_token)
+
+
+class ConfirmBody(BaseModel):
+    confirm: str = Field(max_length=254)
+
+
+@router.post("/auth/leave-organization")
+def leave_org(request: Request, p: Principal = Depends(require_role("viewer"))) -> dict[str, Any]:
+    _control(request).leave_org(p.session.org_id, p.session.user_id)
+    return {"left": True}
+
+
+@router.post("/auth/delete-account")
+def delete_account(request: Request, response: Response, body: ConfirmBody) -> dict[str, Any]:
+    info, _ = require_session(request, mutating=True)
+    _control(request).delete_account(info.user_id, body.confirm)
+    clear_session_cookie(request, response)
+    return {"deleted": True}
+
+
+@router.post("/organization/delete")
+def delete_org(request: Request, body: ConfirmBody, p: Principal = Depends(require_role("owner"))) -> dict[str, Any]:
+    """Delete this organization and all its data, once nothing is being sent. Practice or real alike; no undo."""
+    from ..tenancy import delete_org_storage
+
+    with p.ctx.conn() as conn:
+        busy = conn.execute("SELECT COUNT(*) FROM operations WHERE status IN ('processing','sent')").fetchone()[0] + \
+            conn.execute("SELECT COUNT(*) FROM bill_payments WHERE status IN ('processing','sent')").fetchone()[0]
+    if busy:
+        raise HTTPException(409, "money is still being sent from this organization; wait until every transfer is paid or failed")
+    org_id = p.session.org_id
+    gone = _control(request).delete_org(org_id, p.session.email, body.confirm)
+    request.app.state.orgs.invalidate(org_id)
+    delete_org_storage(request.app.state.settings, org_id)
+    return {"deleted": gone}
+
+
+@router.post("/team/members/{user_id}/reset-link")
+def reset_link(request: Request, user_id: str, p: Principal = Depends(require_role("owner"))) -> dict[str, Any]:
+    """There is no email from this server, so an Owner hands the member a one-hour link. It is shown once."""
+    token, expires = _control(request).issue_reset(p.session.org_id, p.session.user_id, user_id)
+    return {"path": f"#/reset?token={token}", "expires_at": expires}
+
+
 @router.post("/auth/change-password")
 def change_password(request: Request, body: PasswordBody) -> dict[str, Any]:
     info, token = require_session(request, mutating=True)

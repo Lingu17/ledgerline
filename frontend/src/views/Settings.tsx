@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { del, get, post, type Ccy, type Customer, type Policy, type Status } from "../api";
+import { del, get, post, type Ccy, type Customer, type Me, type Policy, type Status } from "../api";
 import { useAuth } from "../auth";
-import { Card, ErrorNote, Field, Loading, Pill, useAction, useLoad, useToast } from "../components/ui";
+import { Card, ErrorNote, Field, Loading, Modal, Pill, useAction, useLoad, useToast } from "../components/ui";
 import { majorString, parseMajor, when } from "../format";
 import { hashParam, oauthErrorText, PROVIDER_LABEL, ProviderLogo, startUrl, type ProviderId } from "../components/OAuthButtons";
 
@@ -36,6 +36,7 @@ export function Settings() {
           <table><tbody>{s.data.demo_fx_rates.map((r) => <tr key={r.sell + r.buy}><td>{r.sell} → {r.buy}</td><td className="num">{r.rate}</td></tr>)}</tbody></table>
         </Card>}
       </div>
+      <LeaveOrDelete org={org.data} />
       {org.data.control_audit.length > 0 && (
         <Card title="Organization changes" pad={false}>
           <div className="table-wrap"><table><tbody>{org.data.control_audit.map((a) => (
@@ -398,15 +399,26 @@ function PolicyEditor({ policy }: { policy: Policy }) {
 }
 
 function AccountCard() {
-  const { me } = useAuth();
+  const { me, setMe } = useAuth();
   const { run, busy } = useAction();
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
+  const [name, setName] = useState<string | null>(null);
   const ids = useLoad(() => get<Identities>("/auth/identities"), []);
   return (
     <Card title="Your account">
       <dl className="kv small" style={{ marginBottom: 12 }}>
-        <dt>Name</dt><dd>{me?.user.name}</dd>
+        <dt>Name</dt><dd>{name === null ? <>{me?.user.name} <button className="btn small ghost" onClick={() => setName(me?.user.name ?? "")}>Change</button></> : (
+          <form className="row" style={{ gap: 6 }} onSubmit={async (e) => {
+            e.preventDefault();
+            const r = await run("name", () => post<Me>("/auth/me", { name }, "PUT"), "Name changed");
+            if (r) { setMe(r); setName(null); }
+          }}>
+            <input aria-label="Your name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} style={{ maxWidth: 220 }} />
+            <button className="btn small" disabled={!!busy || !name.trim()}>Save name</button>
+            <button type="button" className="btn small ghost" onClick={() => setName(null)}>Cancel</button>
+          </form>
+        )}</dd>
         <dt>Email</dt><dd>{me?.user.email}</dd>
         <dt>Session ends</dt><dd>{when(me?.session_expires_at)} at the latest; after 2 hours idle</dd>
       </dl>
@@ -471,6 +483,58 @@ function SignInMethods() {
           );
         })}
       </ul>
+    </Card>
+  );
+}
+
+/** Leaving, deleting the organization (Owner, typed name) and deleting one's own account (typed email). */
+function LeaveOrDelete({ org }: { org: OrgSettings }) {
+  const { me, can, setMe } = useAuth();
+  const { run, busy } = useAction();
+  const [dialog, setDialog] = useState<"org" | "account" | null>(null);
+  const [typed, setTyped] = useState("");
+  const refreshMe = async () => setMe(await get<Me>("/auth/me"));
+  const close = () => { setDialog(null); setTyped(""); };
+  return (
+    <Card title="Leave or delete">
+      <div className="stack" style={{ gap: 12 }}>
+        <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span className="small">Leave <b>{org.name}</b>. You lose access at once; your past actions stay in its records.</span>
+          <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("leave", () => post("/auth/leave-organization"), `You left ${org.name}`)) await refreshMe(); }}>Leave organization</button>
+        </div>
+        {can("owner") && (
+          <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <span className="small">Delete <b>{org.name}</b> and all its data for every member. This cannot be undone; backup copies age out within 30 days.</span>
+            <button className="btn small danger" onClick={() => setDialog("org")}>Delete organization…</button>
+          </div>
+        )}
+        <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span className="small">Delete your account once you belong to no organization. Audit logs keep the email that acted; they cannot be edited.</span>
+          <button className="btn small danger" onClick={() => setDialog("account")}>Delete my account…</button>
+        </div>
+      </div>
+      {dialog && (
+        <Modal title={dialog === "org" ? `Delete ${org.name}` : "Delete your account"} onClose={close}>
+          <p style={{ marginTop: 0 }}>
+            {dialog === "org"
+              ? <>Every customer, invoice, payment, approval and audit entry of <b>{org.name}</b> is deleted for all its members. Type its name to confirm.</>
+              : <>Your name, email, password and sign-in links are erased and you are signed out. Type your email to confirm.</>}
+          </p>
+          <Field id="confirm-delete" label={dialog === "org" ? "Organization name" : "Your email"}>
+            <input id="confirm-delete" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+          </Field>
+          <div className="form-actions">
+            <button className="btn" onClick={close}>Cancel</button>
+            <button className="btn danger solid" disabled={!!busy || typed.trim() !== (dialog === "org" ? org.name : me?.user.email)} onClick={async () => {
+              if (dialog === "org") {
+                if (await run("del-org", () => post("/organization/delete", { confirm: typed }), `${org.name} was deleted`)) { close(); await refreshMe(); }
+              } else if (await run("del-me", () => post("/auth/delete-account", { confirm: typed }), "Your account was deleted")) {
+                close(); setMe(null); window.location.hash = "/home";
+              }
+            }}>Delete</button>
+          </div>
+        </Modal>
+      )}
     </Card>
   );
 }

@@ -77,6 +77,26 @@ def build_org_context(settings: Settings, org: dict[str, Any], clock: Clock) -> 
     return ctx
 
 
+def delete_org_storage(settings: Settings, org_id: str) -> None:
+    """Remove an organization's books, simulated bank and payer-agent keys for good."""
+    if settings.postgres:
+        from .db import connect
+        from .pg import schema_for
+
+        conn = connect(settings.pg_target("control"))
+        try:
+            for kind in ("t", "b"):
+                conn.execute(f'DROP SCHEMA IF EXISTS "{schema_for(settings.pg_schema_prefix, kind, org_id)}" CASCADE')
+        finally:
+            conn.close()
+        return
+    import shutil
+
+    path = org_dir(settings.data_dir, org_id)
+    if path.exists():
+        shutil.rmtree(path)
+
+
 class OrgRegistry:
     def __init__(self, settings: Settings, control: ControlPlane, clock: Clock) -> None:
         self.settings = settings

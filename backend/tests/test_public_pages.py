@@ -28,3 +28,11 @@ def test_with_a_contact_security_txt_follows_rfc_9116(tmp_path):
 def test_a_contact_must_be_mailto_or_https(tmp_path):
     with pytest.raises(ValueError, match="mailto: or https://"):
         load_settings({"LEDGERLINE_DATA_DIR": str(tmp_path), "LEDGERLINE_SECURITY_CONTACT": "someone@example.test"})
+
+
+def test_security_txt_uses_the_configured_origin_not_the_host_header(tmp_path):
+    app = create_app(load_settings({"LEDGERLINE_DATA_DIR": str(tmp_path), "LEDGERLINE_SECURITY_CONTACT": "mailto:security@example.test",
+                                    "LEDGERLINE_PUBLIC_URL": "https://ledger.example.test", "LEDGERLINE_PAYER_MCP_TRANSPORT": "memory",
+                                    "GOOGLE_CLIENT_ID": "", "APPLE_CLIENT_ID": ""}))
+    text = TestClient(app).get("/.well-known/security.txt", headers={"Host": "evil.example.test"}).text
+    assert "Canonical: https://ledger.example.test/.well-known/security.txt" in text and "evil" not in text

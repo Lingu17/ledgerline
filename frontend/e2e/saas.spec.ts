@@ -397,6 +397,54 @@ test("privacy, terms and security are real pages, linked from the home page, sig
   await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
 });
 
+test("account basics: a reset link from an owner, a new name, and deleting the company", async ({ page, browser }) => {
+  const org = `Basics ${uniq()}`;
+  const member = `member-${uniq()}@e2e.test`;
+  await signUp(page, { org, email: `owner-${uniq()}@e2e.test`, sample: false });
+  await nav(page, "Team");
+  await page.getByRole("button", { name: "Invite member" }).click();
+  await page.getByLabel("Email", { exact: true }).fill(member);
+  await page.getByRole("button", { name: "Create invitation" }).click();
+  const invite = await page.getByLabel("Invitation link").inputValue();
+  await page.getByRole("button", { name: "Done" }).click();
+  const other = await browser.newContext();
+  const m = await other.newPage();
+  await m.goto(invite);
+  await m.getByLabel("Your name", { exact: true }).fill("Forgetful Member");
+  await m.getByLabel("Choose a password").fill(PASSWORD);
+  await m.getByRole("button", { name: "Join organization" }).click();
+  await expect(m.getByLabel("Main navigation")).toBeVisible();
+
+  // The member forgot their password: the owner hands over a one-hour link.
+  await page.reload();
+  await page.getByRole("row").filter({ hasText: member }).getByRole("button", { name: "Reset link…" }).click();
+  await page.getByRole("button", { name: "Create link" }).click();
+  const reset = await page.getByLabel("Reset link", { exact: true }).inputValue();
+  await page.getByRole("button", { name: "Done" }).click();
+  const fresh = await browser.newContext();
+  const r = await fresh.newPage();
+  await r.goto(reset);
+  await r.getByLabel("New password", { exact: true }).fill(`New-${PASSWORD}`);
+  await r.getByRole("button", { name: "Set password and sign in" }).click();
+  await expect(r.getByLabel("Main navigation")).toBeVisible();
+  await m.reload();
+  await expect(m.getByLabel("Main navigation")).toHaveCount(0);  // the old session was signed out
+  await other.close();
+  await fresh.close();
+
+  await nav(page, "Settings");
+  await page.getByRole("button", { name: "Change", exact: true }).click();
+  await page.getByLabel("Your name").fill("Renamed Owner");
+  await page.getByRole("button", { name: "Save name" }).click();
+  await expect(page.getByText("Name changed")).toBeVisible();
+  await page.getByRole("button", { name: "Delete organization…" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: "Delete", exact: true })).toBeDisabled();
+  await dialog.getByLabel("Organization name").fill(org);
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByText(`${org} was deleted`)).toBeVisible();
+});
+
 test("own agent: an owner points a practice customer at its own payer agent, and the answer says where it came from", async ({ page }) => {
   // The reference agent runs as its own process (see playwright.config.ts); read its public key from its own key file.
   const py = resolve(process.cwd(), "..", "backend", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");

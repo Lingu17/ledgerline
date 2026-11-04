@@ -23,7 +23,7 @@ def test_health_reports_ready_without_auth(tmp_path):
     r = c.get("/api/health")
     assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
     body = r.json()
-    assert body["status"] == "ok" and body["control_schema"] == 5 and body["storage"] == "local directory"
+    assert body["status"] == "ok" and body["control_schema"] == 6 and body["storage"] == "local directory"
     assert not any(":\\" in str(v) or str(v).startswith("/") for v in body.values())  # never reveals filesystem paths
 
 

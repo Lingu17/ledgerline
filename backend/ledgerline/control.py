@@ -29,6 +29,7 @@ ROLE_RANK = {"viewer": 0, "operator": 1, "owner": 2}
 
 SESSION_ABSOLUTE = timedelta(hours=12)
 SESSION_IDLE = timedelta(hours=2)
+RESET_TTL = timedelta(hours=1)
 INVITE_TTL = timedelta(days=3)
 THROTTLE_WINDOW = timedelta(minutes=15)
 THROTTLE_MAX_FAILURES = 5
@@ -474,6 +475,100 @@ class ControlPlane:
             c.execute("DELETE FROM memberships WHERE org_id = ? AND user_id = ?", (org_id, user_id))
             c.execute("UPDATE sessions SET org_id = NULL WHERE user_id = ? AND org_id = ?", (user_id, org_id))
             self._audit(c, actor_id, "member.removed", org_id, {"user_id": user_id})
+
+    # ---------------------------------------------------------------- account basics
+    def rename_user(self, user_id: str, name: Any) -> str:
+        name = _text(name, "name", 1, 80)
+        with self.conn() as c, db.transaction(c):
+            u = db.row(c, "SELECT email, name FROM users WHERE id = ?", (user_id,))
+            c.execute("UPDATE users SET name = ? WHERE id = ?", (name, user_id))
+            self._audit(c, u["email"], "user.renamed", None, {"from": u["name"], "to": name})
+        return name
+
+    def issue_reset(self, org_id: str, actor_id: str, user_id: str) -> tuple[str, str]:
+        """An Owner's one-hour, single-use link for a member who forgot their password. Only for someone who belongs to
+        this organization alone, so no Owner can reach an account that also works somewhere else."""
+        if user_id == actor_id:
+            raise AuthError(409, "use Change password for your own account")
+        with self.conn() as c, db.transaction(c):
+            if not db.row(c, "SELECT 1 FROM memberships WHERE org_id = ? AND user_id = ?", (org_id, user_id)):
+                raise AuthError(404, "not a member of this organization")
+            if db.row(c, "SELECT 1 FROM memberships WHERE user_id = ? AND org_id != ?", (user_id, org_id)):
+                raise AuthError(409, "this person also belongs to another organization, so only they can change their password")
+            token = secrets.token_urlsafe(32)
+            now = self.clock.now()
+            expires = iso(now + RESET_TTL)
+            c.execute("UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL", (iso(now), user_id))  # one live link
+            c.execute("INSERT INTO password_resets(token_hash, user_id, org_id, issued_by, created_at, expires_at) VALUES (?,?,?,?,?,?)",
+                      (token_hash(token), user_id, org_id, actor_id, iso(now), expires))
+            self._audit(c, actor_id, "member.reset_link_issued", org_id, {"user_id": user_id, "expires_at": expires})
+            return token, expires
+
+    def reset_info(self, token: str) -> dict[str, Any]:
+        with self.conn() as c:
+            r = db.row(c, """SELECT u.email, o.name AS org_name, r.expires_at FROM password_resets r JOIN users u ON u.id = r.user_id
+                             JOIN organizations o ON o.id = r.org_id WHERE r.token_hash = ? AND r.used_at IS NULL AND r.expires_at > ?""",
+                       (token_hash(token), self.now()))
+        if not r:
+            raise AuthError(404, "this reset link is invalid, used or expired; ask an owner for a new one")
+        return dict(r)
+
+    def complete_reset(self, token: str, password: Any, user_agent: str = "") -> str:
+        validate_password(password)
+        with self.conn() as c, db.transaction(c):
+            r = db.row(c, "SELECT * FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?", (token_hash(token), self.now()))
+            if not r:
+                raise AuthError(404, "this reset link is invalid, used or expired; ask an owner for a new one")
+            u = db.row(c, "SELECT email FROM users WHERE id = ?", (r["user_id"],))
+            c.execute("UPDATE password_resets SET used_at = ? WHERE token_hash = ?", (self.now(), token_hash(token)))
+            c.execute("UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ?", (hash_password(password), self.now(), r["user_id"]))
+            c.execute("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL", (self.now(), r["user_id"]))
+            self._audit(c, u["email"], "user.password_reset", r["org_id"], {"link_issued_by": r["issued_by"], "all_sessions_signed_out": True})
+            return self._new_session(c, r["user_id"], r["org_id"], user_agent)
+
+    def leave_org(self, org_id: str, user_id: str) -> None:
+        with self.conn() as c, db.transaction(c):
+            m = db.row(c, "SELECT role FROM memberships WHERE org_id = ? AND user_id = ?", (org_id, user_id))
+            if not m:
+                raise AuthError(404, "not a member of this organization")
+            if m["role"] == "owner" and self._owners(c, org_id) == 1:
+                raise AuthError(409, "you are the only owner: make someone else an owner first, or delete the organization")
+            c.execute("DELETE FROM memberships WHERE org_id = ? AND user_id = ?", (org_id, user_id))
+            c.execute("UPDATE sessions SET org_id = NULL WHERE user_id = ? AND org_id = ?", (user_id, org_id))
+            self._audit(c, user_id, "member.left", org_id, {"user_id": user_id})
+
+    def delete_org(self, org_id: str, actor_email: str, confirm_name: Any) -> dict[str, Any]:
+        """Remove an organization from the control plane. The caller deletes its storage afterwards."""
+        with self.conn() as c, db.transaction(c):
+            o = db.row(c, "SELECT * FROM organizations WHERE id = ?", (org_id,))
+            if not o:
+                raise AuthError(404, "unknown organization")
+            if not isinstance(confirm_name, str) or confirm_name.strip() != o["name"]:
+                raise AuthError(422, "type the organization's name exactly to confirm")
+            members = int(c.execute("SELECT COUNT(*) FROM memberships WHERE org_id = ?", (org_id,)).fetchone()[0])
+            c.execute("UPDATE sessions SET org_id = NULL WHERE org_id = ?", (org_id,))
+            for table in ("memberships", "invitations", "password_resets"):
+                c.execute(f"DELETE FROM {table} WHERE org_id = ?", (org_id,))  # fixed table names only
+            c.execute("DELETE FROM organizations WHERE id = ?", (org_id,))
+            self._audit(c, actor_email, "organization.deleted", org_id, {"name": o["name"], "kind": o["kind"], "members": members})
+            return {"id": org_id, "name": o["name"], "kind": o["kind"]}
+
+    def delete_account(self, user_id: str, confirm_email: Any) -> None:
+        """Erase what identifies a person once they belong to no organization. Audit logs keep the email that acted:
+        they are hash-chained and cannot be edited."""
+        with self.conn() as c, db.transaction(c):
+            u = db.row(c, "SELECT * FROM users WHERE id = ?", (user_id,))
+            if not isinstance(confirm_email, str) or confirm_email.strip().lower() != u["email"].lower():
+                raise AuthError(422, "type your email address exactly to confirm")
+            if db.row(c, "SELECT 1 FROM memberships WHERE user_id = ?", (user_id,)):
+                raise AuthError(409, "leave or delete every organization you belong to first")
+            c.execute("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL", (self.now(), user_id))
+            c.execute("DELETE FROM oauth_identities WHERE user_id = ?", (user_id,))
+            c.execute("UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL", (self.now(), user_id))
+            # The row stays (organizations and invitations it created refer to it) with nothing that identifies the person.
+            c.execute("UPDATE users SET email = ?, name = 'Deleted account', password_hash = '', disabled = 1 WHERE id = ?",
+                      (f"deleted-{user_id}@deleted.invalid", user_id))
+            self._audit(c, f"deleted-{user_id}", "user.deleted", None, {})
 
     def control_audit(self, org_id: str, limit: int = 200) -> list[dict[str, Any]]:
         with self.conn() as c:

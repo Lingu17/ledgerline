@@ -109,6 +109,9 @@ export function SignIn({ initialMode = "signin" }: { initialMode?: "signin" | "s
           </fieldset>
         )}
         {err && <div className="notice risk small" role="alert">{err}</div>}
+        {mode === "signin" && (
+          <p className="small muted" style={{ margin: 0 }}>Forgot your password? An owner of your organization can give you a one-hour reset link from Team.</p>
+        )}
         {mode === "signup" && (
           <p className="small muted" style={{ margin: 0 }}>
             By creating an organization you agree to the <a href="#/terms">Terms</a>. The <a href="#/privacy">Privacy</a> page says what is stored and how to delete it.
@@ -218,4 +221,43 @@ export function friendly(ex: Error): string {
   const m = (ex.message || "").trim();
   if (!m) return "Something went wrong. Please try again.";
   return m.charAt(0).toUpperCase() + m.slice(1) + (/[.!?]$/.test(m) ? "" : ".");
+}
+
+/** A one-hour link an Owner created under Team: choose a new password, and every other session is signed out. */
+export function ResetPassword({ token }: { token: string }) {
+  const { setMe } = useAuth();
+  const [info, setInfo] = useState<{ email: string; org_name: string; expires_at: string } | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    get<typeof info>(`/auth/reset/${encodeURIComponent(token)}`).then(setInfo).catch((e) => setLoadErr(friendly(e as Error)));
+  }, [token]);
+  if (loadErr) return <AuthFrame title="Reset link unavailable" foot={<a href="#/signin">Go to sign in</a>}><p>{loadErr}</p></AuthFrame>;
+  if (!info) return <AuthFrame title="Checking the link…"><div className="skeleton" /></AuthFrame>;
+  return (
+    <AuthFrame title="Choose a new password">
+      <p className="muted small" style={{ marginTop: 0 }}>For {info.email} in {info.org_name}. Every place you are signed in will be signed out.</p>
+      <form className="stack" style={{ gap: 12 }} onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setErr(null);
+        try {
+          setMe(await post<Me>(`/auth/reset/${encodeURIComponent(token)}`, { password }));
+          window.location.hash = "/inbox";
+        } catch (ex) {
+          setErr(friendly(ex as Error));
+        } finally {
+          setBusy(false);
+        }
+      }}>
+        <Field id="reset-pass" label="New password" hint="12+ characters, upper- and lower-case letters and a digit">
+          <input id="reset-pass" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </Field>
+        {err && <div className="notice risk small" role="alert">{err}</div>}
+        <button className="btn primary" disabled={busy || !password} style={{ height: 36 }}>{busy ? "Saving…" : "Set password and sign in"}</button>
+      </form>
+    </AuthFrame>
+  );
 }

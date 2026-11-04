@@ -152,8 +152,11 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         if not settings.security_contact:
             return PlainTextResponse("no security contact has been published for this server\n", status_code=404)
         expires = (datetime.now(timezone.utc) + timedelta(days=180)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        local = request.url.hostname in ("localhost", "127.0.0.1", "::1")
-        base = f"{'http' if local else 'https'}://{request.url.netloc}"  # behind the proxy the app itself sees http
+        if settings.public_url and not settings.public_url.startswith("http://localhost"):
+            base = settings.public_url  # the configured origin, so a forged Host header cannot change what this file says
+        else:
+            local = request.url.hostname in ("localhost", "127.0.0.1", "::1")
+            base = f"{'http' if local else 'https'}://{request.url.netloc}"  # behind the proxy the app itself sees http
         return PlainTextResponse(f"Contact: {settings.security_contact}\nExpires: {expires}\nPreferred-Languages: en\n"
                                  f"Canonical: {base}/.well-known/security.txt\nPolicy: {base}/#/security\n")
 

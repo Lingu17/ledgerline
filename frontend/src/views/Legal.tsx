@@ -79,8 +79,9 @@ export function Privacy() {
       <p>There are no analytics, advertising or tracking cookies. The only cookie is the one that keeps you signed in.</p>
       <h2>How long, and how to delete</h2>
       <ul>
-        <li>Company data is kept until an Owner deletes the company under <b>Settings → Delete company</b>. Deletion is immediate on the server; backup copies age out as described above.</li>
-        <li>Your account can be deleted under <b>Settings → Your account</b> once you no longer belong to any company.</li>
+        <li>Company data is kept until an Owner deletes the company under <b>Settings → Leave or delete</b>. Deletion is immediate on the server; backup copies age out as described above.</li>
+        <li>You can delete your own account in the same place once you no longer belong to any company. Your name, email, password and sign-in links are erased. A company's audit log keeps the email that took each action, because that log is hash-chained and cannot be edited.</li>
+        <li>Forgot your password? The server sends no email, so an Owner of your company can give you a one-hour reset link from <b>Team</b>.</li>
       </ul>
       <h2>Questions</h2>
       <p>Use the contact on the <a href="#/security">Security</a> page.</p>

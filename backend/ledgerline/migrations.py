@@ -126,6 +126,17 @@ CREATE TABLE creations (
 CREATE INDEX creations_ip_at ON creations(ip, at);
 CREATE INDEX creations_at ON creations(at)
 """),
+    (6, "password reset links an owner issues (the server sends no email)", """
+CREATE TABLE password_resets (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  org_id TEXT NOT NULL,
+  issued_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+)
+"""),
 ]
 
 
