@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -124,6 +125,15 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.add_exception_handler(SenderUnavailable, _err(503))
     app.add_exception_handler(SenderRefused, _err(403))
     app.add_exception_handler(AuthError, auth_error_handler)
+
+    @app.exception_handler(sqlite3.OperationalError)
+    def _busy(_request: Request, exc: sqlite3.OperationalError) -> JSONResponse:
+        # Many sign-ups at once can queue on the shared control database: say "busy, try again", not a bare 500.
+        if "locked" in str(exc) or "busy" in str(exc):
+            log.warning("database busy: %s", exc)
+            return JSONResponse({"detail": "the server is busy; please try again in a moment", "error": "Busy"},
+                                status_code=503, headers={"Retry-After": "2"})
+        raise exc
 
     @app.exception_handler(WebhookRejected)
     def _webhook(_request: Request, exc: WebhookRejected) -> JSONResponse:

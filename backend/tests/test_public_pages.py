@@ -46,3 +46,16 @@ def test_version_commit_and_changelog_are_public(client):
     assert client.get("/api/health").json()["commit"] == build_commit()
     r = client.get("/api/public/changelog")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown") and r.text.startswith("# Changelog")
+
+
+def test_a_locked_database_answers_busy_not_500(app, monkeypatch):
+    import sqlite3
+
+    from .conftest import new_client
+
+    def locked(*_a, **_k):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(app.state.control, "signup", locked)
+    r = new_client(app).post("/api/auth/signup", json={"email": "busy@example.test", "name": "Busy", "password": "Correct-Horse-42-battery",
+                                                       "organization_name": "Busy Co", "start_with": "sample"})
+    assert r.status_code == 503 and r.headers["retry-after"] == "2" and "busy" in r.json()["detail"]

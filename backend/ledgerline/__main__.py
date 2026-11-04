@@ -30,7 +30,9 @@ def main() -> None:
     app = create_app(settings)
     watcher.start(app, int(os.environ.get("LEDGERLINE_WATCH_SECONDS", "120")))
     uvicorn.run(app, host=settings.host, port=settings.port, log_level=settings.log_level.lower(),
-                proxy_headers=False, access_log=False)
+                proxy_headers=False, access_log=False,
+                # Longer than the proxy's idle time, so Caddy never reuses a connection uvicorn is closing (a POST is not retried).
+                timeout_keep_alive=75)
 
 
 if __name__ == "__main__":

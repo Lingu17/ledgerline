@@ -257,13 +257,14 @@ class ControlPlane:
         org_name = _text(org_name, "organization name", 2, 80)
         if kind not in ("workspace", "sample"):
             raise AuthError(422, "kind must be 'workspace' or 'sample'")
+        password_hash = hash_password(password)  # scrypt is slow: never while holding the shared write lock
         with self.conn() as c, db.transaction(c):
             if db.row(c, "SELECT id FROM users WHERE email = ?", (email,)):
                 raise AuthError(409, "an account with this email already exists; sign in instead")
             self._check_creation(c, ip, "signup")
             user_id = "usr_" + uuid.uuid4().hex[:12]
             c.execute("INSERT INTO users(id, email, name, password_hash, created_at, password_changed_at) VALUES (?,?,?,?,?,?)",
-                      (user_id, email, name, hash_password(password), self.now(), self.now()))
+                      (user_id, email, name, password_hash, self.now(), self.now()))
             org_id = self._insert_org(c, org_name, kind, user_id)
             self._audit(c, email, "user.signup", org_id, {"org_name": org_name, "kind": kind, "ip": ip})
             token = self._new_session(c, user_id, org_id, user_agent)
@@ -280,19 +281,29 @@ class ControlPlane:
     def _throttle_keys(self, email: str, ip: str) -> list[str]:
         return [f"email:{email}", f"ip:{ip}"]
 
-    def login(self, *, email: Any, password: Any, ip: str, user_agent: str = "") -> str:
-        email_n = email.strip().lower() if isinstance(email, str) else ""
-        keys = self._throttle_keys(email_n, ip)
+    def _checked_password(self, email: str, password: Any, keys: list[str]) -> tuple[dict[str, Any] | None, bool]:
+        """Throttle, then verify the password, with no write lock held: scrypt is slow, and the shared control database
+        must not wait on it. The caller records the outcome in its own short transaction."""
         since = iso(self.clock.now() - THROTTLE_WINDOW)
-        with self.conn() as c, db.transaction(c):
+        with self.conn() as c:
             for k in keys:
                 fails = db.rows(c, "SELECT at FROM login_failures WHERE key = ? AND at > ? ORDER BY at", (k, since))
                 if len(fails) >= THROTTLE_MAX_FAILURES:
                     retry = int((parse_iso(fails[0]["at"]) + THROTTLE_WINDOW - self.clock.now()).total_seconds()) + 1
                     raise AuthError(429, "too many failed sign-in attempts; try again later", retry_after=max(retry, 1))
-            user = db.row(c, "SELECT * FROM users WHERE email = ?", (email_n,))
-            ok = verify_password(password if isinstance(password, str) else "", user["password_hash"] if user else _DUMMY_HASH)
-            if not user or not ok or user["disabled"]:
+            user = db.row(c, "SELECT * FROM users WHERE email = ?", (email,))
+        ok = verify_password(password if isinstance(password, str) else "", user["password_hash"] if user else _DUMMY_HASH)
+        return user, bool(user) and ok and not user["disabled"]
+
+    def login(self, *, email: Any, password: Any, ip: str, user_agent: str = "") -> str:
+        email_n = email.strip().lower() if isinstance(email, str) else ""
+        keys = self._throttle_keys(email_n, ip)
+        user, ok = self._checked_password(email_n, password, keys)
+        with self.conn() as c, db.transaction(c):
+            if ok:  # the password checked must still be the account's: it may have changed while scrypt ran
+                now_hash = db.row(c, "SELECT password_hash, disabled FROM users WHERE id = ?", (user["id"],))
+                ok = bool(now_hash) and now_hash["password_hash"] == user["password_hash"] and not now_hash["disabled"]
+            if not ok:
                 for k in keys:
                     c.execute("INSERT INTO login_failures(key, at) VALUES (?,?)", (k, self.now()))
                 self._audit(c, email_n or "?", "login.failed", None, {"ip": ip})
@@ -340,11 +351,16 @@ class ControlPlane:
 
     def change_password(self, user_id: str, current: Any, new: Any, keep_token: str) -> None:
         validate_password(new)
-        with self.conn() as c, db.transaction(c):
+        with self.conn() as c:
             u = db.row(c, "SELECT * FROM users WHERE id = ?", (user_id,))
-            if not u or not verify_password(current if isinstance(current, str) else "", u["password_hash"]):
-                raise AuthError(403, "current password is incorrect")
-            c.execute("UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ?", (hash_password(new), self.now(), user_id))
+        if not u or not verify_password(current if isinstance(current, str) else "", u["password_hash"]):
+            raise AuthError(403, "current password is incorrect")
+        new_hash = hash_password(new)  # slow: done before the write lock
+        with self.conn() as c, db.transaction(c):
+            changed = c.execute("UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ? AND password_hash = ?",
+                                (new_hash, self.now(), user_id, u["password_hash"])).rowcount
+            if not changed:
+                raise AuthError(409, "your password was changed somewhere else just now; sign in again")
             c.execute("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND token_hash != ? AND revoked_at IS NULL",
                       (self.now(), user_id, token_hash(keep_token)))
             self._audit(c, u["email"], "user.password_changed", None, {"other_sessions_revoked": True})
@@ -408,16 +424,9 @@ class ControlPlane:
         would silently make the invitation endpoint an unlimited password oracle.
         """
         keys = self._throttle_keys(email, ip)
-        since = iso(self.clock.now() - THROTTLE_WINDOW)
+        _, ok = self._checked_password(email, password, keys)
+        failed = not ok
         with self.conn() as c, db.transaction(c):
-            for key in keys:
-                fails = db.rows(c, "SELECT at FROM login_failures WHERE key = ? AND at > ? ORDER BY at", (key, since))
-                if len(fails) >= THROTTLE_MAX_FAILURES:
-                    retry = int((parse_iso(fails[0]["at"]) + THROTTLE_WINDOW - self.clock.now()).total_seconds()) + 1
-                    raise AuthError(429, "too many failed sign-in attempts; try again later", retry_after=max(1, retry))
-            user = db.row(c, "SELECT * FROM users WHERE email = ?", (email,))
-            valid = verify_password(password if isinstance(password, str) else "", user["password_hash"] if user else _DUMMY_HASH)
-            failed = not user or not valid or bool(user["disabled"])
             if failed:
                 for key in keys:
                     c.execute("INSERT INTO login_failures(key, at) VALUES (?,?)", (key, self.now()))
@@ -429,6 +438,11 @@ class ControlPlane:
         preview = self.invitation_info(token)
         if preview["existing_user"]:
             self._check_invitation_password(preview["email"], password, ip)
+            new_hash = None
+        else:
+            name = _text(name, "name", 1, 80)
+            validate_password(password)
+            new_hash = hash_password(password)  # slow: done before the write lock
         with self.conn() as c, db.transaction(c):
             inv = db.row(c, "SELECT * FROM invitations WHERE token_hash = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?",
                          (token_hash(token), self.now()))
@@ -436,15 +450,15 @@ class ControlPlane:
                 raise AuthError(404, "this invitation is invalid, used or expired")
             user = db.row(c, "SELECT * FROM users WHERE email = ?", (inv["email"],))
             if user:
-                if not verify_password(password if isinstance(password, str) else "", user["password_hash"]):
-                    raise AuthError(403, "enter your existing Ledgerline password to join")
+                if new_hash is not None:  # the account appeared after the preview: its password was not checked
+                    raise AuthError(409, "an account with this email now exists; open the invitation again and enter its password")
                 user_id = user["id"]
             else:
-                name = _text(name, "name", 1, 80)
-                validate_password(password)
+                if new_hash is None:
+                    raise AuthError(409, "open the invitation again")
                 user_id = "usr_" + uuid.uuid4().hex[:12]
                 c.execute("INSERT INTO users(id, email, name, password_hash, created_at, password_changed_at) VALUES (?,?,?,?,?,?)",
-                          (user_id, inv["email"], name, hash_password(password), self.now(), self.now()))
+                          (user_id, inv["email"], name, new_hash, self.now(), self.now()))
             c.execute("INSERT OR IGNORE INTO memberships VALUES (?,?,?,?)", (user_id, inv["org_id"], inv["role"], self.now()))
             c.execute("UPDATE invitations SET accepted_at = ? WHERE token_hash = ?", (self.now(), token_hash(token)))
             self._audit(c, inv["email"], "member.joined", inv["org_id"], {"role": inv["role"]})
