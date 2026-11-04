@@ -16,7 +16,7 @@ from . import audit, db, treasury
 from .clock import iso, parse_iso
 from .context import AppContext
 from .money import convert_round, fmt
-from .payouts import Paused, PayoutError
+from .payouts import NO_BANK, Paused, PayoutError, records_only
 from .providers.base import ProviderAmbiguous, ProviderError
 from .reconcile import ESCALATED, deposit_buckets, invoice_views
 from .treasury import TreasuryError
@@ -65,6 +65,8 @@ def options(ctx: AppContext, deposit_id: str) -> dict[str, Any]:
 
 @through_sender("convert_deposit")
 def convert(ctx: AppContext, deposit_id: str, invoice_id: Any, actor: str) -> dict[str, Any]:
+    if records_only(ctx):
+        raise TreasuryError(NO_BANK.replace("make the payment in your bank, then record it here", "convert in your bank, then record the payment as resolved"))
     rates = treasury.decision_rates(ctx)
     with ctx.conn() as conn:
         d = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (deposit_id,))

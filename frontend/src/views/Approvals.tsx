@@ -1,21 +1,23 @@
 import { useState } from "react";
 import { get, post, type Approval, type Operation, type Status } from "../api";
-import { Card, Checks, Empty, ErrorNote, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
+import { Card, Checks, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { money, when } from "../format";
 import { useAuth } from "../auth";
 import { BillPayments, LIVE_PAYMENT, type BillPayment } from "./Treasury";
 import { PracticeTeammateSend } from "./Walkthrough";
 
-export function Approvals({ localMode, sandboxMode = false }: { localMode: boolean; sandboxMode?: boolean }) {
+export function Approvals({ localMode, recordsOnly = false, sandboxMode = false }: { localMode: boolean; recordsOnly?: boolean; sandboxMode?: boolean }) {
   const approvals = useLoad(() => get<Approval[]>("/approvals"), []);
   const ops = useLoad(() => get<Operation[]>("/operations"), []);
   const billPayments = useLoad(() => get<BillPayment[]>("/treasury/bill-payments"), []);
   const status = useLoad(() => get<Status>("/status"), []);
   const { run, busy } = useAction();
   const [confirm, setConfirm] = useState<{ a: Approval; approve: boolean } | null>(null);
+  const [recording, setRecording] = useState<Approval | null>(null);
   const { can, me } = useAuth();
   const op = can("operator");
-  const canSimulate = localMode || (sandboxMode && can("owner"));
+  // A real company with no bank keeps records only: nothing is simulated in its books.
+  const canSimulate = (localMode && !recordsOnly) || (sandboxMode && can("owner"));
   const simulationLabel = localMode ? "Simulate" : "Sandbox API";
 
   const pending = approvals.data?.filter((a) => a.status === "pending") ?? [];
@@ -30,7 +32,7 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
     <div className="stack">
       <section className="stack">
         <h2 className="section-title" style={{ margin: 0 }}>Waiting for a decision</h2>
-        <BillPayments rows={billsToDecide} op={op} owner={can("owner")} localMode={localMode} />
+        <BillPayments rows={billsToDecide} op={op} owner={can("owner")} localMode={localMode} recordsOnly={recordsOnly} />
         {!approvals.data ? <div className="card"><Loading /></div> : pending.length === 0 ? (
           billsToDecide.length === 0 && <div className="card"><Empty title="No approvals waiting">Bill payments, refunds above the auto-limit and operator returns appear here.</Empty></div>
         ) : pending.map((a) => <ScopeCard key={a.id} a={a} busy={busy} canDecide={op} ownProposal={a.created_by === me?.user.email}
@@ -40,7 +42,7 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
       {billsUnderway.length > 0 && (
         <section className="stack">
           <h2 className="section-title" style={{ margin: 0 }}>Approved, on its way</h2>
-          <BillPayments rows={billsUnderway} op={op} owner={can("owner")} localMode={localMode} />
+          <BillPayments rows={billsUnderway} op={op} owner={can("owner")} localMode={localMode} recordsOnly={recordsOnly} />
         </section>
       )}
 
@@ -62,6 +64,11 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
                       onSend={() => run("practice-send", () => post(`/approvals/${a.id}/send-as-practice-teammate`), (r: any) => `The practice teammate sent refund ${r.operation.id}: ${r.operation.status}`)} />
                   )}
                 </div>
+              ) : op && recordsOnly ? (
+                <div style={{ maxWidth: 380, textAlign: "right" }}>
+                  <button className="btn primary" disabled={!!busy} onClick={() => setRecording(a)}>Record refund made outside Ledgerline…</button>
+                  <div className="small muted" style={{ marginTop: 4 }}>No bank is connected, so make the refund in your bank, then record it here.</div>
+                </div>
               ) : op && <button className="btn primary" disabled={!!busy}
                 onClick={() => run("exec" + a.id, () => post(`/approvals/${a.id}/execute`), (r: any) => `Refund ${r.operation.id} is ${r.operation.status}`)}>
                 {busy === "exec" + a.id ? "Sending…" : "Execute refund"}
@@ -70,6 +77,8 @@ export function Approvals({ localMode, sandboxMode = false }: { localMode: boole
           ))}
         </section>
       )}
+
+      {recording && <RecordOutside a={recording} onClose={() => setRecording(null)} />}
 
       <Card title="Money-out operations" pad={false}>
         {!ops.data ? <Loading /> : ops.data.length === 0 ? <Empty title="No operations yet">Refunds and conversions appear here from booking until the bank reports them final.</Empty> : (
@@ -212,4 +221,29 @@ export function Expiry({ decidedAt, ttlHours, practice }: { decidedAt: string | 
   if (practice) return <>Does not expire in a practice company</>;
   const left = (new Date(decidedAt).getTime() + ttlHours * 3600_000 - Date.now()) / 3600_000;
   return left > 1 ? <>Expires in {Math.floor(left)} h if not sent</> : left > 0 ? <>Expires in under an hour if not sent</> : <>Expired: goes back for approval when someone tries to send it</>;
+}
+
+/** No bank connected: the refund was made in the company's own bank; record the date and the bank's reference. */
+function RecordOutside({ a, onClose }: { a: Approval; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
+  const [reference, setReference] = useState("");
+  return (
+    <Modal title="Record a refund made outside Ledgerline" onClose={onClose}>
+      <p style={{ marginTop: 0 }}>
+        <b>{money(a.scope.amount_minor, a.scope.currency)}</b> to {a.scope.destination}. Record it only after your bank has paid it.
+        The same checks apply as for a send: the approval must still be valid, and if the agent proposed it, the person who approved it cannot record it.
+      </p>
+      <div className="form-grid">
+        <Field id="ro-date" label="Paid on"><input id="ro-date" type="date" value={paidOn} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setPaidOn(e.target.value)} /></Field>
+        <Field id="ro-ref" label="Bank reference" hint="As shown on your bank statement"><input id="ro-ref" value={reference} maxLength={60} onChange={(e) => setReference(e.target.value)} /></Field>
+      </div>
+      <div className="form-actions">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={!!busy || reference.trim().length < 2} onClick={async () => {
+          if (await run("record", () => post(`/approvals/${a.id}/record-external`, { paid_on: paidOn, reference: reference.trim() }), "Refund recorded as paid")) onClose();
+        }}>Record as paid</button>
+      </div>
+    </Modal>
+  );
 }

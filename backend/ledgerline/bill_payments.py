@@ -17,7 +17,7 @@ from . import audit, crypto, db, treasury
 from .clock import iso, parse_iso
 from .context import AppContext
 from .money import fmt
-from .payouts import LEASE, REQUEST_NS, Paused, PayoutError, SelfApproval, StaleApproval, approval_expired, same_person
+from .payouts import LEASE, NO_BANK, REQUEST_NS, Paused, PayoutError, SelfApproval, StaleApproval, approval_expired, records_only, same_person
 from .providers.base import ProviderAmbiguous, ProviderError
 from .sender import through_sender
 
@@ -58,6 +58,8 @@ def _check_destination(ctx: AppContext, destination: str, currency: str) -> None
 
 
 def propose(ctx: AppContext, obligation_id: str, destination: Any, actor: str) -> dict[str, Any]:
+    if records_only(ctx):
+        raise PayoutError(NO_BANK.replace("record it here", "use Mark paid on the bill"))
     if not isinstance(destination, str) or not 2 <= len(destination.strip()) <= 120:
         raise PayoutError("choose who receives this payment")
     destination = destination.strip()
@@ -168,6 +170,8 @@ def _claim(ctx: AppContext, payment_id: str, actor: str, rates) -> tuple[dict[st
 @through_sender("send_bill_payment")
 def execute(ctx: AppContext, payment_id: str, actor: str) -> dict[str, Any]:
     """Send (or reconcile) the payment. Safe to call repeatedly and concurrently."""
+    if records_only(ctx):
+        raise PayoutError(NO_BANK.replace("record it here", "use Mark paid on the bill"))
     claimed = _claim(ctx, payment_id, actor, treasury.decision_rates(ctx))
     if claimed is None:
         with ctx.conn() as conn:

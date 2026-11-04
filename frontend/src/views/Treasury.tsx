@@ -18,7 +18,7 @@ interface TreasuryData { wallets: Wallet[]; obligations: Obligation[]; plans: Re
 
 const RATE_REFRESH_MS = 60_000; // the server caches Airwallex rates for 60 s, so asking sooner would show nothing new
 
-export function Treasury({ localMode }: { localMode: boolean }) {
+export function Treasury({ localMode, recordsOnly = false }: { localMode: boolean; recordsOnly?: boolean }) {
   const t = useLoad(() => get<TreasuryData>("/treasury"), []);
   const rates = useLoad(() => get<Rates>("/treasury/rates"), []);
   const liveRates = rates.data?.source === "airwallex_sandbox";
@@ -83,9 +83,9 @@ export function Treasury({ localMode }: { localMode: boolean }) {
         </div>
       </Card>
 
-      <BillDecisions plan={decisions} op={op} payments={payments.data ?? []} onPay={setPaying} />
-      <BillPayments rows={payments.data ?? []} op={op} owner={owner} localMode={localMode} />
-      <CloseTheGap op={op} localMode={localMode} />
+      <BillDecisions plan={decisions} op={op} payments={payments.data ?? []} onPay={setPaying} recordsOnly={recordsOnly} />
+      <BillPayments rows={payments.data ?? []} op={op} owner={owner} localMode={localMode} recordsOnly={recordsOnly} />
+      <CloseTheGap op={op} localMode={localMode} recordsOnly={recordsOnly} />
       <PlanHistory />
       {paying && <PayBill bill={paying} localMode={localMode} onClose={() => setPaying(null)} />}
 
@@ -118,9 +118,9 @@ export function Treasury({ localMode }: { localMode: boolean }) {
 
         <Card title="Conversion quote">
           {!liveQuote ? (
-            <Empty title="No live quote">Request a quote for a bill that is short. Quotes expire and can be used once.</Empty>
+            <Empty title="No live quote">{recordsOnly ? "No bank is connected: convert in your bank, then update the wallet balances." : "Request a quote for a bill that is short. Quotes expire and can be used once."}</Empty>
           ) : (
-            <QuoteBox q={liveQuote} now={now} busy={busy} canConvert={op}
+            <QuoteBox q={liveQuote} now={now} busy={busy} canConvert={op && !recordsOnly}
               onConvert={() => run("convert", () => post<Operation>(`/treasury/quotes/${liveQuote.quote.id}/execute`), (op) => `Conversion ${op.id}: ${op.status}`)} />
           )}
           <div className="small muted" style={{ marginTop: 12 }}>
@@ -128,7 +128,7 @@ export function Treasury({ localMode }: { localMode: boolean }) {
               <span>Current rates unavailable: {rates.error}. <button className="btn small" onClick={rates.reload}>Retry</button></span>
             ) : !rates.data ? "Loading current rates…" : (
               <>
-                <b>{rates.data.source === "synthetic" ? "Synthetic rates" : "Current rates"}</b> · {rates.data.label}
+                <b>{recordsOnly ? "Reference rates for planning only" : rates.data.source === "synthetic" ? "Synthetic rates" : "Current rates"}</b> · {recordsOnly ? "no bank connected: convert in your bank, then update the balances" : rates.data.label}
                 {rates.data.as_of && <> · as of {when(rates.data.as_of)} · updates every minute</>}
                 <div className="rate-grid">
                   {rates.data.rates.map((r) => <span key={r.sell + r.buy} className="mono">{r.sell}→{r.buy} {r.rate}</span>)}
@@ -187,7 +187,7 @@ export interface BillPayment {
 }
 export const LIVE_PAYMENT = ["proposed", "approved", "processing", "sent"];
 
-export function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment[]; op: boolean; owner: boolean; localMode: boolean }) {
+export function BillPayments({ rows, op, owner, localMode, recordsOnly = false }: { rows: BillPayment[]; op: boolean; owner: boolean; localMode: boolean; recordsOnly?: boolean }) {
   const { run, busy } = useAction();
   const { me } = useAuth();
   const hasRows = rows.length > 0;
@@ -195,7 +195,7 @@ export function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment
     : Promise.resolve({ items: [] }), [hasRows, localMode]);
   if (!hasRows) return null;
   const act =(p: BillPayment, path: string, body: unknown, done: string) => run(path + p.id, () => post(`/treasury/bill-payments/${p.id}/${path}`, body), done);
-  const canSimulate = localMode ? op : owner;
+  const canSimulate = recordsOnly ? false : localMode ? op : owner;
   return (
     <Card title="Bill payments" pad={false}>
       <div className="table-wrap">
@@ -245,7 +245,7 @@ interface GapOption { invoice_id: string; customer: string; currency: string; du
 interface GapOptions { gaps: Record<string, number>; max_bps: number; options: GapOption[] }
 interface Offer { id: string; invoice_id: string; customer: string; currency: string; discount_bps: number; discount_minor: number; amount_minor: number; status: string; url: string | null; note: string | null }
 
-function CloseTheGap({ op, localMode }: { op: boolean; localMode: boolean }) {
+function CloseTheGap({ op, localMode, recordsOnly = false }: { op: boolean; localMode: boolean; recordsOnly?: boolean }) {
   const opts = useLoad(() => get<GapOptions>("/treasury/early-pay/options"), []);
   const offers = useLoad(() => get<Offer[]>("/treasury/early-pay"), []);
   const checked = useLoad(() => get<{ at: string | null }>("/treasury/links-last-checked"), []);
@@ -257,6 +257,7 @@ function CloseTheGap({ op, localMode }: { op: boolean; localMode: boolean }) {
       <div className="card-body small">
         {gaps.length ? <>Bills that cannot be funded are short by {gaps.map(([c, v]) => money(v, c)).join(" and ")}. Offering a small discount on invoices not yet due can bring that cash in. Nothing is sent to a customer until you share the link.</>
           : "No bill is short right now."}
+        {recordsOnly && <> Payment links need a connected Airwallex account (Settings), so here this is a list of what to ask customers for.</>}
       </div>
       {!!opts.data?.options.length && (
         <div className="table-wrap">
@@ -270,7 +271,7 @@ function CloseTheGap({ op, localMode }: { op: boolean; localMode: boolean }) {
                   <td className="num"><Money minor={o.remaining_minor} ccy={o.currency} /></td>
                   <td className="num">{money(o.discount_minor, o.currency)}<div className="secondary">{(o.discount_bps / 100).toFixed(2)}%</div></td>
                   <td className="num"><b>{money(o.cash_minor, o.currency)}</b>{o.closes_gap && <div className="secondary">Closes the gap</div>}</td>
-                  <td className="num">{op && <button className="btn small" disabled={!!busy} onClick={() => run("offer", () => post(`/invoices/${o.invoice_id}/early-pay`, { discount_bps: o.discount_bps }), "Early-payment offer created")}>Create offer</button>}</td>
+                  <td className="num">{op && !recordsOnly && <button className="btn small" disabled={!!busy} onClick={() => run("offer", () => post(`/invoices/${o.invoice_id}/early-pay`, { discount_bps: o.discount_bps }), "Early-payment offer created")}>Create offer</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -377,7 +378,7 @@ function PayBill({ bill, localMode, onClose }: { bill: Decision; localMode: bool
   );
 }
 
-function BillDecisions({ plan, op, payments, onPay }: { plan: { data: DecisionPlan | null; error: string | null; reload: () => void }; op: boolean; payments: BillPayment[]; onPay: (b: Decision) => void }) {
+function BillDecisions({ plan, op, payments, onPay, recordsOnly = false }: { plan: { data: DecisionPlan | null; error: string | null; reload: () => void }; op: boolean; payments: BillPayment[]; onPay: (b: Decision) => void; recordsOnly?: boolean }) {
   const { run, busy } = useAction();
   const { me } = useAuth();
   if (plan.error) return <ErrorNote error={plan.error} onRetry={plan.reload} />;
@@ -404,9 +405,9 @@ function BillDecisions({ plan, op, payments, onPay }: { plan: { data: DecisionPl
                     {b.version > 1 && <div className="secondary">Revised (version {b.version}) after: {b.trigger}</div>}
                   </td>
                   <td className="num nowrap">
-                    {op && b.decision === "convert" && <button className="btn small" disabled={!!busy} onClick={() => run("quote", () => post(`/treasury/obligations/${b.obligation_id}/quote`), "Quote received")}>Quote {b.source_currency}→{b.currency}</button>}
+                    {op && !recordsOnly && b.decision === "convert" && <button className="btn small" disabled={!!busy} onClick={() => run("quote", () => post(`/treasury/obligations/${b.obligation_id}/quote`), "Quote received")}>Quote {b.source_currency}→{b.currency}</button>}
                     {op && b.decision === "defer" && <button className="btn small" disabled={!!busy} onClick={async () => { if (await run("defer", () => post(`/treasury/obligations/${b.obligation_id}/defer`), "Bill deferred")) plan.reload(); }}>Accept deferral</button>}
-                    {op && b.decision === "fund" && !payments.some((p) => p.obligation_id === b.obligation_id && LIVE_PAYMENT.includes(p.status)) && <button className="btn small primary" disabled={!!busy} onClick={() => onPay(b)}>Pay</button>}
+                    {op && !recordsOnly && b.decision === "fund" && !payments.some((p) => p.obligation_id === b.obligation_id && LIVE_PAYMENT.includes(p.status)) && <button className="btn small primary" disabled={!!busy} onClick={() => onPay(b)}>Pay</button>}
                     {op && !payments.some((p) => p.obligation_id === b.obligation_id && LIVE_PAYMENT.includes(p.status)) && <button className="btn small" disabled={!!busy} title="Already paid outside Ledgerline" onClick={async () => { if (await run("paid", () => post(`/treasury/obligations/${b.obligation_id}/mark-paid`), "Bill marked paid")) plan.reload(); }}>Mark paid</button>}
                   </td>
                 </tr>

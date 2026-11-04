@@ -13,7 +13,7 @@ from . import audit, crypto, db
 from .clock import iso, parse_iso
 from .context import AppContext
 from .money import CURRENCY_EXPONENT, convert_round, fmt
-from .payouts import Paused, PayoutError
+from .payouts import NO_BANK, Paused, PayoutError, records_only
 from .providers.base import ProviderAmbiguous, ProviderError, Quote
 from .providers.local import DEMO_RATES
 from .sender import through_sender
@@ -428,6 +428,8 @@ def quote_preview(conn: sqlite3.Connection, ctx: AppContext, quote_id: str) -> d
 
 @through_sender("execute_conversion")
 def execute_conversion(ctx: AppContext, quote_id: str, actor: str) -> dict[str, Any]:
+    if records_only(ctx):
+        raise TreasuryError(NO_BANK.replace("make the payment in your bank, then record it here", "convert in your bank, then update the wallet balances"))
     """Book a conversion: the quote is consumed and the sell amount reserved in one IMMEDIATE transaction,
     so a second quote for the same shortfall sees the pending cover and cannot book the same money."""
     rates = decision_rates(ctx)  # a connected account may need a network read, so before the lock

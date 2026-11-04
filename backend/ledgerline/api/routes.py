@@ -514,6 +514,17 @@ def reject(request: Request, approval_id: str, body: Decision, operator: str = D
     return _loads(payouts.decide(ctx_of(request), approval_id, approve=False, actor=operator, seen_scope_hash=body.scope_hash), "scope")
 
 
+class RecordedRefundBody(BaseModel):
+    paid_on: str = Field(max_length=10)
+    reference: str = Field(max_length=60)
+
+
+@router.post("/approvals/{approval_id}/record-external")
+def record_external(request: Request, approval_id: str, body: RecordedRefundBody, operator: str = Depends(require_operator)) -> dict[str, Any]:
+    """No bank connected: record an approved refund that was made in the company's own bank."""
+    return payouts.record_external_refund(ctx_of(request), approval_id, operator, body.paid_on, body.reference)
+
+
 @router.post("/approvals/{approval_id}/execute")
 def execute(request: Request, approval_id: str, operator: str = Depends(require_operator)) -> dict[str, Any]:
     return payouts.execute_refund(ctx_of(request), approval_id, operator)

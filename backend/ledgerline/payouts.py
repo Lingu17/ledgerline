@@ -194,6 +194,29 @@ def decide(ctx: AppContext, approval_id: str, *, approve: bool, actor: str, seen
 
 
 # --------------------------------------------------------------------------- execution
+NO_BANK = ("no bank is connected to this company, so Ledgerline does not send money for it: make the payment in your bank, "
+           "then record it here")
+
+
+def records_only(ctx: AppContext) -> bool:
+    """A real company with no bank connected: Ledgerline records payments made elsewhere and never pretends to send one.
+    Practice companies keep their simulated bank."""
+    return bool(ctx.org) and ctx.org.get("kind") != "sample" and ctx.org.get("bank_mode", "local") == "local"
+
+
+class _RecordedOutside:
+    """Stands in for the bank when a person records a refund they already made in their own bank."""
+
+    def __init__(self, reference: str) -> None:
+        self.reference = reference
+
+    def find_transfer(self, request_id: str) -> None:
+        return None
+
+    def create_transfer(self, *, request_id: str, **_: Any) -> TransferResult:
+        return TransferResult(provider_id=f"outside:{self.reference}", request_id=request_id, status="paid", raw_status="RECORDED_OUTSIDE")
+
+
 def request_id_for(approval_id: str) -> str:
     return str(uuid.uuid5(REQUEST_NS, approval_id))
 
@@ -231,7 +254,7 @@ def send_as_practice_teammate(ctx: AppContext, approval_id: str, pressed_by: str
     return result
 
 
-def _send_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any]:
+def _send_refund(ctx: AppContext, approval_id: str, actor: str, recorded: _RecordedOutside | None = None) -> dict[str, Any]:
     with ctx.conn() as conn:
         with db.transaction(conn):
             now = iso(ctx.clock.now())
@@ -243,6 +266,8 @@ def _send_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any
                 return {"operation": op, "replayed": True}
             if a["status"] != "approved":
                 raise PayoutError(f"approval is {a['status']}; it must be approved before execution")
+            if recorded is None and records_only(ctx):
+                raise PayoutError(NO_BANK)
             if ctx.paused(conn):
                 raise Paused("money-out is paused; the approval is kept and can execute after resume")
             hours = approval_expired(ctx, conn, a["decided_at"])
@@ -290,11 +315,40 @@ def _send_refund(ctx: AppContext, approval_id: str, actor: str) -> dict[str, Any
                              operation_id=op_id)
         if stale_reason:
             raise StaleApproval(stale_reason)
-    op = submit_operation(ctx, op_id, actor)
+    op = submit_operation(ctx, op_id, actor, provider=recorded)
     return {"operation": op, "replayed": False}
 
 
-def submit_operation(ctx: AppContext, op_id: str, actor: str = "system") -> dict[str, Any]:
+def record_external_refund(ctx: AppContext, approval_id: str, actor: str, paid_on: Any, reference: Any) -> dict[str, Any]:
+    """A company with no bank connected made an approved refund in its own bank; record it, with the same checks as a send
+    (approved, not expired, not paused, a different person from the approver when the agent proposed it, scope unchanged)."""
+    import re
+    from datetime import date
+
+    if not records_only(ctx):
+        raise PayoutError("this company sends refunds through its bank; use Execute refund")
+    try:
+        day = date.fromisoformat(paid_on) if isinstance(paid_on, str) else None
+    except ValueError:
+        day = None
+    if day is None or day > ctx.clock.now().date():
+        raise PayoutError("enter the date the refund was paid, as YYYY-MM-DD, not in the future")
+    if not isinstance(reference, str) or not re.fullmatch(r"[A-Za-z0-9 ._:/#-]{2,60}", reference.strip()):
+        raise PayoutError("enter the bank's reference for the refund (2 to 60 letters, digits or . _ : / # -)")
+    result = _send_refund(ctx, approval_id, actor, recorded=_RecordedOutside(reference.strip()))
+    if result.get("expired_after_hours"):
+        raise StaleApproval(f"this approval expired: it was not recorded within {result['expired_after_hours']} hours, so it is back with the approvers")
+    if result.get("returned_to_person"):
+        raise StaleApproval("this refund is now over the auto-approval limit, so it needs a second person to approve it")
+    if not result.get("replayed"):
+        with ctx.conn() as conn, db.transaction(conn):
+            audit.record(conn, iso(ctx.clock.now()), actor, "refund.recorded_outside", "operation", result["operation"]["id"],
+                         {"paid_on": day.isoformat(), "bank_reference": reference.strip(), "approval_id": approval_id},
+                         operation_id=result["operation"]["id"])
+    return result
+
+
+def submit_operation(ctx: AppContext, op_id: str, actor: str = "system", provider: Any = None) -> dict[str, Any]:
     """Send (or reconcile) a refund with the provider. Safe to call repeatedly and concurrently."""
     with ctx.conn() as conn:
         with db.transaction(conn):
@@ -322,7 +376,7 @@ def submit_operation(ctx: AppContext, op_id: str, actor: str = "system") -> dict
             )
             _event(conn, op_id, op["status"], "processing", f"attempt {attempt}" + (" (lookup by request_id first)" if lookup_first else ""), now)
 
-    provider = ctx.provider
+    provider = provider or ctx.provider
     result: TransferResult | None = None
     error: str | None = None
     ambiguous = False
@@ -462,6 +516,8 @@ def cancel_pending(ctx: AppContext, op_id: str, actor: str) -> dict[str, Any]:
 
 def auto_execute_ready(ctx: AppContext, actor: str = "system") -> list[str]:
     """Send only what the policy limit approved. A refund a person approved waits for a person to send it."""
+    if records_only(ctx):
+        return []  # with no bank connected nothing is sent; a person records the refund they made
     with ctx.conn() as conn:
         ids = [r["id"] for r in db.rows(conn, "SELECT id FROM approvals WHERE status = 'approved' AND operation_type='refund' AND decided_by = 'policy:auto_limit'")]
     done = []

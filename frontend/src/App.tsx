@@ -232,9 +232,9 @@ function Shell({ me }: { me: Me }) {
           {page === "ceo" && <Ceo />}
           {known && page === "inbox" && <Inbox />}
           {page === "payments" && <Payments route={route} />}
-          {page === "approvals" && <Approvals localMode={localMode} sandboxMode={s?.bank.mode === "airwallex_sandbox"} />}
+          {page === "approvals" && <Approvals localMode={localMode} recordsOnly={localMode && !isSample} sandboxMode={s?.bank.mode === "airwallex_sandbox"} />}
           {page === "evidence" && <EvidenceView route={route} />}
-          {page === "treasury" && <Treasury localMode={localMode} />}
+          {page === "treasury" && <Treasury localMode={localMode} recordsOnly={localMode && !isSample} />}
           {page === "ledger" && <Ledger />}
           {page === "customers" && <Customers route={route} />}
           {page === "activity" && <Activity />}
