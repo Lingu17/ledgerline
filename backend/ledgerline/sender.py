@@ -223,6 +223,8 @@ class Service:
 
     def handle(self, request: dict[str, Any]) -> Any:
         method, org_id = request.get("method"), request.get("org_id")
+        if method == "ping":  # answered here, never by the bank: proves the socket and the service are up
+            return {"pong": True}
         if method == "seal":
             from .connections import seal
 

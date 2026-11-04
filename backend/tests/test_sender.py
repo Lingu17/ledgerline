@@ -149,3 +149,11 @@ def test_the_service_refuses_to_listen_on_tcp_outside_tests(monkeypatch):
     monkeypatch.delenv("LEDGERLINE_SENDER_ALLOW_TCP", raising=False)
     with pytest.raises(SystemExit, match="Unix socket"):
         sender.main()
+
+
+def test_ping_answers_without_the_bank(pair, monkeypatch):
+    """harden.sh checks the socket with ping, so a bank outage cannot undo the step."""
+    def no_bank(*_a, **_k):
+        raise AssertionError("ping must not reach Airwallex")
+    monkeypatch.setattr(airwallex.AirwallexSandbox, "readiness", no_bank)
+    assert sender.SenderClient(pair["address"], timeout=10).call("ping", "") == {"pong": True}
