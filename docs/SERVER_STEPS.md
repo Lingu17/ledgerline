@@ -195,5 +195,5 @@ sudo bash /opt/ledgerline/src/deploy/vm/harden.sh sender
 
 It ends with `sender: on.` after checking: both services active, the app's user cannot read `sender.env` or the moved
 key, the app's settings hold no Airwallex key, and the app's user can reach the service. If any step or check fails it turns
-itself back off. Undo: `harden.sh sender-off`. Run `sender-off` before ever deploying a commit older than this step; `update.sh` refuses such a commit (and a
+itself back off. Turning off leaves owner-only files (600 and 700, `UMask=0077`) and puts the Airwallex lines at the end of `ledgerline.env`, whatever they were before. It refuses on a server that stores data in PostgreSQL, where the keys cannot be separated this way. While the service is on, `harden.sh files` refuses; run `sender-off` first. Undo: `harden.sh sender-off`. Run `sender-off` before ever deploying a commit older than this step; `update.sh` refuses such a commit (and a
 rollback to one) while the service is on.

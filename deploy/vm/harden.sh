@@ -117,6 +117,9 @@ status() {
 }
 
 files() {
+  if systemctl is-active --quiet ledgerline-send; then
+    echo "the sending service is on; owner-only files would lock it out of the databases. Run harden.sh sender-off first" >&2; exit 1
+  fi
   mkdir -p "$DROPIN"
   printf '[Service]\nUMask=0077\n' > "$DROPIN/umask.conf"
   install -m 644 "$SRC/deploy/vm/ledgerline-backup.service" /etc/systemd/system/ledgerline-backup.service
@@ -213,7 +216,10 @@ KEY_SEND=/var/lib/ledgerline-send/connections.key
 # ledgerline, so files become 660 and folders 770 (nobody else, as before); the backups folder stays the app's alone.
 sender_step() {
   if systemctl is-active --quiet ledgerline-send; then echo "the sending service is already on"; check_sender; return; fi
-  # Any failure part-way puts everything back as it was, so the app never restarts without its keys.
+  if grep -qE '^LEDGERLINE_DATABASE_URL=.+' "$ENVF"; then
+    echo "the sending service separates keys only with local storage (SQLite); this server uses PostgreSQL, so nothing was changed" >&2; exit 2
+  fi
+  # Any failure part-way turns it back off (sender_off), so the app never restarts without its keys.
   trap 'trap - ERR; echo "sender: a step failed; turning it back off" >&2; sender_off; exit 1' ERR
   id ledgerline-send >/dev/null 2>&1 || useradd --system --gid ledgerline --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin ledgerline-send
   install -d -o ledgerline-send -g ledgerline -m 700 /var/lib/ledgerline-send
@@ -273,7 +279,9 @@ sender_off() {
   if [[ -f $KEY_SEND && ! -f $KEY_APP ]]; then mv "$KEY_SEND" "$KEY_APP"
   elif [[ -f $KEY_SEND ]]; then echo "WARNING: both $KEY_SEND and $KEY_APP exist; left both in place, compare them by hand" >&2; fi
   if [[ -f $KEY_APP ]]; then chown ledgerline:ledgerline "$KEY_APP" || true; chmod 600 "$KEY_APP" || true; fi
+  rmdir /var/lib/ledgerline-send 2>/dev/null || true  # only if empty: a key left there (the WARNING above) stays
   mkdir -p "$DROPIN"; printf '[Service]\nUMask=0077\n' > "$DROPIN/umask.conf"
+  chown -R ledgerline:ledgerline /var/lib/ledgerline || true  # files the sending service created (a journal, a database)
   find /var/lib/ledgerline -type f -exec chmod 600 {} + || true
   find /var/lib/ledgerline -type d -exec chmod 700 {} + || true
   rm -f /etc/systemd/system/ledgerline-send.service
