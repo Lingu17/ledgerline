@@ -390,6 +390,9 @@ test("privacy, terms and security are real pages, linked from the home page, sig
   await page.getByRole("navigation", { name: "Footer" }).getByRole("link", { name: "Security" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Security" })).toBeVisible();
   await expect(page.getByText(/has not published a reporting address yet/)).toBeVisible();
+  await page.getByRole("navigation", { name: "Footer" }).getByRole("link", { name: "Changelog" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: /4 November 2026/ })).toBeVisible();
+  await expect(page.getByText(/^Version \d+\.\d+\.\d+/).first()).toBeVisible();
   await page.goto("/#/signup");
   await expect(page.getByRole("link", { name: "Terms" })).toBeVisible();
   await signUp(page, { org: `Legal ${uniq()}`, email: `legal-${uniq()}@e2e.test`, sample: true });

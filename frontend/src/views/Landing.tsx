@@ -305,6 +305,7 @@ export function Landing() {
             <a href="#/privacy">Privacy</a>
             <a href="#/terms">Terms</a>
             <a href="#/security">Security</a>
+            <a href="#/changelog">Changelog</a>
             <a href={signedIn ? "#/inbox" : "#/signin"}>{signedIn ? "Workspace" : "Sign in"}</a>
           </nav>
         </div>

@@ -19,6 +19,7 @@ function DocPage({ title, children }: { title: string; children: React.ReactNode
             <a href="#/privacy">Privacy</a>
             <a href="#/terms">Terms</a>
             <a href="#/security">Security</a>
+            <a href="#/changelog">Changelog</a>
           </nav>
         </div>
       </header>
@@ -32,16 +33,39 @@ function DocPage({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+export interface PublicInfo { version: string; commit: string | null; security_contact: string | null }
+
+let infoCache: Promise<PublicInfo | null> | null = null;
+
+/** The version and commit the server runs, and its security contact. Fetched once per page load. */
+export function usePublicInfo(): PublicInfo | null {
+  const [info, setInfo] = useState<PublicInfo | null>(null);
+  useEffect(() => {
+    infoCache ??= fetch("/api/public/info").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    let live = true;
+    infoCache.then((i) => live && setInfo(i));
+    return () => { live = false; };
+  }, []);
+  return info;
+}
+
+export function VersionLine() {
+  const info = usePublicInfo();
+  if (!info) return null;
+  return <span className="mono">Version {info.version}{info.commit ? ` · ${info.commit.slice(0, 7)}` : ""}</span>;
+}
+
 export function LegalFooter() {
   return (
     <footer className="lp-footer">
       <div className="lp-wrap lp-footer-row">
         <Logo />
-        <p>Not a bank. Runs against the Airwallex test environment; no real money moves.</p>
+        <p>Not a bank. Runs against the Airwallex test environment; no real money moves. <VersionLine /></p>
         <nav aria-label="Footer">
           <a href="#/privacy">Privacy</a>
           <a href="#/terms">Terms</a>
           <a href="#/security">Security</a>
+          <a href="#/changelog">Changelog</a>
         </nav>
       </div>
     </footer>
@@ -117,10 +141,7 @@ export function Terms() {
 }
 
 export function Security() {
-  const [contact, setContact] = useState<string | null>(null);
-  useEffect(() => {
-    fetch("/api/public/info").then((r) => (r.ok ? r.json() : null)).then((d) => setContact(d?.security_contact ?? null)).catch(() => setContact(null));
-  }, []);
+  const contact = usePublicInfo()?.security_contact ?? null;
   const href = contact && (contact.startsWith("mailto:") || contact.startsWith("https://")) ? contact : null;
   return (
     <DocPage title="Security">
@@ -166,4 +187,44 @@ export function Security() {
       </p>
     </DocPage>
   );
+}
+
+/** The changelog from the server, rendered from its small Markdown subset: headings, bullets and inline code. */
+export function Changelog() {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/public/changelog").then((r) => (r.ok ? r.text() : "")).then(setText).catch(() => setText(""));
+  }, []);
+  return (
+    <DocPage title="Changelog">
+      {text === null ? <p>Loading…</p> : <Markdown text={text} />}
+    </DocPage>
+  );
+}
+
+function inline(t: string): React.ReactNode[] {
+  return t.split(/(`[^`]+`)/g).map((part, i) => (part.startsWith("`") && part.endsWith("`") ? <code key={i}>{part.slice(1, -1)}</code> : part));
+}
+
+function Markdown({ text }: { text: string }) {
+  const blocks: React.ReactNode[] = [];
+  let items: string[] = [];
+  let para: string[] = [];
+  const flush = () => {
+    if (items.length) blocks.push(<ul key={blocks.length}>{items.map((it, i) => <li key={i}>{inline(it)}</li>)}</ul>);
+    if (para.length) blocks.push(<p key={blocks.length}>{inline(para.join(" "))}</p>);
+    items = [];
+    para = [];
+  };
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    if (line.startsWith("# ")) continue;  // the page has its own title
+    if (line.startsWith("## ")) { flush(); blocks.push(<h2 key={blocks.length}>{inline(line.slice(3))}</h2>); }
+    else if (line.startsWith("- ")) { if (para.length) flush(); items.push(line.slice(2)); }
+    else if (line.startsWith("  ") && items.length) items[items.length - 1] += " " + line.trim();
+    else if (!line) flush();
+    else para.push(line);
+  }
+  flush();
+  return <>{blocks}</>;
 }

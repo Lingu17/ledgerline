@@ -36,3 +36,13 @@ def test_security_txt_uses_the_configured_origin_not_the_host_header(tmp_path):
                                     "GOOGLE_CLIENT_ID": "", "APPLE_CLIENT_ID": ""}))
     text = TestClient(app).get("/.well-known/security.txt", headers={"Host": "evil.example.test"}).text
     assert "Canonical: https://ledger.example.test/.well-known/security.txt" in text and "evil" not in text
+
+
+def test_version_commit_and_changelog_are_public(client):
+    from ledgerline import __version__, build_commit
+
+    info = client.get("/api/public/info").json()
+    assert info["version"] == __version__ and info["commit"] == build_commit()
+    assert client.get("/api/health").json()["commit"] == build_commit()
+    r = client.get("/api/public/changelog")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown") and r.text.startswith("# Changelog")

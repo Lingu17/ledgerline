@@ -70,7 +70,10 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
 
     control = ControlPlane(settings.pg_target("control") if settings.postgres else settings.data_dir / "control.sqlite3", clock)
     control.creation_limits = dict(zip(("per_ip_hour", "per_ip_day", "per_day"), settings.signup_limits))
-    app = FastAPI(title="Ledgerline", version="0.2.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
+    from .. import REPO_DIR, __version__, build_commit
+
+    app = FastAPI(title="Ledgerline", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
+    commit = build_commit()  # read once: an update restarts the service
     app.state.settings = settings
     app.state.control = control
     app.state.orgs = OrgRegistry(settings, control, clock)
@@ -144,7 +147,14 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     @app.get("/api/public/info", include_in_schema=False)
     def public_info() -> JSONResponse:
         """What any visitor may see: the version, and where to report a security problem (if the operator set one)."""
-        return JSONResponse({"version": app.version, "security_contact": settings.security_contact}, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"version": app.version, "commit": commit, "security_contact": settings.security_contact},
+                            headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/public/changelog", include_in_schema=False)
+    def changelog() -> PlainTextResponse:
+        path = REPO_DIR / "CHANGELOG.md"
+        text = path.read_text(encoding="utf-8") if path.is_file() else "# Changelog\n\nNot available on this server.\n"
+        return PlainTextResponse(text, media_type="text/markdown; charset=utf-8", headers={"Cache-Control": "no-store"})
 
     @app.get("/.well-known/security.txt", include_in_schema=False)
     def security_txt(request: Request) -> PlainTextResponse:
@@ -172,7 +182,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
                 probe = settings.data_dir / ".health"
                 probe.write_text(str(time.time()), encoding="utf-8")
                 storage = "persistent mount" if settings.require_persistent_mount else "local directory"
-            body = {"status": "ok", "version": app.version, "control_schema": schema, "storage": storage,
+            body = {"status": "ok", "version": app.version, "commit": commit, "control_schema": schema, "storage": storage,
                     "bank": settings.provider, "claude": "configured" if settings.claude_configured else "not configured",
                     # The caller's own address as resolved through trusted proxies (verifies proxy configuration).
                     "client": client_ip(request),
