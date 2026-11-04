@@ -11,7 +11,9 @@ from .test_saas import _invite_and_join
 
 
 def real_company(ctx):
-    ctx.org = {"id": "org_x", "name": "X", "kind": "workspace", "bank_mode": "local"}
+    # A real company with a bank connected (the bank behind this test context is still the simulated one): with no bank
+    # it would keep records only and send nothing by itself (test_records_only.py).
+    ctx.org = {"id": "org_x", "name": "X", "kind": "workspace", "bank_mode": "airwallex_sandbox"}
     return ctx
 
 
