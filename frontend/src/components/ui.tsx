@@ -91,7 +91,9 @@ export function useAction() {
         return r;
       } catch (e) {
         const status = e instanceof ApiError ? e.status : 0;
-        toast(status === 423 ? `Paused: ${(e as Error).message}` : (e as Error).message, "error");
+        const m = (e as Error).message || "Something went wrong. Please try again.";
+        const sentence = m.charAt(0).toUpperCase() + m.slice(1) + (/[.!?]$/.test(m) ? "" : ".");
+        toast(status === 423 ? `Paused: ${m}` : sentence, "error");
         bump();
         return null;
       } finally {

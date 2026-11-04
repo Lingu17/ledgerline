@@ -23,7 +23,9 @@ The owner submits on HackerEarth. Nothing in this repository saves or submits an
    (or run `gitleaks detect` if you have it).
 4. Author email: every commit shows your Gmail address as its author. Leave it, or decide to rewrite history before going public (that needs a force-push; ask first).
 5. Make the repository public, then open https://github.com/Lingu17/ledgerline while signed out: the README renders, the links work, the screenshots load.
-6. Submit on HackerEarth by 13 Nov 23:59 IST with the live link, the repository link and the video link.
+6. CI: once the repository is public, Actions minutes are free. Trigger a run (Actions → ci → Run workflow, or push a commit) and check it is green, including the PostgreSQL job; until then the README's CI badge shows failing or no status, because runs since 3 Nov were blocked by billing.
+7. Licence: there is deliberately no LICENSE file, so the code stays all rights reserved even when the repository is public (the owner's choice). Add one only if you decide to.
+8. Submit on HackerEarth by 13 Nov 23:59 IST with the live link, the repository link and the video link.
 
 **Limits, stated up front**
 

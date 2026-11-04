@@ -14,7 +14,7 @@ import { Customers } from "./views/Customers";
 import { Settings } from "./views/Settings";
 import { Team } from "./views/Team";
 import { Walkthrough } from "./views/Walkthrough";
-import { AcceptInvite, NoOrganization, SignIn } from "./views/Auth";
+import { AcceptInvite, NoOrganization, SignIn, friendly } from "./views/Auth";
 import { Landing } from "./views/Landing";
 import { Architecture } from "./views/Architecture";
 
@@ -121,7 +121,7 @@ function OrgMenu({ me }: { me: Me }) {
               setCreating(false);
               window.location.hash = "/inbox";
             } catch (ex) {
-              setErr((ex as Error).message);
+              setErr(friendly(ex as Error));
             }
           }}>
             <div className="stack" style={{ gap: 12 }}>

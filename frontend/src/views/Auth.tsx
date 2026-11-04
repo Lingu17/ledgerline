@@ -71,7 +71,8 @@ export function SignIn({ initialMode = "signin" }: { initialMode?: "signin" | "s
       setMe(me);
       window.location.hash = "/inbox";
     } catch (ex) {
-      setErr(ex instanceof ApiError && ex.status === 429 ? "Too many failed attempts. Wait 15 minutes and try again." : (ex as Error).message);
+      // Sign-in throttle and the sign-up limit both answer 429; the sign-up limit's own message says when to try again.
+      setErr(ex instanceof ApiError && ex.status === 429 && mode === "signin" ? "Too many failed attempts. Wait 15 minutes and try again." : friendly(ex as Error));
     } finally {
       setBusy(false);
     }
@@ -205,4 +206,11 @@ export function NoOrganization() {
       </form>
     </AuthFrame>
   );
+}
+
+/** A server message as a sentence a person can act on. */
+export function friendly(ex: Error): string {
+  const m = (ex.message || "").trim();
+  if (!m) return "Something went wrong. Please try again.";
+  return m.charAt(0).toUpperCase() + m.slice(1) + (/[.!?]$/.test(m) ? "" : ".");
 }

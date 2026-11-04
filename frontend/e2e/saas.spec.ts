@@ -312,6 +312,39 @@ test("one person finishes the practice walkthrough with the practice teammate se
   expect(actors.find((a) => a.startsWith("approval.approved"))).toMatch(/@e2e\.test$/);
 });
 
+test("phone width: a judge can do the whole three-step path at 375 px", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await ctx.newPage();
+  const noSideScroll = async (where: string) =>
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), where).toBeLessThanOrEqual(1);
+  await signUp(page, { org: `Phone ${uniq()}`, email: `phone-${uniq()}@e2e.test`, sample: true });
+  await noSideScroll("inbox");
+  await page.goto("/#/payments?deposit=DEP-1005");
+  await page.getByRole("button", { name: /Ask payer's agent/ }).first().click();
+  await expect(page.locator(".drawer").getByText("Verified").first()).toBeVisible({ timeout: 25_000 });
+  await noSideScroll("payment");
+  const row = (title: string) => page.locator(".steps li").filter({ hasText: title });
+  const finish = async (title: string) => {
+    await expect(row(title)).toBeVisible();
+    if ((await row(title).locator(".n.done").count()) === 0) await row(title).getByRole("button", { name: "Run", exact: true }).click();
+    await expect(row(title).locator(".n.done")).toHaveCount(1, { timeout: 30_000 });
+  };
+  await page.goto("/#/walkthrough");
+  for (const t of ["Receive six deposits", "Request the short balance", "Ask payer agents", "Cover the EUR bill"]) await finish(t);
+  await noSideScroll("practice steps");
+  await page.goto("/#/approvals");
+  await page.getByRole("button", { name: "Approve…" }).click();
+  await page.getByRole("button", { name: "Approve this scope" }).click();
+  await page.getByRole("button", { name: "Send as practice teammate" }).click();
+  await expect(page.getByText(/The practice teammate sent refund/).first()).toBeVisible();
+  await noSideScroll("approvals");
+  await page.goto("/#/walkthrough");
+  // Sent from Approvals, the step shows a Run button that records it; the bank steps follow.
+  for (const t of ["Approve and send the refund", "Bank reports SENT", "Bank reports PAID"]) await finish(t);
+  await expect(page.locator(".steps .n.done")).toHaveCount(8);
+  await ctx.close();
+});
+
 test("own agent: an owner points a practice customer at its own payer agent, and the answer says where it came from", async ({ page }) => {
   // The reference agent runs as its own process (see playwright.config.ts); read its public key from its own key file.
   const py = resolve(process.cwd(), "..", "backend", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");

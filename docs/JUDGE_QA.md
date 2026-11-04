@@ -25,7 +25,7 @@ Signed deposit webhooks, a refund through SENT → PAID as exactly one transfer,
 The refund keeps one request ID for its whole life. After a timeout or an unclear answer, Ledgerline looks that ID up with the bank before anything is sent again, and a lock allows only one live refund per payment. Tests cover timeouts and concurrent sends, and each ends with exactly one transfer. SENT keeps the liability on the books; only PAID releases it.
 
 **How do you know the matching is right?**
-An accuracy run on synthetic data (200 made-up companies and 25 practice walkthroughs, rules only) makes 51,475 checks across 8,826 payments and 4,087 invoices, with 0 mismatches against a separate reference model. There are also over 400 backend tests, and CI runs them on PostgreSQL as well. See [ACCURACY_REPORT](ACCURACY_REPORT.md).
+An accuracy run on synthetic data (200 made-up companies and 25 practice walkthroughs, rules only) makes 51,475 checks across 8,826 payments and 4,087 invoices, with 0 mismatches against a separate reference model. There are also over 500 backend tests and 26 browser tests. CI also runs the backend on PostgreSQL, but GitHub Actions has been blocked by an account billing hold since 3 Nov, so recent releases were checked by two separate local runs and the PostgreSQL suite last ran in CI run #163. See [ACCURACY_REPORT](ACCURACY_REPORT.md).
 
 **How does it compare with Airwallex's own reference builds?**
 Compared with the design rules in Airwallex's public AWS reference builds ([awx-devx/airwallex-agentic-banking-aws](https://github.com/awx-devx/airwallex-agentic-banking-aws)). This is our own comparison; Airwallex has not reviewed Ledgerline.

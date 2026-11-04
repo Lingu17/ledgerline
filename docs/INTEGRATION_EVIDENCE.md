@@ -51,7 +51,7 @@ Only observed results. Sandbox, no real money. Long provider ids are shortened. 
 | Dashboard replay | Airwallex "retrigger" returned `success:false`; no second callback | Not a delivery |
 | Payment link | HTTP 401 unauthorized on 29 Oct (the VM credentials now get 400 `configuration_error`, above) | Labelled draft kept |
 | Claude | First call 28 Oct: Anthropic 400 insufficient credit; nothing stored or applied | Superseded by the successful VM calls |
-| PostgreSQL | Isolated Neon branch 13/13 `test_postgres.py` (29 Oct); CI runs the whole backend on PostgreSQL 17 | PostgreSQL mode is supported but not production |
+| PostgreSQL | Isolated Neon branch 13/13 `test_postgres.py` (29 Oct); CI runs the whole backend on PostgreSQL 17 (last run: CI #163; Actions blocked by a billing hold since 3 Nov) | PostgreSQL mode is supported but not production |
 
 ## Proven by automated tests (not by live provider behaviour)
 
