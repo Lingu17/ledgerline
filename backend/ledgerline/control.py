@@ -281,36 +281,50 @@ class ControlPlane:
     def _throttle_keys(self, email: str, ip: str) -> list[str]:
         return [f"email:{email}", f"ip:{ip}"]
 
-    def _checked_password(self, email: str, password: Any, keys: list[str]) -> tuple[dict[str, Any] | None, bool]:
-        """Throttle, then verify the password, with no write lock held: scrypt is slow, and the shared control database
-        must not wait on it. The caller records the outcome in its own short transaction."""
+    def _checked_password(self, email: str, password: Any, keys: list[str]) -> tuple[dict[str, Any] | None, bool, list[int]]:
+        """Throttle and verify a password without holding the write lock while scrypt runs.
+
+        Each attempt is first reserved in one short transaction: the failures in the window are counted and, if under the
+        limit, a failure row is written for every key at once. So however many requests arrive together, at most
+        THROTTLE_MAX_FAILURES of them get to guess. The caller deletes the reserved rows if the password was right, and
+        keeps them as the failure if not. Returns the user, whether the password is right, and the reserved row ids."""
         since = iso(self.clock.now() - THROTTLE_WINDOW)
-        with self.conn() as c:
+        reserved: list[int] = []
+        with self.conn() as c, db.transaction(c):
             for k in keys:
                 fails = db.rows(c, "SELECT at FROM login_failures WHERE key = ? AND at > ? ORDER BY at", (k, since))
                 if len(fails) >= THROTTLE_MAX_FAILURES:
                     retry = int((parse_iso(fails[0]["at"]) + THROTTLE_WINDOW - self.clock.now()).total_seconds()) + 1
                     raise AuthError(429, "too many failed sign-in attempts; try again later", retry_after=max(retry, 1))
+            for k in keys:
+                c.execute("INSERT INTO login_failures(key, at) VALUES (?,?)", (k, self.now()))
+                # Inside this write transaction no one else can insert, so the newest row for the key is ours.
+                reserved.append(int(c.execute("SELECT MAX(id) FROM login_failures WHERE key = ?", (k,)).fetchone()[0]))
             user = db.row(c, "SELECT * FROM users WHERE email = ?", (email,))
         ok = verify_password(password if isinstance(password, str) else "", user["password_hash"] if user else _DUMMY_HASH)
-        return user, bool(user) and ok and not user["disabled"]
+        return user, bool(user) and ok and not user["disabled"], reserved
+
+    @staticmethod
+    def _release(c: sqlite3.Connection, reserved: list[int]) -> None:
+        """The password was right: the attempt reserved as a failure was not one."""
+        for row_id in reserved:
+            c.execute("DELETE FROM login_failures WHERE id = ?", (row_id,))
 
     def login(self, *, email: Any, password: Any, ip: str, user_agent: str = "") -> str:
         email_n = email.strip().lower() if isinstance(email, str) else ""
         keys = self._throttle_keys(email_n, ip)
-        user, ok = self._checked_password(email_n, password, keys)
+        user, ok, reserved = self._checked_password(email_n, password, keys)
         with self.conn() as c, db.transaction(c):
             if ok:  # the password checked must still be the account's: it may have changed while scrypt ran
                 now_hash = db.row(c, "SELECT password_hash, disabled FROM users WHERE id = ?", (user["id"],))
                 ok = bool(now_hash) and now_hash["password_hash"] == user["password_hash"] and not now_hash["disabled"]
-            if not ok:
-                for k in keys:
-                    c.execute("INSERT INTO login_failures(key, at) VALUES (?,?)", (k, self.now()))
+            if not ok:  # the reserved rows stand as this failure
                 self._audit(c, email_n or "?", "login.failed", None, {"ip": ip})
                 # Committed failure count must survive the raise: commit happens via the context manager below.
                 failed = True
             else:
                 failed = False
+                self._release(c, reserved)
                 c.execute("DELETE FROM login_failures WHERE key = ?", (f"email:{email_n}",))
                 membership = db.row(c, "SELECT org_id FROM memberships WHERE user_id = ? ORDER BY created_at LIMIT 1", (user["id"],))
                 token = self._new_session(c, user["id"], membership["org_id"] if membership else None, user_agent)
@@ -424,13 +438,13 @@ class ControlPlane:
         would silently make the invitation endpoint an unlimited password oracle.
         """
         keys = self._throttle_keys(email, ip)
-        _, ok = self._checked_password(email, password, keys)
+        _, ok, reserved = self._checked_password(email, password, keys)
         failed = not ok
         with self.conn() as c, db.transaction(c):
-            if failed:
-                for key in keys:
-                    c.execute("INSERT INTO login_failures(key, at) VALUES (?,?)", (key, self.now()))
+            if failed:  # the reserved rows stand as this failure
                 self._audit(c, email, "invitation.authentication_failed", None, {"ip": ip})
+            else:
+                self._release(c, reserved)
         if failed:
             raise AuthError(403, "enter your existing Ledgerline password to join")
 

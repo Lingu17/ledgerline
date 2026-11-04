@@ -337,3 +337,37 @@ def test_migrations_recorded_and_legacy_tenant_upgraded(settings, tmp_path):
             tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"oauth_identities", "oauth_states"} <= tables
     create_app(settings)  # restart: nothing re-applied, no error
+
+
+def test_a_burst_of_parallel_guesses_gets_at_most_five_tries(app, monkeypatch):
+    """Passwords are checked outside the write lock, so each try is reserved atomically first: 20 wrong guesses sent
+    at once for one account reach the password check at most five times, and the rest are told to wait."""
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ledgerline import control as control_module
+    from ledgerline.control import AuthError
+
+    signup(new_client(app), email="target@burst.test")
+    checks = []
+    lock = threading.Lock()
+    real = control_module.verify_password
+
+    def counted(password, encoded):
+        with lock:
+            checks.append(1)
+        time.sleep(0.05)  # widen the window a racing request could slip through
+        return real(password, encoded)
+    monkeypatch.setattr(control_module, "verify_password", counted)
+
+    def guess(i):
+        try:
+            app.state.control.login(email="target@burst.test", password=f"Wrong-guess-{i}-aaaa", ip="198.51.100.20")
+            return 200
+        except AuthError as exc:
+            return exc.status
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        codes = list(pool.map(guess, range(20)))
+    assert len(checks) <= 5, len(checks)
+    assert codes.count(401) == len(checks) and codes.count(429) == 20 - len(checks)
