@@ -149,6 +149,13 @@ function Shell({ me }: { me: Me }) {
   const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [tour, setTour] = useState(false);
+  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 820px)").matches);
+  useEffect(() => {
+    const m = window.matchMedia("(max-width: 820px)");
+    const f = () => setNarrow(m.matches);
+    m.addEventListener("change", f);
+    return () => m.removeEventListener("change", f);
+  }, []);
   useEffect(() => setMenuOpen(false), [route.page]);
   const status = useLoad(() => get<Status>("/status"), [me.organization?.id]);
   const counts = useLoad(() => get<{ work_queue: { kind: string }[]; deposit_counts: Record<string, number> }>("/overview"), [me.organization?.id]);
@@ -169,7 +176,7 @@ function Shell({ me }: { me: Me }) {
     <div className="shell">
       {/* Hash routing: a #main link would change the route, so the skip control moves focus instead. */}
       <button type="button" className="skip-link" onClick={() => document.getElementById("main")?.focus()}>Skip to content</button>
-      <aside className={`sidebar ${menuOpen ? "open" : ""}`} aria-label="Main navigation">
+      <aside className={`sidebar ${menuOpen ? "open" : ""}`} aria-label="Main navigation" {...(narrow && !menuOpen ? { inert: "" } : {})}>
         <a className="brand" href="#/home" aria-label="Ledgerline home">
           <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
             <rect width="32" height="32" rx="6" fill="#16263d" />

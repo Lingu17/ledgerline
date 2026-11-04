@@ -231,7 +231,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                       {l.url?.startsWith("https://") && l.status !== "paid" && <a href={l.url} target="_blank" rel="noopener noreferrer">Open Airwallex payment link</a>}
                       {l.status !== "paid" && <div className="row" style={{ marginTop: 4 }}>
                         <a className="btn small" href={balanceEmail(l, x.currency, x.payer_name).mailto}>Open email draft</a>
-                        <button className="btn small" onClick={() => navigator.clipboard?.writeText(balanceEmail(l, x.currency, x.payer_name).body)}>Copy message</button>
+                        <button className="btn small" onClick={() => run("copy", () => navigator.clipboard.writeText(balanceEmail(l, x.currency, x.payer_name).body), "Message copied")}>Copy message</button>
                       </div>}
                       {can("operator") && l.status === "sandbox_created" && <> <button className="btn small" disabled={!!busy} onClick={() => run(`check-${l.id}`, () => post(`/integrations/sandbox/payment-links/${l.id}/check`), (r: any) => r.status === "paid" ? "Paid and booked" : "Not paid yet")}>Check payment</button></>}
                       {can("owner") && bank.data?.bank.mode === "airwallex_sandbox" && l.status === "local_draft" &&<button className="btn small" disabled={!!busy} onClick={() => run(`link-${l.id}`, () => post(`/integrations/sandbox/payment-links/${l.id}/publish`), (r: any) => r.status === "sandbox_created" ? "Sandbox link created; nothing emailed" : r.note)}>Create payment link</button>}

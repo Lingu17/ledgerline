@@ -160,7 +160,7 @@ function ResetLinkModal({ member, onClose }: { member: TeamData["members"][numbe
             <input id="reset-url" readOnly value={link.url} onFocus={(e) => e.currentTarget.select()} />
           </Field>
           <div className="form-actions">
-            <button className="btn" onClick={() => navigator.clipboard?.writeText(link.url)}>Copy</button>
+            <button className="btn" onClick={() => run("copy", () => navigator.clipboard.writeText(link.url), "Link copied")}>Copy</button>
             <button className="btn primary" onClick={onClose}>Done</button>
           </div>
         </>

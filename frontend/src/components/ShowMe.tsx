@@ -41,6 +41,10 @@ export function ShowMe({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const stop = STOPS[i];
+  useEffect(() => {  // leave room under the page and the drawer for this panel, and keep toasts off it
+    document.body.classList.add("tour-open");
+    return () => document.body.classList.remove("tour-open");
+  }, []);
   useEffect(() => {
     let live = true;
     (async () => {

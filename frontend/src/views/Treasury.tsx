@@ -49,6 +49,7 @@ export function Treasury({ localMode, recordsOnly = false }: { localMode: boolea
   return (
     <div className="stack">
       <Card title="Wallet position" pad={false} actions={owner && localMode && <button className="btn small" onClick={() => setModal("opening")}>Set opening balance</button>}>
+        <div className="small muted show-sm" style={{ padding: "8px 16px 0" }}>Swipe the table sideways to see every column.</div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -321,7 +322,7 @@ function PlanHistory() {
   return (
     <Card title="Plan history" pad={false}>
       <div className="table-wrap">
-        <table>
+        <table className="stack-sm">
           <thead><tr><th>When</th><th>What changed the plan</th><th>Decisions</th><th /></tr></thead>
           <tbody>
             {runs.data.map((r) => {
@@ -390,7 +391,7 @@ function BillDecisions({ plan, op, payments, onPay, recordsOnly = false }: { pla
     )}>
       {items.length === 0 ? <Empty title="No bills due in the planning window">Bills due soon are ranked here with a decision for each.</Empty> : (
         <div className="table-wrap">
-          <table>
+          <table className="stack-sm">
             <thead><tr><th>#</th><th>Bill</th><th>Due</th><th className="num">Amount</th><th>Decision</th><th /></tr></thead>
             <tbody>
               {items.map((b) => (
