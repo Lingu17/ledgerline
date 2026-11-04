@@ -35,13 +35,15 @@ class DemoError(ValueError):
 def state(ctx: AppContext) -> dict[str, Any]:
     with ctx.conn() as conn:
         done = db.get_setting(conn, "demo_steps_done", [])
+        sent = db.row(conn, "SELECT id FROM operations WHERE kind='refund' AND deposit_id='DEP-1006'")
+        if sent and "approve" not in done and all(s in done for s in STEP_IDS[:STEP_IDS.index("approve")]):
+            done = [*done, "approve"]  # sent from the Approvals page: nothing is left to press for this step
         nxt = next((s for s in STEP_IDS if s not in done), None)
         blocked = None
         practice_teammate_can_send = None
         if nxt == "approve":
             a = db.row(conn, "SELECT * FROM approvals WHERE operation_type='refund' AND status IN ('pending','approved') ORDER BY created_at LIMIT 1")
-            executed = db.row(conn, "SELECT id FROM operations WHERE kind='refund' AND deposit_id='DEP-1006'")
-            if a is None and executed:
+            if a is None and sent:
                 blocked = None
             elif a is None:
                 blocked = "no refund approval is waiting"
@@ -69,6 +71,8 @@ def _mark(ctx: AppContext, step: str) -> None:
 
 def run_step(ctx: AppContext, step: str, actor: str) -> dict[str, Any]:
     st = state(ctx)
+    if step == "approve" and any(s["id"] == "approve" and s["done"] for s in st["steps"]):
+        return {"step": step, "result": {"already_done": True}, "state": st}
     if step != "seed" and step != st["next"]:
         raise DemoError(f"next step is {st['next']!r}, not {step!r}")
     result: dict[str, Any]

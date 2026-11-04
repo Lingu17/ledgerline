@@ -500,6 +500,10 @@ class Scenario:
             expected = (d.category, d.status, d.cust, d.allocated, d.credited, d.unapplied, d.amount, d.ccy)
             self.expect(actual == expected, f"{did}: API {actual} expected {expected}")
             self.expect(g["source"] == "manual_import", f"{did}: source {g['source']}")
+            for p in g["plans"]:  # every rules decision replays to the same plan; a person's decision is not replayed
+                r = self.c.get(f"/api/deposits/{did}/plans/{p['version']}/replay").json()
+                self.expect(r["ok"] if r["replayable"] else r["kind"] == "operator", f"{did} v{p['version']}: replay {r}")
+                self.count("replayed" if r["replayable"] else "not_replayed_person")
         tr = self.c.get("/api/treasury").json()
         wallets = {w["currency"]: w for w in tr["wallets"]}
         for ccy in CCYS:

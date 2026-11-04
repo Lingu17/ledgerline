@@ -339,8 +339,10 @@ test("phone width: a judge can do the whole three-step path at 375 px", async ({
   await expect(page.getByText(/The practice teammate sent refund/).first()).toBeVisible();
   await noSideScroll("approvals");
   await page.goto("/#/walkthrough");
-  // Sent from Approvals, the step shows a Run button that records it; the bank steps follow.
-  for (const t of ["Approve and send the refund", "Bank reports SENT", "Bank reports PAID"]) await finish(t);
+  // Sent from Approvals, the step is already done: no Run button is left for it.
+  await expect(row("Approve and send the refund").locator(".n.done")).toHaveCount(1);
+  await expect(row("Approve and send the refund").getByRole("button", { name: "Run", exact: true })).toHaveCount(0);
+  for (const t of ["Bank reports SENT", "Bank reports PAID"]) await finish(t);
   await expect(page.locator(".steps .n.done")).toHaveCount(8);
   await ctx.close();
 });
@@ -464,4 +466,7 @@ test("payment detail shows the decision path and accounts for every cent", async
   await why.getByRole("button", { name: "Explain this decision" }).click();
   await expect(why.getByText(/Written from a template; the decision was made by rules in code/)).toBeVisible();
   await expect(why.getByText(/DEP-1003/).first()).toBeVisible();
+  // Replay: the same rules on the inputs stored with the plan give the same plan; nothing changes.
+  await page.getByRole("button", { name: "Replay this decision" }).first().click();
+  await expect(page.getByText("Same plan.")).toBeVisible();
 });

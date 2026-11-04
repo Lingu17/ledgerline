@@ -167,6 +167,7 @@ def test_guided_demo_over_api_with_stale_view_protection(client, app):
     assert client.post("/api/demo/step", json={"step": "approve"}, headers=OP).status_code == 409
     second = _invite_and_join(client, app, "second@northbeam.test", "operator")
     assert second.post(f"/api/approvals/{ap['id']}/execute").status_code == 200
+    assert client.get("/api/demo").json()["next"] == "bank_sent"  # the send itself completes the step
     for step in ["approve", "bank_sent", "bank_paid"]:
         assert client.post("/api/demo/step", json={"step": step}, headers=OP).status_code == 200
     ledger = client.get("/api/ledger").json()

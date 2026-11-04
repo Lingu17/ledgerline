@@ -1,0 +1,34 @@
+{
+  "description": "A test vector: the question Ledgerline sends about DEP-1005, the signed answer, and the public key that verifies it. The private key was thrown away. canonical is the exact UTF-8 text that was signed.",
+  "public_key": "mu216rbhUsTgyYLei8hhZh4NWn9eqhr5AxH3IIlnmEI=",
+  "question": {
+    "customer_id": "CUST-DUNMORE",
+    "deposit_id": "DEP-1005",
+    "currency": "USD",
+    "amount_minor": 120000,
+    "received_at": "2026-11-03T10:14:52Z",
+    "reference": "DUNMORE MAR"
+  },
+  "answer": {
+    "status": "answered",
+    "envelope": {
+      "claim": {
+        "schema": "ledgerline.explain_payment.v1",
+        "deposit_id": "DEP-1005",
+        "customer_id": "CUST-DUNMORE",
+        "currency": "USD",
+        "amount_minor": 120000,
+        "invoice_id": "INV-2291",
+        "reason": "advance_payment",
+        "note": "Advance for March.",
+        "issued_at": "2026-11-03T10:15:00Z",
+        "expires_at": "2026-11-03T10:20:00Z",
+        "nonce": "9f2c4be07a1d5e63"
+      },
+      "signature": "cnGHD4XiiHaRBK1HgxLrt9CRfIpmUyXJeiilmfuw9clgtttgfGvfYOxSlMHZcg/YwXlZ4NTiMKKyJzA5xtVYDg==",
+      "key_id": "ed25519:13dc7473cc021b1f",
+      "alg": "Ed25519"
+    }
+  },
+  "canonical": "{\"amount_minor\":120000,\"currency\":\"USD\",\"customer_id\":\"CUST-DUNMORE\",\"deposit_id\":\"DEP-1005\",\"expires_at\":\"2026-11-03T10:20:00Z\",\"invoice_id\":\"INV-2291\",\"issued_at\":\"2026-11-03T10:15:00Z\",\"nonce\":\"9f2c4be07a1d5e63\",\"note\":\"Advance for March.\",\"reason\":\"advance_payment\",\"schema\":\"ledgerline.explain_payment.v1\"}"
+}

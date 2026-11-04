@@ -53,7 +53,7 @@ Money arrives with a missing reference, a fee taken off, in the wrong currency, 
 **The three checks on every agent answer:** who signed it · that it is about this payment and still fresh · that your own records agree.
 
 > **Limits, stated up front**
-> - **Payer agents.** The built-in payer agents are simulated: they answer from a fixed table with keys held on this server, so their signature proves the mechanism, not that an outside party said anything. A customer can now run its own agent instead, holding its own key, and Ledgerline asks it over the network with the same three checks; that path is tested end to end with the reference agent (`tools/payer_agent`) as a separate process on the same machine, on the same machine. On 3 Nov 2026 it also ran across the internet: the reference agent ran on the owner's own PC behind a Cloudflare tunnel, the live site asked it about a practice payment, and its signed answer passed the three checks and was labelled Customer's own agent. That was the owner's machine, not an independent party, and no real company runs one today.
+> - **Payer agents.** The built-in payer agents are simulated: they answer from a fixed table with keys held on this server, so their signature proves the mechanism, not that an outside party said anything. A customer can now run its own agent instead, holding its own key, and Ledgerline asks it over the network with the same three checks; that path is tested end to end with the reference agent (`tools/payer_agent`) as a separate process on the same machine. On 3 Nov 2026 it also ran across the internet: the reference agent ran on the owner's own PC behind a Cloudflare tunnel, the live site asked it about a practice payment, and its signed answer passed the three checks and was labelled Customer's own agent. That was the owner's machine, not an independent party, and no real company runs one today. The protocol is written down in [PAYER_AGENT_SPEC](docs/PAYER_AGENT_SPEC.md), with a JSON schema and a signed test vector.
 > - **Run on the real Airwallex sandbox:** signed deposit webhooks, a refund of an unmatched deposit (SENT → PAID, one transfer), a currency conversion, a EUR 100 bill payment (SENT → PAID), a paid early-payment link, beneficiaries and live rates. **Tested only on the simulated bank:** refunds the agent proposes, including the rule that a different member sends them and the practice teammate; automatic refunds under the limit; a refund returned to a person after the limit is lowered; failed and timed-out transfers; the pause switch; a paid exact-balance link; and wrong-currency conversion.
 > - **One person with two emails would pass the two-person rule.** It checks accounts, not people. Both live payments out, the refund and the bill payment, were proposed and approved with two accounts that belong to the owner, so they show the control and the bank call, not independent review.
 
@@ -90,6 +90,7 @@ Money arrives with a missing reference, a fee taken off, in the wrong currency, 
 | **The agent asks by itself** | An unclear payment gets its question asked on arrival, with no click. A signed answer must pass three checks: who signed it, that it is about this payment and still fresh, and that your records agree | Tested, simulated agents |
 | **AI document reader** | Claude reads remittance emails and PDFs and suggests; a person decides | Live |
 | **Why this plan** | A plain-language explanation of each payment's plan, written from structured facts only (ids, amounts, categories, check results; never free text such as the email, the payer name or an agent's own words) and checked: it must cite real ids and use only the facts' numbers, or it is not shown. Advice only; nothing that decides reads it | Tested |
+| **Replay this decision** | Any plan the rules made can be re-run: Ledgerline keeps the exact inputs the rules read (and their hash in the audit log), runs the same rules on them again and shows **Same plan** or the difference. A person's decision has no rules to re-run. Read-only | Tested |
 | **Two people for money out** | Every bill payment, and refunds above your limit. A person proposes and another approves; if the agent proposed it, one person approves and another sends. The approver sees the exact amount and destination; if anything changes, the approval is void | Live; agent-proposed refunds tested on the simulated bank only |
 | **Refunds and bill payments** | One transfer under a duplicate lock. SENT is not final; only PAID closes it | Live |
 | **What to pay first** | Ranks bills and decides: fund, convert, defer or escalate. A bill that releases more cash than it costs goes first | Tested |
@@ -254,6 +255,7 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 |:--|:--|:--|
 | Reference company (6 payments) | **4** decided with no person, **3** fully closed · **1** approval · **1** escalation with its reason · **0** double payments · ledger balanced | [EVALUATION](docs/EVALUATION.md) |
 | Randomized companies | **50** companies · **2,127** payments · **0** allocations disagreeing with an independent reference model | [EVALUATION](docs/EVALUATION.md) |
+| Value on synthetic companies (first plan per payment) | **8,826** payments in 200 made-up companies built with many hard cases: **30.4%** decided with no person, **50.5%** escalated with a reason, **19.2%** waiting for the payer's agent · **0** refunds sent without verified evidence or a person · about **223 hours** of matching saved *if* a payment takes 5 minutes by hand (an assumption) | [MEASURED_VALUE](docs/MEASURED_VALUE.md) |
 | Accuracy harness (rules only, automatic asking switched off) | **200** companies and 25 sample walkthroughs · **51,475** checks · **0** mismatches | [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) |
 | Live Airwallex sandbox (Google Cloud host) | signed webhooks booked once · beneficiary validated and created · current FX rates · refund approved with the owner's second account (not independent review), **one** transfer, SENT → PAID, liability released only at PAID | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
 | Live hosted link (2 Nov) | a test-card payment of EUR 197 on a Singapore sandbox account was reported paid by Airwallex and booked once; the invoice settled and the bill moved from Escalate to Fund | Live app |
@@ -262,7 +264,7 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 | Release (30 Oct) | CI 5/5 jobs · public smoke 32/32 · data survives restart, VM reboot and redeploy (8/8 each) | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
 | Tests (4 Nov) | backend **513** passed, 1 POSIX-only skip on Windows · browser **26/26** on Microsoft Edge, including the whole judge path at phone width (375 px). GitHub Actions has been blocked by an account billing hold since 3 Nov, so these deploys were checked by two separate local runs, not CI, and the PostgreSQL suite has not run since CI run #163 | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
 
-What is **not** measured yet: real customers' payment mix, hours saved, adoption. Those need a pilot.
+What is **not** measured yet: real customers' payment mix, real time saved (the hours above rest on an assumed 5 minutes per payment), how often real payer agents answer, adoption. Those need a pilot.
 
 ---
 
@@ -441,7 +443,8 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 | For | Read |
 |:--|:--|
 | Judges | [JUDGE_QUICKSTART](docs/JUDGE_QUICKSTART.md) · [JUDGE_QA](docs/JUDGE_QA.md) · [DEMO_SCRIPT](docs/DEMO_SCRIPT.md) |
-| Evidence | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) · [EVALUATION](docs/EVALUATION.md) · [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) |
+| Evidence | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) · [EVALUATION](docs/EVALUATION.md) · [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) · [MEASURED_VALUE](docs/MEASURED_VALUE.md) |
+| Payer agents | [PAYER_AGENT_SPEC](docs/PAYER_AGENT_SPEC.md) · [JSON schema](docs/schemas/explain_payment.v1.schema.json) · [test vector](docs/schemas/explain_payment.v1.example.json) · [reference agent](tools/payer_agent/agent.py) |
 | Acceptance | [FULL_APPLICATION_ACCEPTANCE_REPORT](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) · [HACKATHON_REQUIREMENTS_MATRIX](docs/HACKATHON_REQUIREMENTS_MATRIX.md) |
 | Operations | [DEPLOYMENT](docs/DEPLOYMENT.md) · [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md) |
 | Origin | [Accepted proposal](docs/original-proposal.txt) · [SUBMISSION_DRAFT](docs/SUBMISSION_DRAFT.md) |

@@ -5,13 +5,15 @@ import hashlib
 import json
 import sqlite3
 import uuid
+from dataclasses import asdict
+from datetime import timezone
 from typing import Any
 
 from . import audit, crypto, db
 from .clock import iso
 from .context import AppContext
 from .evidence import verify
-from .matching import InvoiceView, initial_plan
+from .matching import InvoiceView, identify_customer, initial_plan, parse_invoice_refs
 from .money import fmt, validate_currency, validate_minor
 
 # Deposit statuses
@@ -151,22 +153,43 @@ def ingest_deposit(conn: sqlite3.Connection, ctx: AppContext, fields: dict[str, 
 def run_initial_plan(conn: sqlite3.Connection, ctx: AppContext, deposit_id: str) -> dict[str, Any]:
     deposit = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (deposit_id,))
     policy = ctx.policy(conn)
-    plan = initial_plan(deposit, customers(conn), invoice_views(conn), policy["fee_tolerance_minor"][deposit["currency"]],
+    all_customers, invoices = customers(conn), invoice_views(conn)
+    plan = initial_plan(deposit, all_customers, invoices, policy["fee_tolerance_minor"][deposit["currency"]],
                         policy["fee_tolerance_bps"])
-    return _store_and_apply(conn, ctx, deposit, plan.to_dict(), kind="initial", evidence_id=None)
+    # Exactly what the rules read, so the decision can be replayed: the payer's customer record (the first match is
+    # the one used), the invoices the reference names, and for a payment with no reference the same-amount invoices.
+    refs = parse_invoice_refs(deposit["reference"] or "")
+    match = identify_customer(deposit["payer_name"], all_customers)
+    read = {i.id: i for i in invoices.values() if i.id in refs or (not refs and i.currency == deposit["currency"]
+                                                                   and i.remaining_minor == deposit["amount_minor"] and i.status == "open")}
+    inputs = {"rule": "initial_plan",
+              "deposit": {k: deposit[k] for k in ("id", "amount_minor", "currency", "payer_name", "reference")},
+              "customers": [{"id": match["id"], "payer_names": match["payer_names"], "agent_public_key": match["agent_public_key"]}] if match else [],
+              "invoices": {k: asdict(v) for k, v in sorted(read.items())},
+              "fee_tolerance_minor": policy["fee_tolerance_minor"][deposit["currency"]], "fee_tolerance_bps": policy["fee_tolerance_bps"]}
+    return _store_and_apply(conn, ctx, deposit, plan.to_dict(), kind="initial", evidence_id=None, inputs=inputs)
+
+
+def inputs_hash(inputs: dict[str, Any]) -> str:
+    """Hash of a plan's stored inputs. Plain sorted JSON, not the signing encoding: an agent's malformed answer may
+    carry floats, and recording it must never fail."""
+    return crypto.sha256_hex(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode())
 
 
 def _store_and_apply(conn: sqlite3.Connection, ctx: AppContext, deposit: dict[str, Any], plan: dict[str, Any], *,
-                     kind: str, evidence_id: str | None) -> dict[str, Any]:
+                     kind: str, evidence_id: str | None, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
     now = iso(ctx.clock.now())
     dep_id = deposit["id"]
     version = int(conn.execute("SELECT COALESCE(MAX(version),0)+1 FROM plans WHERE deposit_id = ?", (dep_id,)).fetchone()[0])
     conn.execute(
-        "INSERT INTO plans(deposit_id, version, kind, category, summary, actions, evidence_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
-        (dep_id, version, kind, plan["category"], plan["summary"], json.dumps(plan["actions"]), evidence_id, now),
+        "INSERT INTO plans(deposit_id, version, kind, category, summary, actions, evidence_id, created_at, inputs) VALUES (?,?,?,?,?,?,?,?,?)",
+        (dep_id, version, kind, plan["category"], plan["summary"], json.dumps(plan["actions"]), evidence_id, now,
+         json.dumps(inputs, sort_keys=True) if inputs is not None else None),
     )
-    audit.record(conn, now, "rules" if kind == "initial" else "system", f"plan.{kind}", "deposit", dep_id,
-                 {"version": version, "category": plan["category"], "actions": plan["actions"], "notes": plan.get("notes", [])})
+    detail = {"version": version, "category": plan["category"], "actions": plan["actions"], "notes": plan.get("notes", [])}
+    if inputs is not None:
+        detail["inputs_hash"] = inputs_hash(inputs)  # a replay checks the stored inputs against this
+    audit.record(conn, now, "rules" if kind == "initial" else "system", f"plan.{kind}", "deposit", dep_id, detail)
     # Bump first so anything created below (e.g. an approval) binds to the new version.
     _bump_version(conn, dep_id, now, f"plan v{version}")
     deposit = db.row(conn, "SELECT * FROM deposits WHERE id = ?", (dep_id,))
@@ -348,9 +371,8 @@ def record_agent_answer(conn: sqlite3.Connection, ctx: AppContext, deposit_id: s
 
     raw = json.dumps(envelope if envelope is not None else answer, sort_keys=True)
     claim_hash = crypto.sha256_hex(raw.encode())
-    if result["verdict"] == "verified" and db.row(
-        conn, "SELECT id FROM evidence WHERE claim_hash = ? AND verdict = 'verified'", (claim_hash,)
-    ):
+    already_used = db.row(conn, "SELECT id FROM evidence WHERE claim_hash = ? AND verdict = 'verified'", (claim_hash,)) is not None
+    if result["verdict"] == "verified" and already_used:
         result["verdict"] = "rejected"
         result["reason"] = "replayed answer: this exact signed claim was already used"
     ev_version = int(conn.execute("SELECT COALESCE(MAX(version),0)+1 FROM evidence WHERE deposit_id = ?", (deposit_id,)).fetchone()[0])
@@ -364,9 +386,27 @@ def record_agent_answer(conn: sqlite3.Connection, ctx: AppContext, deposit_id: s
                  {"evidence_id": ev_id, "transport": transport, "verdict": result["verdict"], "reason": result["reason"],
                   "checks": [{c["name"]: c["passed"]} for c in result["checks"]]})
 
+    # Exactly what the checks read, so the decision can be replayed.
+    claim_in = envelope.get("claim") if isinstance(envelope, dict) else None
+    claimed = claim_in.get("invoice_id") if isinstance(claim_in, dict) else None
+    registry = key_registry(conn) if envelope is not None else {}
+    inputs = {"rule": "payer_agent_answer", "envelope": envelope,
+              "no_envelope_reason": result["reason"] if envelope is None else None,
+              "deposit": {k: deposit[k] for k in ("id", "currency", "amount_minor", "customer_id")},
+              "asked_customer_id": asked_customer_id,
+              "registry": {asked_customer_id: registry[asked_customer_id]} if asked_customer_id in registry else {},
+              "invoices": {claimed: asdict(invoices[claimed])} if isinstance(claimed, str) and claimed in invoices else {},
+              "now": now_dt.astimezone(timezone.utc).isoformat(), "max_ttl_seconds": policy["evidence_max_ttl_seconds"], "skew_seconds": policy["evidence_clock_skew_seconds"],
+              "applicable_minor": applicable, "already_used": already_used}
+    plan = plan_after_answer(result, deposit, applicable)
+    revised = _store_and_apply(conn, ctx, deposit, plan, kind="revised", evidence_id=ev_id, inputs=inputs)
+    return {"evidence_id": ev_id, "verification": result, "plan": revised}
+
+
+def plan_after_answer(result: dict[str, Any], deposit: dict[str, Any], amount: int) -> dict[str, Any]:
+    """The revised plan for a checked answer. Pure: `amount` is the still-unapplied part of the deposit (overpayments
+    were partly allocated already), and only that part is decided by this evidence."""
     claim = result["claim"]
-    # Only the still-unapplied part is decided by this evidence (overpayments were partly allocated already).
-    amount = applicable
     if result["verdict"] != "verified":
         plan = {
             "category": "evidence_rejected",
@@ -399,5 +439,4 @@ def record_agent_answer(conn: sqlite3.Connection, ctx: AppContext, deposit_id: s
             "actions": [{"type": "request_refund_approval", "amount_minor": amount,
                          "reason": f"verified duplicate of {claim['invoice_id']}"}],
         }
-    revised = _store_and_apply(conn, ctx, deposit, plan, kind="revised", evidence_id=ev_id)
-    return {"evidence_id": ev_id, "verification": result, "plan": revised}
+    return plan

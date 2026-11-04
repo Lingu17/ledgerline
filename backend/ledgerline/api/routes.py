@@ -235,6 +235,17 @@ def read_remittance(request: Request, deposit_id: str, body: RemittanceBody | No
         raise HTTPException(409, str(exc)) from exc
 
 
+@router.get("/deposits/{deposit_id}/plans/{version}/replay", dependencies=read)
+def replay_decision(request: Request, deposit_id: str, version: int) -> dict[str, Any]:
+    """Run the same rules again on the inputs stored with this plan and compare. Changes nothing."""
+    from ..replay import ReplayError, replay_plan
+
+    try:
+        return replay_plan(ctx_of(request), deposit_id, version)
+    except ReplayError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @router.get("/deposits/{deposit_id}/explanation", dependencies=read)
 def get_explanation(request: Request, deposit_id: str) -> dict[str, Any]:
     """The cached "why this plan" for the current plan version, if one was written. Advice only."""

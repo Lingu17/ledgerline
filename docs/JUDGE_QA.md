@@ -1,7 +1,7 @@
 # Judge Q&A, short and honest
 
 **Who would actually answer your agent call today?**
-No outside company yet. The built-in payer agents are simulated, with their keys on our server. A customer can instead run its own agent with its own key and register its address and public key; Ledgerline then asks it over the network and applies the same three checks. That path is tested end to end with our reference agent as a separate process, and anyone can run it (see the quickstart). On 3 Nov 2026 it also ran across the internet: the reference agent ran on the owner's own PC behind a Cloudflare tunnel, the live site asked it about a practice payment, and its signed answer passed the three checks and was labelled Customer's own agent. That was the owner's machine, not an independent party, and no real company runs one today.
+No outside company yet. The built-in payer agents are simulated, with their keys on our server. A customer can instead run its own agent with its own key and register its address and public key; Ledgerline then asks it over the network and applies the same three checks. That path is tested end to end with our reference agent as a separate process, and anyone can run it (see the quickstart). On 3 Nov 2026 it also ran across the internet: the reference agent ran on the owner's own PC behind a Cloudflare tunnel, the live site asked it about a practice payment, and its signed answer passed the three checks and was labelled Customer's own agent. That was the owner's machine, not an independent party, and no real company runs one today. The protocol, with a JSON schema and a signed test vector, is in [PAYER_AGENT_SPEC](PAYER_AGENT_SPEC.md).
 
 **Why trust a signed answer at all?**
 We don't trust it on its own. The signature only says who is speaking. The answer must also be about this exact payment, be fresh, and agree with our records. DEP-1004 shows a correctly signed answer being rejected because the records disagree.
@@ -14,6 +14,9 @@ It is treated as data. Tests feed emails that say "ignore previous instructions"
 
 **Does the AI explain its decisions?**
 The rules in code decide. On request, each payment gets a short "why this plan", written from structured facts only: ids, amounts, categories and check results. No free text goes in, not the email, not the payer name the bank reports, not a payer agent's own words, so an instruction hidden in any of them cannot reach it; tests try both a payer name and an agent's answer. It must cite ids that exist and use only numbers from the facts, or it is dropped and shown as unavailable. It is labelled as advice and nothing that decides reads it; tests show the plan is identical with or without it. Practice companies use a fixed template, so judges' clicks cost nothing.
+
+**Can I check a decision was made the way you say?**
+Yes: **Replay this decision** on any plan in a payment's history. Each plan keeps the exact inputs the rules read (the payment, the payer's customer record, the invoices it names, the policy limits; for an agent's answer, the signed envelope, the registered key and the time), and the audit log keeps their hash. A replay checks the hash, runs the same rules again and shows *Same plan* or each difference. Every accuracy run replays every decision of every synthetic company. A person's own decision is shown as such; there are no rules to re-run.
 
 **Is the two-person rule real if you used two of your own accounts?**
 The rule checks accounts, not people, and we say so. The live sandbox runs show the control and the bank call. They aren't independent review.

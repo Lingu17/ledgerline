@@ -262,6 +262,7 @@ ALTER TABLE customers ADD COLUMN agent_url TEXT;
 ALTER TABLE customers ADD COLUMN agent_key_set_by TEXT;
 ALTER TABLE customers ADD COLUMN agent_key_set_at TEXT
 """),
+    (11, "the exact inputs each plan was made from, so a decision can be replayed", "ALTER TABLE plans ADD COLUMN inputs TEXT"),
 ]
 
 

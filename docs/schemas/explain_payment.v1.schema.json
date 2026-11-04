@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ledgerline.explain_payment.v1",
+  "title": "Ledgerline explain_payment v1",
+  "description": "The one MCP tool a payer's agent offers to Ledgerline: the question Ledgerline sends, and the answer the agent returns. An answer is a signed claim, never an instruction. See docs/PAYER_AGENT_SPEC.md.",
+  "$defs": {
+    "question": {
+      "description": "The arguments of the explain_payment tool call. Only these fields leave Ledgerline: no balances, notes or other customers' data.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customer_id", "deposit_id", "currency", "amount_minor", "received_at", "reference"],
+      "properties": {
+        "customer_id": {"type": "string", "description": "The payer as Ledgerline knows it. The claim must speak for this customer."},
+        "deposit_id": {"type": "string", "description": "The incoming payment being asked about. The claim must name it."},
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+        "amount_minor": {"type": "integer", "minimum": 1, "description": "Amount in the currency's minor unit (cents for USD)."},
+        "received_at": {"type": "string", "description": "When the payment arrived, ISO 8601 in UTC."},
+        "reference": {"type": "string", "description": "The bank reference as received; may be empty."}
+      }
+    },
+    "answer": {
+      "description": "The tool result: an answered claim, or 'unknown' when the payer has no record of the payment.",
+      "oneOf": [{"$ref": "#/$defs/answered"}, {"$ref": "#/$defs/unknown"}]
+    },
+    "answered": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "envelope"],
+      "properties": {
+        "status": {"const": "answered"},
+        "envelope": {"$ref": "#/$defs/envelope"}
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"const": "unknown"},
+        "customer_id": {"type": "string"},
+        "detail": {"type": "string", "description": "Shown to a person; never acted on."}
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "signature", "key_id"],
+      "properties": {
+        "claim": {"$ref": "#/$defs/claim"},
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{86}==$",
+          "description": "Standard base64 of the 64-byte Ed25519 signature over the canonical JSON of claim."
+        },
+        "key_id": {
+          "type": "string",
+          "pattern": "^ed25519:[0-9a-f]{16}$",
+          "description": "'ed25519:' plus the first 16 hex characters of SHA-256 of the raw 32-byte public key."
+        },
+        "alg": {"const": "Ed25519"}
+      }
+    },
+    "claim": {
+      "description": "What is signed. Every field is required and no other field is accepted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "deposit_id", "customer_id", "currency", "amount_minor", "invoice_id", "reason", "note",
+                   "issued_at", "expires_at", "nonce"],
+      "properties": {
+        "schema": {"const": "ledgerline.explain_payment.v1"},
+        "deposit_id": {"type": "string", "description": "Copied from the question."},
+        "customer_id": {"type": "string", "description": "Copied from the question."},
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$", "description": "Copied from the question."},
+        "amount_minor": {"type": "integer", "description": "Copied from the question. Integers only: floats cannot be signed."},
+        "invoice_id": {"type": "string", "description": "The seller's invoice the payment relates to, as it appears on the invoice."},
+        "reason": {"enum": ["invoice_payment", "advance_payment", "duplicate_payment"]},
+        "note": {"type": "string", "description": "Free text for a person to read. Ledgerline never acts on it and never shows it to Claude."},
+        "issued_at": {"type": "string", "description": "ISO 8601 UTC, for example 2026-11-03T10:15:00Z."},
+        "expires_at": {"type": "string", "description": "ISO 8601 UTC, after issued_at, at most 900 seconds later by default."},
+        "nonce": {"type": "string", "minLength": 8, "description": "Random per answer, so two answers about the same payment differ."}
+      }
+    }
+  }
+}

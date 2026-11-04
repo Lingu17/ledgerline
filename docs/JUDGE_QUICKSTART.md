@@ -23,7 +23,7 @@ cloudflared tunnel --url http://localhost:8790        # second window; prints ht
 python tools/payer_agent/agent.py --port 8790 --public-host <words>.trycloudflare.com   # prints its public key
 ```
 
-The agent creates its private key on first run and keeps it in `tools/payer_agent/agent_key.json`; only the public key goes to the site. In your practice company, **Customers → Dunmore → Payer agent…**, enter `https://<words>.trycloudflare.com/mcp` and the printed public key, then **Payments → DEP-1005 → Ask payer's agent**: the answer is labelled **Customer's own agent**. Edit `tools/payer_agent/answers.json` to make it claim something else and watch the checks reject it. Stop the tunnel when you are done.
+The agent creates its private key on first run and keeps it in `tools/payer_agent/agent_key.json`; only the public key goes to the site. In your practice company, **Customers → Dunmore → Payer agent…**, enter `https://<words>.trycloudflare.com/mcp` and the printed public key, then **Payments → DEP-1005 → Ask payer's agent**: the answer is labelled **Customer's own agent**. Edit `tools/payer_agent/answers.json` to make it claim something else and watch the checks reject it. Stop the tunnel when you are done. To write your own agent in another language, [PAYER_AGENT_SPEC](PAYER_AGENT_SPEC.md) has the exact question, answer, signing rule and a test vector.
 
 Day-to-day work without the practice steps: create an organization with **My company**, add customers and invoices, record or import payments (CSV), resolve escalations, invite teammates with roles (Team). A refund you propose must be approved by someone else.
 

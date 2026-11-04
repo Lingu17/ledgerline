@@ -205,6 +205,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   <li key={p.id}>
                     <span className={`dot ${p.kind === "initial" ? "" : ev?.verdict === "rejected" ? "risk" : "ok"}`} />
                     <PlanCard plan={p} ccy={x.currency} />
+                    {p.kind !== "operator" && <ReplayDecision id={x.id} version={p.version} />}
                   </li>
                 );
               })}
@@ -648,6 +649,49 @@ function ImportCsv({ onClose }: { onClose: () => void }) {
 interface Explanation { available: boolean; sentences?: string[]; cited_ids?: string[]; label?: string; reason?: string; plan_version: number }
 
 /** "Why this plan": written from facts only, cached per plan version, and never read by anything that decides. */
+interface Replay {
+  replayable: boolean;
+  reason?: string;
+  identical?: boolean;
+  inputs_untampered?: boolean;
+  ok?: boolean;
+  differences?: string[];
+}
+
+/** Runs the same rules again on the inputs stored with this plan and says whether they give the same plan. Changes nothing. */
+function ReplayDecision({ id, version }: { id: string; version: number }) {
+  const [r, setR] = useState<Replay | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const replay = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      setR(await get<Replay>(`/deposits/${id}/plans/${version}/replay`));
+    } catch (ex) {
+      setErr((ex as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="small" style={{ marginTop: 6 }} aria-live="polite">
+      {!r && <button className="btn small" disabled={busy} onClick={replay}>{busy ? "Replaying…" : "Replay this decision"}</button>}
+      {err && <span className="neg"> {err}</span>}
+      {r && !r.replayable && <span className="muted">Not replayed: {r.reason}.</span>}
+      {r?.replayable && r.ok && (
+        <span><b className="pos">Same plan.</b> The rules, run again on the inputs stored with v{version}, give the identical plan, and those inputs match their hash in the audit log. Nothing was changed.</span>
+      )}
+      {r?.replayable && !r.ok && (
+        <div>
+          <b className="neg">Different.</b> {r.inputs_untampered ? "" : "The stored inputs no longer match their hash in the audit log. "}
+          {(r.differences ?? []).map((d, i) => <div key={i} className="mono">{d}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WhyThisPlan({ id, planVersion }: { id: string; planVersion: number }) {
   const ex = useLoad(() => get<{ explanation: Explanation | null }>(`/deposits/${id}/explanation`), [id, planVersion]);
   const { run, busy } = useAction();
