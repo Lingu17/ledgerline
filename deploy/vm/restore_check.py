@@ -31,7 +31,8 @@ def check(blob_path: Path, key_path: Path, name: str | None = None) -> bool:
             tar.extractall(tmp, filter="data")
         root = next(Path(tmp).iterdir())
         with closing(sqlite3.connect(root / "control.sqlite3")) as c:
-            org_ids = {r[0] for r in c.execute("SELECT id FROM organizations")}
+            kinds = dict(c.execute("SELECT id, kind FROM organizations").fetchall())
+            org_ids = set(kinds)
             users = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         books = sorted(root.glob("orgs/*/ledgerline.sqlite3"))  # each organization's books (not its simulated bank)
         print(f"{name}: control database opens: {len(org_ids)} organizations, {users} accounts, {len(books)} sets of books")
@@ -45,8 +46,9 @@ def check(blob_path: Path, key_path: Path, name: str | None = None) -> bool:
             try:
                 balanced = ledger.conservation(conn)["all_balanced"]
                 # A practice company's open "Try to tamper" demo is put back in this temporary copy first, so the
-                # check still proves that the demo's one change is the only one.
-                demo = tamper_demo.undo(conn)
+                # check still proves that the demo's one change is the only one. Only for practice companies, as the
+                # control database records them: in a real company such a setting is never honoured.
+                demo = tamper_demo.undo(conn) if kinds.get(db_path.parent.name) == "sample" else None
                 chain = audit.verify_chain(conn)
             finally:
                 conn.close()

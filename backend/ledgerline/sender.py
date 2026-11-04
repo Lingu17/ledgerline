@@ -10,15 +10,16 @@ For a company connected to Airwallex it holds a proxy instead of a bank client:
   have run: approval status and scope hash, expiry, the pause switch, sender different from approver, the duplicate
   lock, the stable request id and the read-back after a timeout. No amount, account or request id is accepted.
 - Everything else the app needs from the bank (rates, quotes, transfer status, beneficiaries, deposits, payment
-  links, which move no money) is forwarded by method name from a fixed list. `create_transfer` and
+  links, sandbox simulations) is forwarded by method name from a fixed list. `create_transfer` and
   `create_conversion` are never forwarded.
 
-What it does not change: a compromised app could still request a send that its own database says was approved.
-The sender checks the database's approval; it cannot know whether that approval was written by a real person.
+What it does not change: a compromised app could still request a send that its own database says was approved, or
+add a payout beneficiary. The sender checks the database's approval; it cannot know whether a real person wrote it.
 
 Requests are one JSON line per connection on a Unix socket that only the app's group can open; the sender also checks
 the caller's user id when LEDGERLINE_SENDER_PEER_UID is set. `tcp:127.0.0.1:<port>` exists for tests and Windows
-development only, and only on loopback.
+development only, only on loopback, and `main` refuses it unless LEDGERLINE_SENDER_ALLOW_TCP=1: loopback TCP has no
+peer check, so any local user could connect.
 """
 from __future__ import annotations
 
@@ -39,7 +40,9 @@ log = logging.getLogger("ledgerline.sender")
 MAX_LINE = 1 << 20
 TIMEOUT = 90.0  # a send can wait on Airwallex; the client gives up later than the provider does
 
-# Forwarded to the bank client by name. None of these moves money.
+# Forwarded to the bank client by name. None of these pays money out of the account, but not all are harmless:
+# simulate_deposit and simulate_transfer_status exist only in the Airwallex sandbox, and create_beneficiary adds a
+# payout destination, which a compromised app could still request (paying it still needs a send by id, checked here).
 PROXY_METHODS = frozenset({
     "readiness", "current_rate", "list_deposits", "beneficiary_schema", "validate_beneficiary", "create_beneficiary",
     "list_beneficiaries", "simulate_deposit", "get_deposit", "find_transfer", "get_transfer", "simulate_transfer_status",
@@ -283,9 +286,11 @@ def serve(settings: Any, address: str, peer_uid: int | None = None) -> socketser
 def main() -> None:
     from .config import load_settings
 
+    address = os.environ.get("LEDGERLINE_SENDER_LISTEN", "unix:/run/ledgerline-send/send.sock")
+    if not address.startswith("unix:") and os.environ.get("LEDGERLINE_SENDER_ALLOW_TCP") != "1":
+        raise SystemExit("the sending service listens on a Unix socket; tcp: is for tests (set LEDGERLINE_SENDER_ALLOW_TCP=1)")
     settings = load_settings()
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    address = os.environ.get("LEDGERLINE_SENDER_LISTEN", "unix:/run/ledgerline-send/send.sock")
     uid = os.environ.get("LEDGERLINE_SENDER_PEER_UID")
     server = serve(settings, address, int(uid) if uid else None)
     log.info("sending service listening on %s", address)

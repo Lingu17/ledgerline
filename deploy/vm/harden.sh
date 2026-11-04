@@ -213,17 +213,22 @@ KEY_SEND=/var/lib/ledgerline-send/connections.key
 # ledgerline, so files become 660 and folders 770 (nobody else, as before); the backups folder stays the app's alone.
 sender_step() {
   if systemctl is-active --quiet ledgerline-send; then echo "the sending service is already on"; check_sender; return; fi
+  # Any failure part-way puts everything back as it was, so the app never restarts without its keys.
+  trap 'trap - ERR; echo "sender: a step failed; turning it back off" >&2; sender_off; exit 1' ERR
   id ledgerline-send >/dev/null 2>&1 || useradd --system --gid ledgerline --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin ledgerline-send
   install -d -o ledgerline-send -g ledgerline -m 700 /var/lib/ledgerline-send
+  local keys
+  keys=$(grep -E '^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY)=' "$ENVF" || true)
+  if [[ -z $keys && -f $SENV ]]; then keys=$(grep -E '^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY)=' "$SENV" || true); fi  # an earlier half-done run
   (umask 077
-   { grep -E '^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY)=' "$ENVF" || true
+   { if [[ -n $keys ]]; then printf '%s\n' "$keys"; fi
      echo "LEDGERLINE_CONNECTIONS_KEY_PATH=$KEY_SEND"
-     echo "LEDGERLINE_SENDER_PEER_UID=$(id -u ledgerline)"; } > "$SENV")
-  chown root:root "$SENV"; chmod 600 "$SENV"
+     echo "LEDGERLINE_SENDER_PEER_UID=$(id -u ledgerline)"; } > "$SENV.new")
+  chown root:root "$SENV.new"; chmod 600 "$SENV.new"; mv "$SENV.new" "$SENV"
   sed -i -E '/^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY|LEDGERLINE_SENDER_SOCKET)=/d' "$ENVF"
   echo "LEDGERLINE_SENDER_SOCKET=unix:/run/ledgerline-send/send.sock" >> "$ENVF"
   chown root:ledgerline "$ENVF"; chmod 640 "$ENVF"
-  if [[ -f $KEY_APP ]]; then mv "$KEY_APP" "$KEY_SEND"; fi
+  if [[ -f $KEY_APP && ! -f $KEY_SEND ]]; then mv "$KEY_APP" "$KEY_SEND"; fi
   if [[ -f $KEY_SEND ]]; then chown ledgerline-send:ledgerline "$KEY_SEND"; chmod 600 "$KEY_SEND"; fi
   mkdir -p "$DROPIN"; printf '[Service]\nUMask=0007\n' > "$DROPIN/umask.conf"
   find /var/lib/ledgerline -path /var/lib/ledgerline/backups -prune -o -type d -exec chmod 770 {} +
@@ -232,6 +237,7 @@ sender_step() {
   systemctl daemon-reload
   systemctl enable --now ledgerline-send
   systemctl restart ledgerline
+  trap - ERR
   if ! check_app || ! check_sender; then echo "sender: a check failed; turning it back off"; sender_off; exit 1; fi
   echo "sender: on. The Airwallex keys and connections.key are readable only by the sending service and root."
   echo "Store the moved key in your password manager if you have not: sudo cat $KEY_SEND   (never paste it into a chat)"
@@ -252,17 +258,26 @@ print("SENDER OK" if isinstance(r, dict) else "SENDER BAD")' 2>&1) || true
   (( ok ))
 }
 
+# Safe from any half-done state: never duplicates a key line, never overwrites a key file, never prints a secret.
 sender_off() {
   systemctl disable --now ledgerline-send 2>/dev/null || true
-  sed -i -E '/^LEDGERLINE_SENDER_SOCKET=/d' "$ENVF"
-  if [[ -f $SENV ]]; then grep -E '^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY)=' "$SENV" >> "$ENVF" || true; rm -f "$SENV"; fi
-  chown root:ledgerline "$ENVF"; chmod 640 "$ENVF"
-  if [[ -f $KEY_SEND ]]; then mv "$KEY_SEND" "$KEY_APP"; chown ledgerline:ledgerline "$KEY_APP"; chmod 600 "$KEY_APP"; fi
+  sed -i -E '/^LEDGERLINE_SENDER_SOCKET=/d' "$ENVF" || true
+  if [[ -f $SENV ]]; then
+    local line
+    while IFS= read -r line; do
+      grep -q "^${line%%=*}=" "$ENVF" || printf '%s\n' "$line" >> "$ENVF"
+    done < <(grep -E '^(AIRWALLEX_CLIENT_ID|AIRWALLEX_API_KEY)=' "$SENV" || true)
+    rm -f "$SENV"
+  fi
+  chown root:ledgerline "$ENVF" || true; chmod 640 "$ENVF" || true
+  if [[ -f $KEY_SEND && ! -f $KEY_APP ]]; then mv "$KEY_SEND" "$KEY_APP"
+  elif [[ -f $KEY_SEND ]]; then echo "WARNING: both $KEY_SEND and $KEY_APP exist; left both in place, compare them by hand" >&2; fi
+  if [[ -f $KEY_APP ]]; then chown ledgerline:ledgerline "$KEY_APP" || true; chmod 600 "$KEY_APP" || true; fi
   mkdir -p "$DROPIN"; printf '[Service]\nUMask=0077\n' > "$DROPIN/umask.conf"
-  find /var/lib/ledgerline -type f -exec chmod 600 {} +
-  find /var/lib/ledgerline -type d -exec chmod 700 {} +
+  find /var/lib/ledgerline -type f -exec chmod 600 {} + || true
+  find /var/lib/ledgerline -type d -exec chmod 700 {} + || true
   rm -f /etc/systemd/system/ledgerline-send.service
-  reload_restart
+  reload_restart || true
   check_app && echo "sender: off. The app holds the Airwallex keys again, as before. (The ledgerline-send user is left in place.)"
 }
 

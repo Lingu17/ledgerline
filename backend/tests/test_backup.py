@@ -58,6 +58,30 @@ def test_a_copy_taken_during_a_practice_tamper_demo_checks_clean_with_the_change
     assert client.get("/api/audit/verify").json()["broken_at"] == event  # the live company is untouched by the check
 
 
+def test_a_real_company_with_a_forged_demo_setting_still_fails(app, settings, key_file, tmp_path, capsys):
+    from fastapi.testclient import TestClient
+
+    from ledgerline import db
+
+    from .conftest import signup
+
+    c = TestClient(app)
+    signup(c, email="owner@real-backup.test", org="Real Books", start_with="empty")
+    assert c.post("/api/customers", json={"name": "Acme", "country": "GB", "payer_names": ["ACME LTD"],
+                                          "refund_beneficiary": "Acme - account"}).status_code == 200
+    ctx = app.state.orgs.get(c.org_id)
+    with ctx.conn() as conn, db.transaction(conn):  # someone with database access edits a row and plants a cover story
+        e = db.row(conn, "SELECT id, detail FROM audit_events ORDER BY id LIMIT 1")
+        changed = e["detail"].replace("}", ', "x": 1}', 1)
+        conn.execute("UPDATE audit_events SET detail = ? WHERE id = ?", (changed, e["id"]))
+        db.set_setting(conn, "practice_tamper", {"id": e["id"], "action": "x", "field": "amount_minor", "from": 0, "to": 0,
+                                                 "original": e["detail"], "changed": changed})
+    snap = backup.snapshot(Path(settings.data_dir), Path(settings.data_dir) / "backups", 7)
+    assert restore_check.check(write_encrypted(snap, key_file, tmp_path), key_file) is False
+    out = capsys.readouterr().out
+    assert f"{c.org_id}: books balanced=True, audit chain ok=False" in out and "put back" not in out and "FAIL" in out
+
+
 def test_a_copy_missing_an_organizations_books_fails(snapshot, key_file, tmp_path, capsys):
     next(snapshot.glob("orgs/*/ledgerline.sqlite3")).unlink()
     assert restore_check.check(write_encrypted(snapshot, key_file, tmp_path), key_file) is False

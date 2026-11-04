@@ -179,7 +179,7 @@ The drill ends with `restore check: PASS` and `RECOVERY TIME: N minutes`. Send t
 measured time. Saved Airwallex keys are not in the backup (by design); a real recovery reconnects Airwallex under
 Settings, and moves the reserved address to the new VM.
 
-## 7. Separate sending service (on the VM, 3 minutes; the app restarts for a few seconds)
+## 7. Separate sending service (on the VM, 3 minutes; both services stop and start, a few seconds offline: run it well before judging)
 
 After this step the Airwallex keys live only in a separate process; the app cannot read them. The server-wide
 Airwallex keys move from `/etc/ledgerline/ledgerline.env` to a root-only `/etc/ledgerline/sender.env`, and
@@ -194,5 +194,6 @@ sudo bash /opt/ledgerline/src/deploy/vm/harden.sh sender
 ```
 
 It ends with `sender: on.` after checking: both services active, the app's user cannot read `sender.env` or the moved
-key, the app's settings hold no Airwallex key, and the app's user can reach the service. If any check fails it turns
-itself back off. Undo: `harden.sh sender-off`. Run `sender-off` before ever deploying a commit older than this step.
+key, the app's settings hold no Airwallex key, and the app's user can reach the service. If any step or check fails it turns
+itself back off. Undo: `harden.sh sender-off`. Run `sender-off` before ever deploying a commit older than this step; `update.sh` refuses such a commit (and a
+rollback to one) while the service is on.

@@ -33,8 +33,10 @@ healthy() {  # the health route answers, and a signed-out request to a real rout
   return 1
 }
 
+sender_on() { systemctl is-enabled --quiet ledgerline-send 2>/dev/null; }
+
 restart_services() {  # the sending service, when the owner turned it on, runs the same code and restarts first
-  if systemctl is-enabled --quiet ledgerline-send 2>/dev/null; then systemctl restart ledgerline-send; fi
+  if sender_on; then systemctl restart ledgerline-send; fi
   systemctl restart ledgerline
 }
 
@@ -60,9 +62,19 @@ main() {
   cp "$SRC/deploy/vm/checkout.sh" "$CHECKOUT"
   chmod 644 "$CHECKOUT"  # the service user runs it
   PREV=$(as_app git -C "$SRC" rev-parse HEAD)
+  # With the sending service on, code from before it would ignore the socket and hold no keys, so neither the new
+  # version nor the one a rollback would restore may predate it.
+  if sender_on && ! as_app git -C "$SRC" cat-file -e "$PREV:backend/ledgerline/sender.py" 2>/dev/null; then
+    echo "the sending service is on but the running commit $PREV predates it; run harden.sh sender-off first" >&2
+    rm -f "$CHECKOUT"; exit 1
+  fi
 
   trap rollback ERR
   as_app bash "$CHECKOUT" "$SRC" "$REF"
+  if sender_on && [[ ! -f $SRC/backend/ledgerline/sender.py ]]; then
+    echo "the sending service is on and $REF predates it; run harden.sh sender-off first" >&2
+    rollback
+  fi
   install_and_build
   trap - ERR
 

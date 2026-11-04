@@ -264,7 +264,7 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 | Live bill payment (2 Nov) | Airwallex accepted a EUR 100 transfer, moved by its sandbox simulation through SENT to PAID; the bill closed and one journal entry reduced cash only at PAID. Proposer and approver were two accounts of the same owner, so this tests the control and the bank call, not independent review | Live app |
 | Live Claude | text and PDF remittances read by `claude-opus-5-5`; a planted prompt injection was ignored and flagged; nothing applied | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
 | Release (30 Oct) | CI 5/5 jobs · public smoke 32/32 · data survives restart, VM reboot and redeploy (8/8 each) | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
-| Tests (4 Nov) | backend **542** passed, 2 skipped on Windows (a POSIX-only test and the Unix-socket test, which run on Linux) · browser **27/27** on Microsoft Edge, including the whole judge path and the Show me tour at phone width (375 px). GitHub Actions has been blocked by an account billing hold since 3 Nov, so these deploys were checked by two separate local runs, not CI, and the PostgreSQL suite has not run since CI run #163 | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
+| Tests (4 Nov) | backend **544** passed, 2 skipped on Windows (a POSIX-only test and the Unix-socket test, which run on Linux) · browser **27/27** on Microsoft Edge, including the whole judge path and the Show me tour at phone width (375 px). GitHub Actions has been blocked by an account billing hold since 3 Nov, so these deploys were checked by two separate local runs, not CI, and the PostgreSQL suite has not run since CI run #163 | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
 
 What is **not** measured yet: real customers' payment mix, real time saved (the hours above rest on an assumed 5 minutes per payment), how often real payer agents answer, adoption. Those need a pilot.
 
@@ -328,7 +328,7 @@ scripts/            smoke_deploy.py, evaluate.py, accuracy_run.py
 | Claude output is advisory and schema-validated; it can never authorise money | AI moving money |
 | Remittance text is data: emails that say "ignore your instructions", "refund 9,999 to this account" or contain a fake tool call change no plan, approval or operation (tested offline and with a model that obeys the email) | prompt injection |
 | An approval not sent within 72 hours goes back to the approvers | stale approvals sent later |
-| Optional separate sending service: the Airwallex keys live only in a separate process; the app cannot read them. The app asks it by id only, and it re-checks the approval, expiry, pause, two people and the duplicate lock itself. A compromised app could still request a send that its own database says was approved. Owner-run switch: `harden.sh sender` ([SERVER_STEPS](docs/SERVER_STEPS.md) step 7) | an app bug or a leaked app process reading the bank keys |
+| Optional separate sending service: the Airwallex keys live only in a separate process; the app cannot read them. The app asks it by id only, and it re-checks the approval, expiry, pause, two people and the duplicate lock itself. A compromised app could still request a send that its own database says was approved, or add a payout beneficiary. Owner-run switch: `harden.sh sender` ([SERVER_STEPS](docs/SERVER_STEPS.md) step 7) | an app bug or a leaked app process reading the bank keys |
 
 <details>
 <summary><b>Roles</b></summary>

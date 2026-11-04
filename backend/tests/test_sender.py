@@ -141,3 +141,10 @@ def test_bank_results_cross_the_socket_unchanged():
     t = TransferResult("tr1", "req", "sent", "SENT")
     assert sender._decode(sender._encode([q, {"t": t}])) == [q, {"t": t}]
     assert sender._plain(["APR-1", "a@b", True, None]) and not sender._plain([{"x": 1}]) and not sender._plain([[1]])
+
+
+def test_the_service_refuses_to_listen_on_tcp_outside_tests(monkeypatch):
+    monkeypatch.setenv("LEDGERLINE_SENDER_LISTEN", "tcp:127.0.0.1:0")
+    monkeypatch.delenv("LEDGERLINE_SENDER_ALLOW_TCP", raising=False)
+    with pytest.raises(SystemExit, match="Unix socket"):
+        sender.main()
