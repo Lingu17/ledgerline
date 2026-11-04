@@ -210,7 +210,7 @@ CSV columns:
 2. A **different** team member approves it under **Approvals** (or **Treasury → Bill payments**).
 3. Click **Send payment**. The plan is checked again before anything reaches the bank.
 4. **Check status** until it shows paid. SENT is not final: the bill stays open and its cash stays committed until PAID.
-5. On a sandbox account, an Owner moves the transfer on with **Test bank: sent**, then **Test bank: paid**.
+5. On a sandbox account, an Owner moves the transfer on with **Simulate bank: sent**, then **Simulate bank: paid**.
 </details>
 
 <details>

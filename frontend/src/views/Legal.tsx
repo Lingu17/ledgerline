@@ -20,6 +20,7 @@ function DocPage({ title, children }: { title: string; children: React.ReactNode
             <a href="#/terms">Terms</a>
             <a href="#/security">Security</a>
             <a href="#/changelog">Changelog</a>
+            <a href="#/help">Help</a>
           </nav>
         </div>
       </header>
@@ -227,4 +228,55 @@ function Markdown({ text }: { text: string }) {
   }
   flush();
   return <>{blocks}</>;
+}
+
+const HELP: [string, string, string[]][] = [
+  ["start", "Getting started", [
+    "Choose Practice company to learn with made-up data, or My company to set up your own. A practice company has a Show me tour at the top right and Practice steps in the menu.",
+    "For your own company: connect your Airwallex sandbox account in Settings, invite at least one more Operator under Team (money out needs a second person), then add customers, invoices and bills, or import them from CSV.",
+  ]],
+  ["inbox", "Inbox", ["Cash by currency and the payments that need a decision. Each item says its next step."]],
+  ["ceo", "CEO view", ["The company on one screen: is cash safe, what happened, and what needs a person."]],
+  ["payments", "Payments", [
+    "Every payment received, how it was matched, and what is left. Clean matches settle by themselves; a bank fee within your tolerance is written off.",
+    "For anything unclear, open the payment and use Ask payer's agent or Read remittance. A signed answer is used only if it passes three checks. Replay this decision re-runs the rules on the stored inputs.",
+  ]],
+  ["approvals", "Approvals", [
+    "Refunds above your limit and every bill payment need a second person. The approval is bound to the exact amount and destination, and expires after 72 hours.",
+    "If the agent proposed a refund, the person who approves it cannot also send it. SENT is not final; only PAID is.",
+  ]],
+  ["evidence", "Evidence", ["Every payer-agent answer and document reading, with its three checks and how the plan changed."]],
+  ["treasury", "Treasury", [
+    "What to pay first: each bill shows Fund, Convert, Defer or Escalate, with the reason. Convert buys only the shortfall above your reserve.",
+    "Bring cash in early offers a capped discount through a hosted payment link. Plan history replays any earlier plan.",
+  ]],
+  ["ledger", "Ledger", ["Per currency: received equals applied plus customer credit plus refunded plus still unapplied, to the cent. Every movement is a balanced journal."]],
+  ["customers", "Customers & invoices", ["Who pays you, under which names, what they owe and their credits. Import CSV with name, country, payer_names, refund_beneficiary."]],
+  ["activity", "Activity", ["Every decision and money movement, searchable. Verify log integrity checks the hash chain; Download CSV files or the evidence JSON for your records."]],
+  ["team", "Team", ["Invite people as Owner, Operator or Viewer. Nothing is emailed: send the link yourself. An Owner can create a one-hour reset link for a member who forgot their password."]],
+  ["settings", "Settings", ["Pause all money-out, connect Airwallex, set policy limits, change your name or password, export, leave or delete."]],
+  ["walkthrough", "Practice steps", ["The practice story step by step. Alone, the labelled practice teammate can send a refund you approved; it exists only in practice companies."]],
+];
+
+/** How to use each screen, in a few lines each. Every page's Help link opens its own section. */
+export function Help({ topic }: { topic: string | null }) {
+  useEffect(() => {
+    if (topic) setTimeout(() => document.getElementById(`help-${topic}`)?.scrollIntoView({ block: "start" }), 50);
+  }, [topic]);
+  return (
+    <DocPage title="Help">
+      <p>
+        Short answers for each screen. Back to <a href="#/inbox">your workspace</a>. In a practice company, the <b>Show me</b> button
+        at the top right walks you through the whole story.
+      </p>
+      {HELP.map(([id, title, lines]) => (
+        <section key={id} id={`help-${id}`} className={topic === id ? "help-current" : undefined}>
+          <h2>{title}</h2>
+          {lines.map((l, i) => <p key={i}>{l}</p>)}
+        </section>
+      ))}
+      <h2>Still stuck?</h2>
+      <p>See <a href="#/security">Security</a> for how to report a problem, and <a href="#/privacy">Privacy</a> for what is stored.</p>
+    </DocPage>
+  );
 }

@@ -18,7 +18,8 @@ import { AcceptInvite, NoOrganization, ResetPassword, SignIn, friendly } from ".
 import { Landing } from "./views/Landing";
 import { Architecture } from "./views/Architecture";
 import { ShowMe } from "./components/ShowMe";
-import { Changelog, Privacy, Security, Terms, VersionLine } from "./views/Legal";
+import { Changelog, Help, Privacy, Security, Terms, VersionLine } from "./views/Legal";
+import { PageError } from "./components/PageError";
 
 export type Route = { page: string; params: URLSearchParams };
 
@@ -153,7 +154,8 @@ function Shell({ me }: { me: Me }) {
   const counts = useLoad(() => get<{ work_queue: { kind: string }[]; deposit_counts: Record<string, number> }>("/overview"), [me.organization?.id]);
   const pendingApprovals = counts.data?.work_queue.filter((w) => w.kind === "approval").length ?? 0;
   const needsReview = counts.data?.deposit_counts?.escalated ?? 0;
-  const page = TITLES[route.page] ? route.page : "inbox";
+  const known = !!TITLES[route.page];
+  const page = known ? route.page : "inbox";
   const [title, sub] = TITLES[page];
   const s = status.data;
   const localMode = s?.bank.mode === "local";
@@ -206,6 +208,7 @@ function Shell({ me }: { me: Me }) {
             </div>
           </div>
           <div className="topbar-right">
+            <a className="btn small ghost" href={`#/help?topic=${page}`}>Help</a>
             {isSample && !tour && <button className="btn small" onClick={() => setTour(true)}>Show me</button>}
             {s?.paused && (
               <a className="badge paused" href="#/settings" title={s.pause_info?.reason || "Money-out paused"}><b>Money-out paused</b></a>
@@ -221,8 +224,13 @@ function Shell({ me }: { me: Me }) {
         </header>
         {tour && isSample && <ShowMe onClose={() => setTour(false)} />}
         <main className="content" id="main" tabIndex={-1}>
+          <PageError key={route.page}>
+          {!known && route.page !== "inbox" && (
+            <div className="card"><div className="empty"><b>Page not found</b>
+              There is no page at #/{route.page}. <a href="#/inbox">Go to the inbox</a> or <a href="#/help">open Help</a>.</div></div>
+          )}
           {page === "ceo" && <Ceo />}
-          {page === "inbox" && <Inbox />}
+          {known && page === "inbox" && <Inbox />}
           {page === "payments" && <Payments route={route} />}
           {page === "approvals" && <Approvals localMode={localMode} sandboxMode={s?.bank.mode === "airwallex_sandbox"} />}
           {page === "evidence" && <EvidenceView route={route} />}
@@ -233,8 +241,9 @@ function Shell({ me }: { me: Me }) {
           {page === "team" && <Team />}
           {page === "settings" && <Settings />}
           {page === "walkthrough" && <Walkthrough />}
+          </PageError>
           <footer className="app-footer small muted">
-            <a href="#/privacy">Privacy</a> · <a href="#/terms">Terms</a> · <a href="#/security">Security</a> · <a href="#/changelog">Changelog</a>
+            <a href="#/help">Help</a> · <a href="#/privacy">Privacy</a> · <a href="#/terms">Terms</a> · <a href="#/security">Security</a> · <a href="#/changelog">Changelog</a>
             <div><VersionLine /></div>
           </footer>
         </main>
@@ -255,6 +264,7 @@ function Gate() {
   if (route.page === "terms") return <Terms />;
   if (route.page === "security") return <Security />;
   if (route.page === "changelog") return <Changelog />;
+  if (route.page === "help") return <Help topic={route.params.get("topic")} />;
   if (!me) {
     if (route.page === "signup") return <SignIn key="signup" initialMode="signup" />;
     if (route.page === "signin") return <SignIn key="signin" />;

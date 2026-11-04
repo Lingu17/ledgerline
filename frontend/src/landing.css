@@ -174,3 +174,5 @@
 .doc-body a { color: #0b5f58; text-decoration: underline; }
 .doc-updated { color: #5f6979; margin: 0 0 20px; font-size: 13.5px; }
 .lp-footer nav { flex-wrap: wrap; }
+.doc-body section { scroll-margin-top: 80px; }
+.doc-body .help-current h2 { color: #0b5f58; }

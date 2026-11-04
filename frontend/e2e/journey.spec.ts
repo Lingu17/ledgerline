@@ -131,8 +131,8 @@ test("full journey as two people", async ({ page, browser }) => {
     await op.evaluate(() => window.dispatchEvent(new Event("focus")));
     await op.getByRole("button", { name: "Approve", exact: true }).click();
     await op.getByRole("button", { name: "Send payment" }).click();
-    await op.getByRole("button", { name: "Test bank: sent" }).click();
-    await op.getByRole("button", { name: "Test bank: paid" }).click();
+    await op.getByRole("button", { name: "Simulate bank: sent" }).click();
+    await op.getByRole("button", { name: "Simulate bank: paid" }).click();
     await op.waitForLoadState("networkidle");
     await op.goto("/#/treasury");
     await expect(op.locator(".pill", { hasText: /^paid$/i }).first()).toBeVisible();

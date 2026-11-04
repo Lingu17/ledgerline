@@ -227,8 +227,8 @@ export function BillPayments({ rows, op, owner, localMode }: { rows: BillPayment
                     </>}
                     {p.status === "approved" && <button className="btn small primary" disabled={!!busy} onClick={() => act(p, "execute", undefined, "Sent to the bank")}>Send payment</button>}
                     {["processing", "sent"].includes(p.status) && <button className="btn small" disabled={!!busy} onClick={() => act(p, "sync", undefined, "Checked with the bank")}>Check status</button>}
-                    {canSimulate && p.provider_id && p.status === "processing" && <button className="btn small" disabled={!!busy} onClick={() => act(p, "simulate-bank", { next_status: "SENT" }, "Test bank: SENT")}>Test bank: sent</button>}
-                    {canSimulate && p.provider_id && p.status === "sent" && <button className="btn small" disabled={!!busy} onClick={() => act(p, "simulate-bank", { next_status: "PAID" }, "Test bank: PAID")}>Test bank: paid</button>}
+                    {canSimulate && p.provider_id && p.status === "processing" && <button className="btn small" disabled={!!busy} onClick={() => act(p, "simulate-bank", { next_status: "SENT" }, "Simulated bank reported SENT")}>Simulate bank: sent</button>}
+                    {canSimulate && p.provider_id && p.status === "sent" && <button className="btn small" disabled={!!busy} onClick={() => act(p, "simulate-bank", { next_status: "PAID" }, "Simulated bank reported PAID")}>Simulate bank: paid</button>}
                   </div>}
                 </td>
               </tr>

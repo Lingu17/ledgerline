@@ -398,6 +398,13 @@ test("privacy, terms and security are real pages, linked from the home page, sig
   await signUp(page, { org: `Legal ${uniq()}`, email: `legal-${uniq()}@e2e.test`, sample: true });
   await page.locator(".app-footer").getByRole("link", { name: "Privacy" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
+  // Help opens at the section for the page it was pressed on; an unknown page says so instead of showing another one.
+  await page.goto("/#/payments");
+  await page.getByRole("link", { name: "Help", exact: true }).first().click();
+  await expect(page).toHaveURL(/#\/help\?topic=payments/);
+  await expect(page.locator("#help-payments")).toBeInViewport();
+  await page.goto("/#/no-such-page");
+  await expect(page.getByText("Page not found")).toBeVisible();
 });
 
 test("account basics: a reset link from an owner, a new name, and deleting the company", async ({ page, browser }) => {
