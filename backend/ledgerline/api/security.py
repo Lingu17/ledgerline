@@ -68,6 +68,10 @@ def client_ip(request: Request) -> str:
     peer = request.client.host if request.client else "unknown"
     settings = request.app.state.settings
     hops = settings.trusted_proxy_hops
+    if settings.edge_secret is None:
+        # Nothing proves a request came through an outer edge, so only our own proxy's entry can be trusted: with
+        # two hops and no secret, a client reaching that proxy directly could choose its own address.
+        hops = min(hops, 1)
     if hops <= 0:
         return peer
     chain = [x.strip() for x in request.headers.get("x-forwarded-for", "").split(",") if x.strip()] + [peer]

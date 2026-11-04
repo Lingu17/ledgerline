@@ -59,3 +59,14 @@ def test_a_locked_database_answers_busy_not_500(app, monkeypatch):
     r = new_client(app).post("/api/auth/signup", json={"email": "busy@example.test", "name": "Busy", "password": "Correct-Horse-42-battery",
                                                        "organization_name": "Busy Co", "start_with": "sample"})
     assert r.status_code == 503 and r.headers["retry-after"] == "2" and "busy" in r.json()["detail"]
+
+
+def test_a_missing_file_is_a_real_404_and_app_addresses_still_load(client):
+    from ledgerline.api.app import FRONTEND_DIST
+
+    if not FRONTEND_DIST.is_dir():  # the page is served only when the frontend is built
+        return
+    for path in ("/.hg", "/wp-login.php", "/assets/missing.js"):
+        assert client.get(path).status_code == 404, path
+    assert client.get("/robots.txt").text.startswith("User-agent")
+    assert "<!doctype html>" in client.get("/somewhere/in/the/app").text.lower()

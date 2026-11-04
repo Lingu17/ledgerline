@@ -38,6 +38,9 @@ def test_refuses_to_start_when_data_dir_is_not_on_the_persistent_mount(tmp_path)
         create_app(_settings(tmp_path, LEDGERLINE_REQUIRE_PERSISTENT_MOUNT=str(tmp_path / "not-a-mount")))
 
 
+EDGE = "edge-test-secret-0123456789abcdef"
+
+
 def _fail_logins(c, ip_chain, n, email="victim@northbeam.test"):
     codes = []
     for _ in range(n):
@@ -49,8 +52,8 @@ def _fail_logins(c, ip_chain, n, email="victim@northbeam.test"):
 def test_throttling_uses_the_real_client_behind_two_proxies(tmp_path):
     """Behind Vercel -> Render, every request arrives from a proxy. Without proxy awareness one judge's
     typos would lock out every judge; with it, each browser has its own budget and spoofing is ignored."""
-    app = create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="2"))
-    c = TestClient(app)
+    app = create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="2", LEDGERLINE_EDGE_SECRET=EDGE))
+    c = TestClient(app, headers={"X-Ledgerline-Edge": EDGE})  # two hops are trusted only with the edge's proof
     # Attacker at 203.0.113.9 burns its budget on many accounts (per-IP key).
     for i in range(5):
         _fail_logins(c, "203.0.113.9, 76.76.21.21", 1, email=f"user{i}@northbeam.test")
@@ -58,7 +61,7 @@ def test_throttling_uses_the_real_client_behind_two_proxies(tmp_path):
     # Prepending a forged address does not give a fresh budget: the client is read from the trusted end.
     assert _fail_logins(c, "198.51.100.1, 203.0.113.9, 76.76.21.21", 1, email="other2@northbeam.test") == [429]
     # A different judge behind the same proxy is unaffected.
-    owner = TestClient(app)
+    owner = TestClient(app, headers={"X-Ledgerline-Edge": EDGE})
     signup(owner, email="judge@northbeam.test")
     r = owner.post("/api/auth/login", json={"email": "judge@northbeam.test", "password": PASSWORD},
                    headers={"X-Forwarded-For": "192.0.2.44, 76.76.21.21"})
@@ -85,10 +88,19 @@ def _ip_of(app, headers):
 
 def test_short_forwarded_chain_fails_closed(tmp_path):
     """Codex review finding 1: a direct client must not choose its identity by sending a short X-Forwarded-For."""
+    app = create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="2", LEDGERLINE_EDGE_SECRET=EDGE))
+    proof = {"X-Ledgerline-Edge": EDGE}
+    assert _ip_of(app, {**proof, "X-Forwarded-For": "client, edge"}) == "client"
+    assert _ip_of(app, {**proof, "X-Forwarded-For": "forged"}) == "10.0.0.5"  # too short: never the leftmost, client-chosen entry
+    assert _ip_of(app, proof) == "10.0.0.5"
+
+
+def test_two_hops_without_an_edge_secret_trust_only_our_own_proxy(tmp_path):
+    """Security scan M1: with nothing proving a request passed the outer edge, a client reaching the inner proxy
+    directly must not choose its address; only the entry our own proxy appended counts."""
     app = create_app(_settings(tmp_path, LEDGERLINE_TRUSTED_PROXY_HOPS="2"))
-    assert _ip_of(app, {"X-Forwarded-For": "client, edge"}) == "client"
-    assert _ip_of(app, {"X-Forwarded-For": "forged"}) == "10.0.0.5"  # too short: never the leftmost, client-chosen entry
-    assert _ip_of(app, {}) == "10.0.0.5"
+    assert _ip_of(app, {"X-Forwarded-For": "198.51.100.7, 203.0.113.9"}) == "203.0.113.9"
+    assert _ip_of(app, {"X-Forwarded-For": "203.0.113.9"}) == "203.0.113.9"
 
 
 def test_edge_secret_gates_forwarded_header_trust(tmp_path):

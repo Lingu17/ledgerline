@@ -17,6 +17,7 @@ An agent's answer is still only a claim: it goes through the same three checks a
 from __future__ import annotations
 
 import ipaddress
+import re
 import socket
 import typing
 from urllib.parse import urlsplit
@@ -72,6 +73,9 @@ def check_url(url: typing.Any, allow_loopback: bool = False) -> str:
         literal = ipaddress.ip_address(host)
     except ValueError:
         literal = None
+    if literal is None and all(re.fullmatch(r"0x[0-9a-f]+|[0-9]+", label) for label in host.split(".")):
+        # 2130706433, 0177.0.0.1 or 0x7f.1 are addresses in disguise; the connect-time check refuses them too.
+        raise AgentRefused("agent URL must use a host name or a plain dotted IP address")
     if literal is not None and not address_allowed(literal, allow_loopback):
         raise AgentRefused(f"agent URL points to a non-public address ({host})")
     if host in ("localhost",) and not allow_loopback:

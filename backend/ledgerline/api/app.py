@@ -217,6 +217,8 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             candidate = (FRONTEND_DIST / path).resolve()
             if path and candidate.is_file() and Path(FRONTEND_DIST.resolve()) in candidate.parents:
                 return FileResponse(candidate)
-            return FileResponse(FRONTEND_DIST / "index.html")
+            if "." in path.rsplit("/", 1)[-1]:  # asks for a file (robots.txt, .hg, x.php) that is not there: say so
+                return PlainTextResponse("not found\n", status_code=404)
+            return FileResponse(FRONTEND_DIST / "index.html")  # an app address: the page routes it
 
     return app

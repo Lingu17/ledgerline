@@ -214,6 +214,9 @@ def test_only_an_owner_registers_an_agent(loopback_app, agent):
     "https://[::ffff:127.0.0.1]/mcp",          # IPv4-mapped loopback
     "https://0.0.0.0/mcp",
     "https://224.0.0.1/mcp",                   # multicast
+    "https://2130706433/mcp",                  # 127.0.0.1 written as one decimal number
+    "https://0177.0.0.1/mcp",                  # octal loopback
+    "https://0x7f.1/mcp",                      # hex loopback
     "https://agent.example.com/mcp#frag",
     "",
     "https://" + "a" * 300 + ".example.com/mcp",
