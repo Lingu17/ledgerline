@@ -29,6 +29,7 @@ def pair(tmp_path, monkeypatch):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     address = f"tcp:127.0.0.1:{server.server_address[1]}"
     app_settings = load_settings({**BASE, "LEDGERLINE_DATA_DIR": str(tmp_path), "LEDGERLINE_SENDER_SOCKET": address,
+                                  "LEDGERLINE_PG_SCHEMA_PREFIX": keys.pg_schema_prefix,  # one database for both, as in production
                                   "AIRWALLEX_CLIENT_ID": "", "AIRWALLEX_API_KEY": ""})
     app = create_app(app_settings)
     c = TestClient(app)
