@@ -37,6 +37,12 @@ SYSTEM = ("You explain a payment-matching decision to a finance team in 2 to 4 s
           "evidence ids you rely on. Do not invent numbers: use only numbers that appear in the facts.")
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 _INVOICE = re.compile(r"^INV-\d{3,6}$")
+_UNSAFE = re.compile(r"[^A-Za-z0-9_.:-]")
+
+
+def _token(value: Any) -> str:
+    """An id-like field an Owner could have typed (customer id, evidence source): short, plain characters only."""
+    return _UNSAFE.sub("", str(value or ""))[:40]
 
 
 def _key(deposit_id: str, version: int) -> str:
@@ -53,7 +59,7 @@ def facts(conn, ctx: AppContext, deposit_id: str) -> dict[str, Any] | None:
     evidence = []
     for e in db.rows(conn, "SELECT id, source, verdict, checks FROM evidence WHERE deposit_id = ? ORDER BY version", (deposit_id,)):
         checks = json.loads(e["checks"] or "[]")
-        evidence.append({"id": e["id"], "source": e["source"], "verdict": e["verdict"],
+        evidence.append({"id": _token(e["id"]), "source": _token(e["source"]), "verdict": _token(e["verdict"]),
                          "checks_passed": sum(1 for c in checks if c.get("passed")), "checks_total": len(checks)})
     def action(a: dict[str, Any]) -> dict[str, Any]:  # structured fields only; an invoice id must have the INV-0000 form
         out: dict[str, Any] = {"type": str(a.get("type", ""))[:40]}
@@ -66,7 +72,7 @@ def facts(conn, ctx: AppContext, deposit_id: str) -> dict[str, Any] | None:
         return out
     actions = [action(a) for a in plan["actions"]]
     limit = ctx.policy(conn)["refund_auto_limit_minor"].get(ccy)
-    return {"deposit": {"id": d["id"], "amount": major(d["amount_minor"]), "currency": ccy, "status": d["status"], "customer_id": d["customer_id"]},
+    return {"deposit": {"id": d["id"], "amount": major(d["amount_minor"]), "currency": ccy, "status": _token(d["status"]), "customer_id": _token(d["customer_id"]) or None},
             "plan": {"id": f"{d['id']} plan v{plan['version']}", "version": plan["version"], "kind": plan["kind"],
                      "category": plan["category"], "actions": actions},
             "evidence": evidence, "refund_limit": major(limit) if limit is not None else None}
