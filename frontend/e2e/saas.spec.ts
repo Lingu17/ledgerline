@@ -344,6 +344,9 @@ test("phone width: a judge can do the whole three-step path at 375 px", async ({
   await expect(row("Approve and send the refund").getByRole("button", { name: "Run", exact: true })).toHaveCount(0);
   for (const t of ["Bank reports SENT", "Bank reports PAID"]) await finish(t);
   await expect(page.locator(".steps .n.done")).toHaveCount(8);
+  await page.goto("/#/settings");
+  await expect(page.getByRole("heading", { name: "Policy" })).toBeVisible();
+  await noSideScroll("settings");
   await ctx.close();
 });
 
@@ -446,6 +449,11 @@ test("account basics: a reset link from an owner, a new name, and deleting the c
   const zip = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download CSV files" }).click();
   expect((await zip).suggestedFilename()).toBe("ledgerline-export.zip");
+  await page.getByLabel("Approvals expire after (hours)").fill("24");
+  await page.getByRole("button", { name: "Save policy" }).click();
+  await expect(page.getByText("Policy saved")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Approvals expire after (hours)")).toHaveValue("24");
   await page.getByRole("button", { name: "Change", exact: true }).click();
   await page.getByLabel("Your name").fill("Renamed Owner");
   await page.getByRole("button", { name: "Save name" }).click();

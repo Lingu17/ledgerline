@@ -345,8 +345,14 @@ function PolicyEditor({ policy }: { policy: Policy }) {
   const init = () => Object.fromEntries(fields.map((f) => [f, Object.fromEntries(CCYS.map((c) => [c, majorString(policy[f][c])]))])) as Record<string, Record<Ccy, string>>;
   const [v, setV] = useState(init);
   const [bps, setBps] = useState(String(policy.fee_tolerance_bps));
+  const [ttl, setTtl] = useState(String(policy.approval_ttl_hours));
+  const [ahead, setAhead] = useState(String(policy.obligation_lookahead_days));
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => setV(init()), [policy]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setV(init());
+    setTtl(String(policy.approval_ttl_hours));
+    setAhead(String(policy.obligation_lookahead_days));
+  }, [policy]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     const body: Record<string, unknown> = {};
@@ -361,6 +367,10 @@ function PolicyEditor({ policy }: { policy: Policy }) {
     }
     if (!/^\d+$/.test(bps)) return setErr("Fee tolerance share must be whole basis points");
     body.fee_tolerance_bps = Number(bps);
+    if (!/^\d+$/.test(ttl) || Number(ttl) < 1 || Number(ttl) > 720) return setErr("Approvals expire after 1 to 720 hours");
+    body.approval_ttl_hours = Number(ttl);
+    if (!/^\d+$/.test(ahead) || Number(ahead) < 1 || Number(ahead) > 90) return setErr("Plan bills 1 to 90 days ahead");
+    body.obligation_lookahead_days = Number(ahead);
     setErr(null);
     run("policy", () => post("/settings/policy", body, "PUT"), "Policy saved");
   };
@@ -377,7 +387,7 @@ function PolicyEditor({ policy }: { policy: Policy }) {
                   <td>{labels[f]}</td>
                   {CCYS.map((c) => (
                     <td key={c} className="num">
-                      <input type="text" inputMode="decimal" aria-label={`${labels[f]} ${c}`} style={{ width: 120, textAlign: "right" }} disabled={!owner}
+                      <input type="text" inputMode="decimal" aria-label={`${labels[f]} ${c}`} style={{ width: "100%", minWidth: 72, maxWidth: 120, textAlign: "right" }} disabled={!owner}
                         value={v[f][c]} onChange={(e) => setV({ ...v, [f]: { ...v[f], [c]: e.target.value } })} />
                     </td>
                   ))}
@@ -386,11 +396,17 @@ function PolicyEditor({ policy }: { policy: Policy }) {
             </tbody>
           </table>
         </div>
-        <div className="row" style={{ marginTop: 12, justifyContent: "space-between" }}>
+        <div className="row" style={{ marginTop: 12, gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
           <Field id="pol-bps" label="Fee tolerance cap (basis points of amount billed)">
             <input id="pol-bps" type="text" inputMode="numeric" style={{ width: 120 }} value={bps} disabled={!owner} onChange={(e) => setBps(e.target.value)} />
           </Field>
-          {owner && <button className="btn primary" disabled={!!busy}>Save policy</button>}
+          <Field id="pol-ttl" label="Approvals expire after (hours)" hint="An approval not sent in time goes back to the approvers. 1 to 720.">
+            <input id="pol-ttl" type="text" inputMode="numeric" style={{ width: 120 }} value={ttl} disabled={!owner} onChange={(e) => setTtl(e.target.value)} />
+          </Field>
+          <Field id="pol-ahead" label="Plan bills this many days ahead" hint="Treasury and the CEO view look this far. 1 to 90.">
+            <input id="pol-ahead" type="text" inputMode="numeric" style={{ width: 120 }} value={ahead} disabled={!owner} onChange={(e) => setAhead(e.target.value)} />
+          </Field>
+          {owner && <button className="btn primary" disabled={!!busy} style={{ marginLeft: "auto" }}>Save policy</button>}
         </div>
         {err && <div className="notice risk small" role="alert" style={{ marginTop: 10 }}>{err}</div>}
       </form>

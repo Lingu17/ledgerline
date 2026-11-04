@@ -855,10 +855,12 @@ def put_policy(request: Request, body: dict[str, Any], operator: str = Depends(r
     ctx = ctx_of(request)
     from .. import audit
 
-    policy = validate_policy(body)
     with ctx.conn() as conn, db.transaction(conn):
+        before = ctx.policy(conn)
+        policy = validate_policy({**before, **body})  # a field the form does not show keeps its value
+        changed = {k: {"from": before[k], "to": policy[k]} for k in policy if before.get(k) != policy[k]}
         db.set_setting(conn, "policy", policy)
-        audit.record(conn, iso(ctx.clock.now()), operator, "policy.updated", "settings", "policy", policy)
+        audit.record(conn, iso(ctx.clock.now()), operator, "policy.updated", "settings", "policy", {"changed": changed})
     return policy
 
 
