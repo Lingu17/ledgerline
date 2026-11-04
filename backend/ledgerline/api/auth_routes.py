@@ -393,7 +393,7 @@ def disconnect_airwallex(request: Request, p: Principal = Depends(require_role("
 def setup_checklist(request: Request, p: Principal = Depends(require_role("viewer"))) -> dict[str, Any]:
     """First-run steps for a real company, each computed from its own data."""
     org = _control(request).org(p.session.org_id)
-    members = len(_control(request).members(org["id"]))
+    approvers = sum(m["role"] in ("owner", "operator") for m in _control(request).members(org["id"]))  # a viewer cannot approve
     with p.ctx.conn() as conn:
         n = lambda t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]  # noqa: E731 - fixed table names only
         customers, invoices, bills, deposits = n("customers"), n("invoices"), n("obligations"), n("deposits")
@@ -404,7 +404,7 @@ def setup_checklist(request: Request, p: Principal = Depends(require_role("viewe
         {"id": "customers", "label": "Add the customers who pay you", "done": customers > 0, "page": "customers"},
         {"id": "invoices", "label": "Add open invoices", "done": invoices > 0, "page": "customers"},
         {"id": "bills", "label": "Add upcoming bills and payroll", "done": bills > 0, "page": "treasury"},
-        {"id": "approver", "label": "Invite a second approver", "done": members > 1, "page": "team"},
+        {"id": "approver", "label": "Invite a second approver", "done": approvers > 1, "page": "team"},
         {"id": "payment", "label": "Receive your first payment", "done": deposits > 0, "page": "payments"},
     ]
     return {"show": org["kind"] != "sample" and not all(x["done"] for x in steps), "steps": steps}

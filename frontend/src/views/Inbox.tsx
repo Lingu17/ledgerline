@@ -43,6 +43,10 @@ function FirstVisit() {
   };
   return (
     <Card title="See what it does in three minutes" actions={<button className="btn small" onClick={hide}>Hide this guide</button>}>
+      <p className="small" style={{ margin: "0 0 8px" }}>
+        <button className="btn small primary" onClick={() => window.dispatchEvent(new Event("ledgerline:tour"))}>Take the guided tour</button>{" "}
+        (the same as <b>Show me</b> at the top), or follow these steps yourself:
+      </p>
       <ol className="small" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
         <li><a href="#/payments?deposit=DEP-1005">Open this payment</a> and click <b>Ask payer's agent</b>: what looks like a duplicate turns out to be an advance, and the refund is dropped before any money moves.</li>
         <li><a href="#/payments?deposit=DEP-1004">Open this one</a> and ask again: the answer is correctly signed but false, so it is rejected and a person gets the reason.</li>

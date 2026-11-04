@@ -458,6 +458,7 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 - Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov and it was paid with a test card; Ledgerline asks Airwallex every two minutes rather than using link webhooks, and settlement timing is not tracked. The earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
 - Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
 - USD, EUR and GBP only; other currencies are not supported yet.
+- Invoice numbers are Ledgerline's own (INV-2301, INV-2302, ...). A payment that quotes another system's number (say HL-2026-014) is not matched by the rules or the remittance reader; a person places it with Resolve.
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery (invitation and reset links are copied by a person), no self-service password reset (an owner issues a one-hour link), no enterprise SSO or MFA, and no billing.
 - The separate sending service ships switched off; the owner turns it on with server step 7. A compromised app could still request a send that its own database says was approved. Its Unix-socket test runs on Linux only and has not run while CI is blocked; on Windows it is tested over a loopback connection.
 

@@ -114,3 +114,15 @@ def test_csv_onboarding_and_checklist(real):
     done = {s["id"]: s["done"] for s in real.get("/api/setup").json()["steps"]}
     assert done["customers"] and done["invoices"] and done["bills"] and not done["bank"]
     assert real.post("/api/customers/import", json={"csv": "wrong,header\n1,2"}).status_code in (409, 422)
+
+
+def test_second_approver_ticks_only_when_someone_who_can_approve_has_joined(real, app):
+    from .test_saas import _invite_and_join
+
+    step = lambda: {s["id"]: s["done"] for s in real.get("/api/setup").json()["steps"]}["approver"]  # noqa: E731
+    real.post("/api/team/invitations", json={"email": "pending@real.test", "role": "operator"})
+    assert step() is False  # an invitation alone is not a second approver
+    _invite_and_join(real, app, "viewer@real.test", "viewer")
+    assert step() is False  # a viewer cannot approve
+    _invite_and_join(real, app, "op2@real.test", "operator")
+    assert step() is True

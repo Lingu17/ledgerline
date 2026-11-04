@@ -254,6 +254,11 @@ test("first-visit guide leads to the agent's decision, and can be hidden", async
   await expect(page.getByText("Next:", { exact: true })).toBeVisible();
   await expect(page.getByText("In a real company the agent asks by itself.")).toBeVisible();
   await page.goto("/#/inbox");
+  // One tour, two ways in: the guide card starts the same Show me tour as the top bar.
+  await page.getByRole("button", { name: "Take the guided tour" }).click();
+  await expect(page.getByRole("region", { name: "Show me tour" })).toBeVisible();
+  await page.goto("/#/inbox");
+  await page.reload();
   await page.getByRole("button", { name: "Hide this guide" }).click();
   await expect(page.getByRole("heading", { name: "See what it does in three minutes" })).toHaveCount(0);
   await page.reload();

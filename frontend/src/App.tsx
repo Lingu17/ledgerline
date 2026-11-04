@@ -149,6 +149,11 @@ function Shell({ me }: { me: Me }) {
   const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [tour, setTour] = useState(false);
+  useEffect(() => {  // the Inbox guide card starts the same tour as the Show me button
+    const start = () => setTour(true);
+    window.addEventListener("ledgerline:tour", start);
+    return () => window.removeEventListener("ledgerline:tour", start);
+  }, []);
   const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 820px)").matches);
   useEffect(() => {
     const m = window.matchMedia("(max-width: 820px)");
