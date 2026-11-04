@@ -291,6 +291,11 @@ class ControlPlane:
         since = iso(self.clock.now() - THROTTLE_WINDOW)
         reserved: list[int] = []
         with self.conn() as c, db.transaction(c):
+            if isinstance(self.path, db.PgTarget):
+                # PostgreSQL does not serialise this transaction the way SQLite's BEGIN IMMEDIATE does: lock each key
+                # (in a fixed order, so two requests never wait on each other) until the transaction ends.
+                for k in sorted(keys):
+                    c.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (k,))
             for k in keys:
                 fails = db.rows(c, "SELECT at FROM login_failures WHERE key = ? AND at > ? ORDER BY at", (k, since))
                 if len(fails) >= THROTTLE_MAX_FAILURES:
