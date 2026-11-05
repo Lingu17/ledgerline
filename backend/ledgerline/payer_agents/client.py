@@ -134,9 +134,12 @@ def explain_payments(
     if not requests:
         return [], "none"
     if transport == "memory":
+        from .keys import EnvKeys, PgKeys, load_keys
         from .server import build_server
 
-        target: Any = build_server(data_dir)
+        # Decrypt here, as the stdio path does: a key that cannot be decrypted (wrong LEDGERLINE_SECRET_KEY) raises in
+        # this process and the payment stays waiting, instead of becoming a tool error recorded as a rejected answer.
+        target: Any = build_server(EnvKeys(load_keys(data_dir)) if isinstance(data_dir, PgKeys) else data_dir)
         label = "mcp/in-memory"
     else:
         from mcp.client.stdio import get_default_environment
