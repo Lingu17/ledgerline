@@ -52,10 +52,18 @@ Money arrives with a missing reference, a fee taken off, in the wrong currency, 
 
 **The three checks on every agent answer:** who signed it · that it is about this payment and still fresh · that your own records agree.
 
-> **Limits, stated up front**
-> - **Payer agents.** The built-in payer agents are simulated: they answer from a fixed table with keys held on this server, so their signature proves the mechanism, not that an outside party said anything. A customer can now run its own agent instead, holding its own key, and Ledgerline asks it over the network with the same three checks; that path is tested end to end with the reference agent (`tools/payer_agent`) as a separate process on the same machine. On 3 Nov 2026 it also ran across the internet: the reference agent ran on the owner's own PC behind a Cloudflare tunnel, the live site asked it about a practice payment, and its signed answer passed the three checks and was labelled Customer's own agent. That was the owner's machine, not an independent party, and no real company runs one today. The protocol is written down in [PAYER_AGENT_SPEC](docs/PAYER_AGENT_SPEC.md), with a JSON schema and a signed test vector. Practice companies ask the simulated agents in-process over the same MCP protocol, so many judges can try it at once; a customer's own agent is asked over the network.
-> - **Run on the real Airwallex sandbox:** signed deposit webhooks, a refund of an unmatched deposit (SENT → PAID, one transfer), a currency conversion, a EUR 100 bill payment (SENT → PAID), a paid early-payment link, beneficiaries and live rates. **Tested only on the simulated bank:** refunds the agent proposes, including the rule that a different member sends them and the practice teammate; automatic refunds under the limit; a refund returned to a person after the limit is lowered; failed and timed-out transfers; the pause switch; a paid exact-balance link; and wrong-currency conversion.
-> - **One person with two emails would pass the two-person rule.** It checks accounts, not people. Both live payments out, the refund and the bill payment, were proposed and approved with two accounts that belong to the owner, so they show the control and the bank call, not independent review.
+### What is real and what is simulated
+
+| Part | Real | Simulated, or not yet |
+|:--|:--|:--|
+| Bank | Ran on the real Airwallex sandbox: signed deposit webhooks, a refund SENT → PAID as one transfer, a currency conversion, a EUR 100 bill payment, a paid early-payment link, beneficiaries and live rates | No live money. Agent-proposed refunds, automatic refunds under the limit, failed and timed-out transfers, the pause switch and wrong-currency conversion are tested on the simulated bank only |
+| Payer agents | Real MCP and Ed25519 signatures, and the three checks on every answer. A customer can connect its own agent with its own key, asked over the network; the [spec](docs/PAYER_AGENT_SPEC.md) has a schema and a signed test vector, and the reference agent once answered the live site across the internet from the owner's PC | The built-in agents answer from a fixed table with keys on this server, so their signature proves the mechanism, not that an outside party spoke. No outside company runs one yet |
+| Two people for money out | Enforced in code: the proposer cannot approve, and the approver of an agent-proposed refund cannot also send it | It checks accounts, not people: both live payments out were proposed and approved with two of the owner's own accounts |
+| Claude | Reads remittance emails and PDFs live (`claude-opus-5-5`) through five typed tools | Advice only: no tool has an amount or account field, and nothing it says moves money |
+| Companies | Separate data per company, roles, CSV import and export | Practice companies use made-up data; USD, EUR and GBP only |
+
+**Why the AI doesn't decide:** on purpose. Every money decision is made by rules in code that a replay reproduces exactly; the model only reads documents and explains, the same split Airwallex's own agentic-banking reference builds draw ([comparison](docs/JUDGE_QA.md)).
+**What the payer gains by running an agent:** fewer "what was this payment for?" emails from its suppliers, its payment placed on the right invoice the same day, and no wrong refund it then has to send back.
 
 <p align="center"><img src="docs/screenshots/11-ceo.png" alt="The CEO view: cash, what needs a person, what the agent handled, and whether the numbers can be trusted" width="85%"></p>
 
@@ -120,7 +128,7 @@ Money arrives with a missing reference, a fee taken off, in the wrong currency, 
 
 Each company's data is isolated. A practice company uses made-up data and a simulated bank. For your own company, choose **My company** and connect your Airwallex sandbox keys under Settings.
 
-**What it does not do yet:** handle live money, send email from the server (balance requests open as a draft in your own mail), or connect a customer's own hosted agent; the payer agents are simulations (see the limits above). Without an agent, a person or the document reader handles the case, so it is useful today. Time saved has not been measured with a real customer.
+**What it does not do yet:** handle live money or send email from the server (balance requests open as a draft in your own mail). The built-in payer agents are simulations, and no outside company runs its own yet ([what is real](#what-is-real-and-what-is-simulated)). Without an agent, a person or the document reader handles the case, so it is useful today. Time saved has not been measured with a real customer.
 
 ---
 
@@ -265,6 +273,8 @@ In a practice company, **Practice: customer pays** runs the same path without a 
 | Live Claude | text and PDF remittances read by `claude-opus-5-5`; a planted prompt injection was ignored and flagged; nothing applied | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) |
 | Release (30 Oct) | CI 5/5 jobs · public smoke 32/32 · data survives restart, VM reboot and redeploy (8/8 each) | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
 | Tests (5 Nov) | backend **584** passed, 2 skipped on Windows (a POSIX-only test and the Unix-socket test, which run on Linux), and 587 passed, 12 skipped on a second machine · browser **30/30** on Microsoft Edge, including the whole judge path and the Show me tour at phone width (375 px). GitHub Actions has been blocked by an account billing hold since 3 Nov, so these deploys were checked by two separate local runs, not CI, and the PostgreSQL suite has not run since CI run #163 | [Acceptance report](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) |
+
+The two synthetic runs answer different questions: the evaluation (50 companies, payer agents answering) compares every allocation with an independent reference model; the accuracy run (200 companies, rules only, automatic asking off) checks every figure the API reports and replays every decision.
 
 What is **not** measured yet: real customers' payment mix, real time saved (the hours above rest on an assumed 5 minutes per payment), how often real payer agents answer, adoption. Those need a pilot.
 
@@ -454,7 +464,7 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 
 ## ⚠️ Honest limits
 
-- Payer agents are simulations: real MCP and signatures, but answers come from a fixed table and keys sit on this server. Real customers' agents would register their own keys at onboarding. Check 3 tests plausibility against your records; it cannot tell a real advance from a false one that fits.
+- The built-in payer agents are simulations: real MCP and signatures, but answers come from a fixed table and keys sit on this server. A customer can register its own agent's address and public key (Customers → Payer agent…, Owner only); no outside company runs one yet. Check 3 tests plausibility against your records; it cannot tell a real advance from a false one that fits.
 - Airwallex hosted payment links depend on the account's region. A Singapore sandbox account created a real hosted link on 2 Nov and it was paid with a test card; Ledgerline asks Airwallex every two minutes rather than using link webhooks, and settlement timing is not tracked. The earlier account was refused with `configuration_error`, and there Ledgerline keeps a labelled draft and never invents a URL.
 - Airwallex's dashboard replay did not produce a second delivery, so duplicate rejection is proven by tests.
 - USD, EUR and GBP only; other currencies are not supported yet.
