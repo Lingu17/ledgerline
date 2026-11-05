@@ -217,6 +217,9 @@ def test_only_an_owner_registers_an_agent(loopback_app, agent):
     "https://2130706433/mcp",                  # 127.0.0.1 written as one decimal number
     "https://0177.0.0.1/mcp",                  # octal loopback
     "https://0x7f.1/mcp",                      # hex loopback
+    "https://2130706433./mcp",                 # the same with a trailing dot (final verification N2)
+    "https://localhost./mcp",
+    "https://127.0.0.1./mcp",
     "https://agent.example.com/mcp#frag",
     "",
     "https://" + "a" * 300 + ".example.com/mcp",

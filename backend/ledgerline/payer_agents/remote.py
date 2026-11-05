@@ -52,7 +52,7 @@ def check_url(url: typing.Any, allow_loopback: bool = False) -> str:
         raise AgentRefused(f"agent URL must be text of at most {MAX_URL_LENGTH} characters")
     url = url.strip()
     parts = urlsplit(url)
-    host = (parts.hostname or "").lower()
+    host = (parts.hostname or "").lower().rstrip(".")  # "localhost." and "2130706433." are the same hosts
     if parts.username or parts.password:
         raise AgentRefused("agent URL must not contain a user name or password")
     if parts.fragment:
