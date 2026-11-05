@@ -32,6 +32,19 @@
   <a href="docs/JUDGE_QA.md"><b>Judge Q&amp;A</b></a>
 </p>
 
+<p align="center"><sub>
+<a href="#in-30-seconds">In 30 seconds</a> ·
+<a href="#try-it-in-5-minutes">Try it</a> ·
+<a href="#what-is-real-and-what-is-simulated">What is real</a> ·
+<a href="#for-judges-each-criterion-with-evidence-you-can-check">For judges</a> ·
+<a href="#-features">Features</a> ·
+<a href="#-measured-not-claimed">Measured</a> ·
+<a href="#%EF%B8%8F-architecture">Architecture</a> ·
+<a href="#%EF%B8%8F-money-rules-the-code-enforces">Money rules</a> ·
+<a href="#-tech-stack">Tech stack</a> ·
+<a href="#-run-it-yourself">Run it</a>
+</sub></p>
+
 ---
 
 ## In 30 seconds
@@ -383,6 +396,46 @@ Every rule is enforced by the API; the UI only hides what you cannot do.
 <sub>Captured from a real run on a synthetic company (`frontend/e2e/screenshots.spec.ts`). Desktop and 375 px layouts; every page meets WCAG AA contrast.</sub>
 
 ---
+
+## 🧰 Tech stack
+
+| Layer | Choice | Why |
+|:--|:--|:--|
+| API | Python 3.12+, FastAPI, Pydantic | Typed request bodies; money in integer minor units only |
+| Storage | SQLite per company (WAL); PostgreSQL 17 supported | One file per company is simple isolation; PostgreSQL runs the same tests in CI |
+| Agents | MCP (Model Context Protocol), Ed25519 signatures | Payer agents answer a typed tool; answers are signed claims, checked three ways |
+| AI | Claude (`claude-opus-5-5`), typed tools only | Reads remittance emails and PDFs; no tool can state an amount or an account |
+| Bank | Airwallex sandbox API, signed webhooks | Deposits, refunds, conversions, bill payments, payment links, live rates |
+| Web | React 18, TypeScript, Vite | One page app served by the API, no separate frontend host |
+| Tests | pytest, Playwright (Edge, Chromium), GitHub Actions | Backend on Linux, Windows and PostgreSQL; the judge path in a real browser |
+| Hosting | Google Cloud VM, Caddy (HTTPS), systemd | Nightly backups, hardening scripts, a separate sending service for the bank keys |
+
+## 📁 Project layout
+
+```text
+backend/ledgerline/      the app: matching.py (rules), reconcile.py (plans and evidence), payouts.py (approvals, refunds),
+                         evidence.py (the three checks), replay.py, audit.py (hash chain), treasury.py, agent_loop.py,
+                         claude_reader.py, explain.py, payer_agents/ (MCP server and client), providers/ (bank), api/
+backend/tests/           pytest suite, including the accuracy harness and the PostgreSQL tests
+frontend/src/            React app: views/ (Inbox, Payments, Approvals, CEO view, ...), components/ (Show me, agent panel)
+frontend/e2e/            Playwright tests: the whole judge path, phone width, the tour and the decision receipt
+tools/payer_agent/       reference payer agent anyone can run with their own key
+deploy/vm/               server setup, update, hardening, backups and the sending service
+docs/                    judge quickstart and Q&A, payer agent spec, evidence and reports
+scripts/                 accuracy run, evaluation, measured value, smoke tests
+```
+
+### Run the tests
+
+```bash
+cd backend && .venv/bin/python -m pytest -q
+```
+
+```bash
+cd frontend && npm run e2e
+```
+
+PostgreSQL tests run when `LEDGERLINE_TEST_DATABASE_URL` points at a PostgreSQL 17 database (CI does this).
 
 ## 🧪 Run it yourself
 
