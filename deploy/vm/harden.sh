@@ -98,11 +98,12 @@ PY
 
 status() {
   echo "== hardening score"; systemd-analyze security ledgerline 2>/dev/null | tail -1
-  echo "== drop-ins"; ls "$DROPIN" 2>/dev/null || echo "none"
+  local dropins; dropins=$(ls -A "$DROPIN" 2>/dev/null || true)
+  echo "== drop-ins"; echo "${dropins:-none}"
   echo "== files readable by others under /var/lib/ledgerline: $(find /var/lib/ledgerline -type f -perm /004 | wc -l); by group: $(find /var/lib/ledgerline -type f -perm /040 | wc -l) (expected only while the sending service is on)"
   echo "== sending service: $(systemctl is-active ledgerline-send 2>/dev/null || true)"
   echo "== journald"; journalctl --disk-usage; cat /etc/systemd/journald.conf.d/ledgerline.conf 2>/dev/null || echo "no cap set"
-  echo "== Ops Agent log lines in the last hour: $(journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager | wc -l)"
+  echo "== Ops Agent log lines in the last hour: $(journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager 2>/dev/null | wc -l)"
   echo "== ssh"; sshd -T 2>/dev/null | grep -E "^(permitrootlogin|passwordauthentication) "; systemctl is-active fail2ban 2>/dev/null || true
   echo "== backup"; [[ -f /etc/ledgerline/backup.env ]] && grep -o "^LEDGERLINE_BACKUP_BUCKET=.*" /etc/ledgerline/backup.env || echo "no off-server copy configured"
   local last=/var/lib/ledgerline/backups/last_offsite
@@ -164,7 +165,7 @@ journald() {
 }
 
 opsagent_why() {
-  echo "lines in the last hour: $(journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager | wc -l)"
+  echo "lines in the last hour: $(journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager 2>/dev/null | wc -l)"
   journalctl -u 'google-cloud-ops-agent*' --since -1h -q --no-pager -o cat | cut -c1-150 | sed -E 's/[0-9]{2,}/N/g' | sort | uniq -c | sort -rn | head -5
 }
 
