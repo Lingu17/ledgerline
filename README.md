@@ -22,6 +22,8 @@
 
 <p align="center"><b>For small companies that bill in several currencies.</b> Sandbox and made-up data only: no real money moves.</p>
 
+<p align="center"><b>100</b> judges at once with <b>0</b> errors · <b>0</b> refunds without a verified answer or a second person · CI green, including the whole suite on PostgreSQL</p>
+
 <p align="center">
   <a href="https://35-207-220-110.sslip.io"><b>▶ Try it live</b></a> ·
   <!-- Owner: replace the next line with <a href="(video URL)"><b>🎬 Watch the 3-minute video</b></a> once it is recorded. -->
