@@ -268,11 +268,12 @@ class PgTarget:
         return f"postgresql schema {self.schema}"
 
 
-def connect(db_path: "Path | PgTarget") -> sqlite3.Connection:
+def connect(db_path: "Path | PgTarget", create: bool = True) -> sqlite3.Connection:
+    """create=False (PostgreSQL): raise pg.SchemaMissing instead of creating a schema that does not exist."""
     if isinstance(db_path, PgTarget):
         from .pg import PgConnection
 
-        return PgConnection(db_path.url, db_path.schema)  # type: ignore[return-value]
+        return PgConnection(db_path.url, db_path.schema, create=create)  # type: ignore[return-value]
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path), timeout=10, isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row

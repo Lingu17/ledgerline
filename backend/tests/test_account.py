@@ -6,6 +6,19 @@ from .test_saas import _invite_and_join
 NEW_PASSWORD = "Another-Secret-42"
 
 
+def _org_storage(app, org_id):
+    """Where an organization's books live: its folder on SQLite; its ledger and bank schemas on PostgreSQL."""
+    s = app.state.settings
+    if not s.postgres:
+        return {"orgs": (s.data_dir / "orgs" / org_id).exists()}
+    from ledgerline.pg import schema_for
+
+    names = {k: schema_for(s.pg_schema_prefix, k, org_id) for k in ("t", "b")}
+    with app.state.control.conn() as c:
+        found = {r[0] for r in c.execute("SELECT schema_name FROM information_schema.schemata").fetchall()}
+    return {k: n in found for k, n in names.items()}
+
+
 def test_a_person_changes_their_display_name(client):
     r = client.put("/api/auth/me", json={"name": "Ada Lovelace"})
     assert r.status_code == 200 and r.json()["user"]["name"] == "Ada Lovelace"
@@ -43,12 +56,11 @@ def test_no_reset_link_for_someone_who_also_belongs_elsewhere_or_for_yourself(cl
 
 def test_deleting_an_organization_needs_its_exact_name_and_removes_its_data(client, app):
     org_id, name = client.org_id, client.get("/api/organization").json()["name"]
-    data = app.state.settings.data_dir / "orgs" / org_id
-    assert data.exists()
+    assert any(_org_storage(app, org_id).values())
     assert client.post("/api/organization/delete", json={"confirm": name.upper() + "x"}).status_code == 422
     r = client.post("/api/organization/delete", json={"confirm": name})
     assert r.status_code == 200, r.text
-    assert not data.exists() and app.state.control.org(org_id) is None
+    assert not any(_org_storage(app, org_id).values()) and app.state.control.org(org_id) is None
     me = client.get("/api/auth/me").json()
     assert me["organization"] is None
     rows = app.state.control.control_audit(org_id)
@@ -77,7 +89,7 @@ def test_a_context_held_during_deletion_never_recreates_the_database(client, app
     with pytest.raises(RuntimeError, match="no longer exists"):
         with held.conn():
             pass
-    assert not (app.state.settings.data_dir / "orgs" / client.org_id).exists()
+    assert not any(_org_storage(app, client.org_id).values())
 
 
 def test_leave_then_delete_my_account(client, app):
