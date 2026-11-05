@@ -3,6 +3,14 @@ import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 
+/** A phone-width context that keeps the running project's device settings (touch, mobile browser, pixel ratio), so a
+ *  Pixel or iPhone project tests the phone it names. The desktop Edge project has none of these, so it is unchanged. */
+function phoneContext(): Record<string, unknown> {
+  const use = test.info().project.use as Record<string, unknown>;
+  const keep = ["isMobile", "hasTouch", "userAgent", "deviceScaleFactor", "locale", "timezoneId"];
+  return { ...Object.fromEntries(keep.filter((k) => use[k] !== undefined).map((k) => [k, use[k]])), viewport: { width: 375, height: 812 } };
+}
+
 // Generated per run; never stored. Meets the 12+ chars / upper / lower / digit policy.
 const PASSWORD = `E2e-${randomBytes(9).toString("base64url")}Aa1`;
 const uniq = () => randomBytes(4).toString("hex");
@@ -147,7 +155,7 @@ test("a second organization cannot see the first organization's payments", async
 });
 
 test("phone width: no page-level horizontal overflow", async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const ctx = await browser.newContext(phoneContext());
   const page = await ctx.newPage();
   await signUp(page, { org: `Mobile ${uniq()}`, email: `m-${uniq()}@e2e.test`, sample: true });
   for (const hash of ["#/home", "#/inbox", "#/payments", "#/treasury", "#/customers", "#/team", "#/settings"]) {
@@ -318,7 +326,7 @@ test("one person finishes the practice walkthrough with the practice teammate se
 });
 
 test("phone width: a judge can do the whole three-step path at 375 px", async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const ctx = await browser.newContext(phoneContext());
   const page = await ctx.newPage();
   const noSideScroll = async (where: string) =>
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), where).toBeLessThanOrEqual(1);
@@ -356,7 +364,7 @@ test("phone width: a judge can do the whole three-step path at 375 px", async ({
 });
 
 test("show me: the guided tour runs the practice story, and a tampered audit row is caught and restored", async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const ctx = await browser.newContext(phoneContext());
   const page = await ctx.newPage();
   await signUp(page, { org: `Tour ${uniq()}`, email: `tour-${uniq()}@e2e.test`, sample: true });
   await page.getByRole("button", { name: "Show me" }).click();
@@ -549,7 +557,7 @@ test("pressing Execute on a refund now over the limit explains that it needs a s
 });
 
 test("phone width: bill payments read as cards with nothing to scroll sideways", async ({ browser }) => {
-  const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const ctx = await browser.newContext(phoneContext());
   const page = await ctx.newPage();
   await signUp(page, { org: `Cards ${uniq()}`, email: `cards-${uniq()}@e2e.test`, sample: true });
   await page.goto("/#/treasury");

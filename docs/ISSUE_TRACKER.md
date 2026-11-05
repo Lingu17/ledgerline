@@ -37,7 +37,7 @@ docs, not built) · WONTFIX (decided, with the reason).
 | 24 | `DEPLOYMENT.md:88` says the app sends its own CSP; it does not (the live `Caddyfile.single` does) | Final verify N3 | **FIXED**: DEPLOYMENT.md now says Caddy (`Caddyfile.single`) sends them and an edge must copy them; no second CSP in the app. Change the doc to say `Caddyfile.single` sends it. Lower risk than adding a second CSP in the app |
 | 25 | Treasury Bills and Conversions tables scroll sideways at 390 px with no hint; the earlier fix covered only two tables | Final verify N5, browser #4 partly | `stack-sm` on both, or the swipe hint Wallet position already has |
 | 26 | Toast × Dismiss is 21 px tall on phones | Final verify N4 | 44 px minimum under `pointer: coarse` |
-| 27 | Phone tests create their own context and drop the device settings (`saas.spec.ts:150, 321, 359, 552`) | Final verify N6 | Spread `test.info().project.use` into `newContext` |
+| 27 | Phone tests create their own context and drop the device settings (`saas.spec.ts:150, 321, 359, 552`) | Final verify N6 | **FIXED**: `phoneContext()` in saas.spec.ts copies the project's touch, mobile, user-agent and pixel-ratio settings and keeps 375 px; the four phone tests use it. Spread `test.info().project.use` into `newContext` |
 | 28 | Trailing-dot numeric hosts (`https://2130706433./`) pass registration; nothing is called (glibc does not resolve them, and the connect guard refuses) | Final verify N2 | **FIXED**: the host is lower-cased and loses a trailing dot before every check; three trailing-dot cases added to the refused-URL test. `host.rstrip(".")` before the numeric and localhost checks |
 
 ## Owner
