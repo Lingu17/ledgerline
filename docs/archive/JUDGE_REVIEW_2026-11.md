@@ -39,7 +39,10 @@ A strict, busy judge's review of `main` at **`b3ba221`** ("Docs match the 5 Nov 
 
 No page errors, no HTTP 4xx/5xx and no console errors anywhere in the run.
 
-**Tests reproduced here (Linux):** `pytest` → **590 passed, 9 skipped** in 154 s. Accuracy and evaluation reruns: see §3, last rows.
+**Reproduced here (Linux):**
+- `pytest`: **590 passed, 9 skipped** in 154 s.
+- `scripts/accuracy_run.py` (200 companies + 25 walkthroughs): **PASS, 61,063 checks, 8,826 payments, 4,087 invoices, 8,826 replayed**, in 420 s. This matches `docs/ACCURACY_REPORT.md` exactly.
+- `scripts/evaluate.py --seeds 50` (the command in the README's "Run it yourself"): **crashes** with `AssertionError: approve` (`scripts/evaluate.py:66`). The demo `approve` step now returns 409: *"ev@eval.test approved APR-…, so a different team member must send it… or let the practice teammate send it"*. The two-person rule works as intended, but this script was not updated when the rule was added, so `docs/EVALUATION.md` (50 companies, 2,127 payments) cannot be regenerated from `main` today.
 
 ## 2. Scores
 
@@ -98,8 +101,8 @@ Legend: **VERIFIED** = code and a test both show it · **OVERSTATED** = true in 
 | 37 | Scrypt; 5 failures in 15 min → 429; 2 h idle / 12 h absolute sessions | VERIFIED | `backend/ledgerline/control.py:30-35, 59, 300-301` |
 | 38 | Each organization has its own database file | VERIFIED | `backend/ledgerline/tenancy.py`; separate SQLite files under the data dir |
 | 39 | Live Airwallex sandbox: webhooks, refund SENT→PAID, FX, EUR 100 bill, paid link | UNVERIFIED (owner evidence) | `docs/INTEGRATION_EVIDENCE.md:23` has ids and timestamps. A judge cannot rerun it, but it is precise and labelled |
-| 40 | Accuracy: 200 companies, 61,063 checks, 0 mismatches, 8,826 replays | see rerun | `scripts/accuracy_run.py`, `docs/ACCURACY_REPORT.md:3-5`; rerun result below |
-| 41 | Evaluation: 50 companies, 2,127 payments, 0 disagreements | see rerun | `scripts/evaluate.py --seeds 50` |
+| 40 | Accuracy: 200 companies, 61,063 checks, 0 mismatches, 8,826 replays | VERIFIED (rerun) | `scripts/accuracy_run.py` rerun on `b3ba221`: PASS, identical counts (`docs/ACCURACY_REPORT.md:3-5`) |
+| 41 | Evaluation: 50 companies, 2,127 payments, 0 disagreements (README "Measured" table) | **UNVERIFIED (cannot be rerun)** | `scripts/evaluate.py --seeds 50` crashes at `scripts/evaluate.py:66`: demo step `approve` → 409, because the approver of an agent-proposed refund may not send it. The script should send with `/api/approvals/{id}/send-as-practice-teammate` (or a second member) |
 
 ## 4. The five hardest questions a judge would ask
 
@@ -131,10 +134,12 @@ Legend: **VERIFIED** = code and a test both show it · **OVERSTATED** = true in 
 | 7 | **Add a JUDGE_QA entry: "What can a stolen payer key do?"** with the real limits (under the auto-limit, only to the registered destination, one per deposit, pause). | Pre-empts the sharpest money-safety question. Protects the 9 |
 | 8 | **Fix the quickstart:** step 7 → "the scorecard on the **Inbox**", and either show "3 fully closed" on screen or drop it. Add a step: "On DEP-1005, press **Explain this decision** (Why this plan)". Split step 2 into two lines. | Removes the one place the review got stuck, and surfaces a differentiator nobody presses today |
 | 9 | **Fix the two on-screen wording bugs:** `matching.py:164/170` ("…INV-2244, which every referenced invoice is already settled" → "…, and every referenced invoice is already settled"), and the "Asking payer" status before anything is asked in practice (`format.ts:68`, e.g. "Ready to ask payer"). Optionally hide "Payment link draft fallback" from a fresh company's first activity rows. | Small, but they appear in the first two minutes of every judge's run. +0.5 on quality |
+| 9b | **Fix `scripts/evaluate.py`** so the reference case sends the refund as the practice teammate (or a second member), then regenerate `docs/EVALUATION.md`. Code change, for the session that owns the code. | A judge who runs the README's own command today gets a traceback. Restores a cited measurement. Protects completeness |
 | 10 | **Run server step 7 (sending service) and the off-server backups on the live host before judging**, then change JUDGE_QA's "Partly" row to say it is on. | Upgrades the one "Partly" in the comparison table. Strengthens money safety and completeness |
 
 ### Things that lose points if left as they are
 
+- **The README's `evaluate.py` command crashes** (see §1): the one reproducibility command a technical judge is most likely to run.
 - **Missing video link** (README L28, SD L13): the single biggest risk.
 - **Red or blank CI badge** (README L18).
 - **Contradictions:** README L123 and L457 vs README L56 (own agent can / cannot connect).
@@ -149,4 +154,4 @@ Legend: **VERIFIED** = code and a test both show it · **OVERSTATED** = true in 
 
 ## Bottom line
 
-A safe, thoughtful, unusually honest build that works end to end with zero errors. The money controls are the strongest part, and they are real and tested. What holds the score at 44/60 is not the code: there is no video yet, the CI badge is red, and the docs contradict themselves in places. That costs clarity and trust. Fixes 1–5 above are mostly writing, take well under 2 days, and could plausibly lift the total to about 50.
+A safe, thoughtful, unusually honest build that works end to end with zero errors. The money controls are the strongest part, and they are real and tested. What holds the score at 44/60 is not the code: there is no video yet, the CI badge is red, and the docs contradict themselves in places. That costs clarity and trust. Fixes 1–5 above, plus the one-line `evaluate.py` repair, are mostly writing, take well under 2 days, and could plausibly lift the total to about 50.
