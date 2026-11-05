@@ -649,6 +649,8 @@ test("show me: the two agents talk, from this company's own data, only after Pla
   await expect.poll(async () => (await heard()).spoken.length).toBe(2);  // each caption once
   expect((await heard()).spoken[1]).toContain("Rules in code made the first plan for each.");
   await next();  // DEP-1005: the conversation, read from the payment
+  // The chat appears only once the agent has answered, so the stored answer is there to compare with.
+  await expect(tour.getByText("Simulated payer agent: real signatures and checks")).toBeVisible({ timeout: 30_000 });
   const dep = await (await page.request.get("/api/deposits/DEP-1005")).json();
   const key = dep.evidence.reverse().find((e: { source: string }) => e.source === "mcp_signed").envelope.key_id as string;
   await expect.poll(async () => (await heard()).spoken.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(7);
