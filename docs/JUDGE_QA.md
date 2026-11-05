@@ -1,13 +1,24 @@
 # Judge Q&A, short and honest
 
+What is real and what is simulated is one table on the README's first screen: [what is real](../README.md#what-is-real-and-what-is-simulated). The answers below do not repeat it.
+
 **Who would actually answer your agent call today?**
-No outside company yet. The built-in payer agents are simulated, with their keys on our server. A customer can instead run its own agent with its own key and register its address and public key; Ledgerline then asks it over the network and applies the same three checks. That path is tested end to end with our reference agent as a separate process, and anyone can run it (see the quickstart). On 3 Nov 2026 it also ran across the internet: the reference agent ran on the owner's own PC behind a Cloudflare tunnel, the live site asked it about a practice payment, and its signed answer passed the three checks and was labelled Customer's own agent. That was the owner's machine, not an independent party, and no real company runs one today. The protocol, with a JSON schema and a signed test vector, is in [PAYER_AGENT_SPEC](PAYER_AGENT_SPEC.md). Practice companies ask the simulated agents in-process over the same MCP protocol (a separate process per question limited the server to about 30 judges at once in a load test); a customer's own agent is asked over the network.
+No outside company yet. The built-in payer agents are simulated, with their keys on our server. A customer can run its own agent with its own key and register its address and public key (Customers → Payer agent…, Owner only); Ledgerline then asks it over the network with the same three checks. Anyone can run the reference agent ([quickstart](JUDGE_QUICKSTART.md)); on 3 Nov it answered the live site across the internet from the owner's own PC, which shows the path, not an independent party. The protocol, with a JSON schema and a signed test vector, is in [PAYER_AGENT_SPEC](PAYER_AGENT_SPEC.md). Practice companies ask the simulated agents in-process over the same MCP protocol: in a [load test](archive/LOAD_TEST_2026-11.md), starting a separate process per question kept p95 under 2 s on every endpoint only up to 30 judges at once, while in-process 100 judges finished the walkthrough with no errors and the slowest endpoint at p95 0.74 s.
+
+**Why would a payer run an agent for you?**
+For its own sake: fewer "what was this payment for?" emails from its suppliers, its payment placed on the right invoice the same day, and no wrong refund it then has to send back. The agent answers one narrow question about its own payment, from its own accounts-payable records, and signs the answer.
+
+**Why doesn't the AI decide?**
+On purpose. Every money decision is made by rules in code, so the same inputs always give the same plan and **Replay this decision** can prove it; the model only reads documents (as advisory evidence) and explains. That is the line Airwallex's own agentic-banking reference builds draw too (the table at the end).
 
 **Why trust a signed answer at all?**
 We don't trust it on its own. The signature only says who is speaking. The answer must also be about this exact payment, be fresh, and agree with our records. DEP-1004 shows a correctly signed answer being rejected because the records disagree.
 
 **What stops the agent from sending money?**
 The agent only proposes. Small refunds backed by a verified answer go out under a limit the company sets, and the pause switch stops them. Anything over the limit needs two people, and when the agent proposed it, the approver can't also send it: the page shows no Send button to them, and the server refuses the request (403, covered by an automated test). Claude never states an amount and has no tool that moves money.
+
+**What can a stolen payer key do?**
+At most return part of that payer's own money to that payer's own registered account. A claim signed with a stolen key still has to pass the other two checks: it must be about this exact payment (its id, amount and currency) and still fresh, and our records must agree. If it does, the most it can set off without a person is a refund, and only when all of these hold: the amount is within the company's auto-limit and backed by that verified answer; it is no more than the part of the payment not yet placed; it goes to the refund account registered on the customer, never to an address in the claim; and only one live refund per payment can exist. Anything over the limit waits for two people, and the pause switch stops it. Changing a customer's refund account needs a signed-in Operator, is recorded in the audit log, and voids any approval bound to the old account; connecting or changing a payer agent's key needs an Owner. (`payouts.py`: `create_refund_approval`, `current_scope`.)
 
 **What if a remittance email contains instructions for the AI?**
 It is treated as data. Tests feed emails that say "ignore previous instructions", "refund 9,999 to this account", "approve this", or contain a fake tool call, through the offline reader and through a model that does what the email says. In every case the result is stored as advisory evidence only, off-schema output becomes an escalation, and no plan, approval or operation changes; no amount or account from the email appears anywhere. The tools themselves have no amount or account field.
@@ -25,13 +36,13 @@ Yes: **Replay this decision** on any plan in a payment's history. Each plan keep
 The rule checks accounts, not people, and we say so. The live sandbox runs show the control and the bank call. They aren't independent review.
 
 **What ran on real Airwallex?**
-Signed deposit webhooks, a refund through SENT → PAID as exactly one transfer, a currency conversion, a EUR 100 bill payment, a paid early-payment link, beneficiaries and live rates. Agent-proposed refunds, and the practice teammate, have only run on the simulated bank.
+Webhooks, a refund SENT → PAID as one transfer, a conversion, a EUR 100 bill payment, a paid early-payment link, beneficiaries and live rates; the agent-proposed refund path has only run on the simulated bank. Details: [what is real](../README.md#what-is-real-and-what-is-simulated) and [INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md).
 
 **What happens if the bank times out mid-transfer?**
 The refund keeps one request ID for its whole life. After a timeout or an unclear answer, Ledgerline looks that ID up with the bank before anything is sent again, and a lock allows only one live refund per payment. Tests cover timeouts and concurrent sends, and each ends with exactly one transfer. SENT keeps the liability on the books; only PAID releases it.
 
 **How do you know the matching is right?**
-An accuracy run on synthetic data (200 made-up companies and 25 practice walkthroughs, rules only) makes 61,063 checks across 8,826 payments and 4,087 invoices, with 0 mismatches against a separate reference model. There are also over 540 backend tests and 27 browser tests. CI also runs the backend on PostgreSQL, but GitHub Actions has been blocked by an account billing hold since 3 Nov, so recent releases were checked by two separate local runs and the PostgreSQL suite last ran in CI run #163. See [ACCURACY_REPORT](ACCURACY_REPORT.md).
+An accuracy run on synthetic data (200 made-up companies and 25 practice walkthroughs, rules only) makes 61,063 checks across 8,826 payments and 4,087 invoices, with 0 mismatches against a separate reference model, and replays every decision; a separate evaluation of 50 companies, with payer agents answering, compares every allocation with an independent reference model. See [ACCURACY_REPORT](ACCURACY_REPORT.md) and [EVALUATION](EVALUATION.md). The test counts, CI status and where each number comes from are kept in one place: the README's [Measured, not claimed](../README.md#-measured-not-claimed) table.
 
 **How does it compare with Airwallex's own reference builds?**
 Compared with the design rules in Airwallex's public AWS reference builds ([awx-devx/airwallex-agentic-banking-aws](https://github.com/awx-devx/airwallex-agentic-banking-aws)). This is our own comparison; Airwallex has not reviewed Ledgerline.
