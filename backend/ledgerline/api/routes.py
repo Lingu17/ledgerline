@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, Stric
 from .. import agent_loop, audit, bill_payments, ceo, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace, wrong_currency
 from ..clock import iso
 from ..context import AppContext, validate_policy
-from ..payer_agents.client import SimulatedAgentFailed, ask_agents, explain_payments
+from ..payer_agents.client import SimulatedAgentFailed, ask_agents, explain_payments, simulated_transport
 from ..providers.local import DEMO_RATES
 from ..reconcile import deposit_buckets, latest_plan, pending_agent_questions, record_agent_answer
 from .security import require_operator, require_owner, require_reader
@@ -67,7 +67,7 @@ def status(request: Request) -> dict[str, Any]:
             "label": f"Claude API ({s.claude_model})" if s.claude_configured else "Deterministic fixture - Claude not invoked (no ANTHROPIC_API_KEY)",
         },
         "payer_agents": {
-            "transport": "mcp/stdio" if s.payer_mcp_transport == "stdio" else "mcp/in-memory",
+            "transport": "mcp/stdio" if simulated_transport(ctx) == "stdio" else "mcp/in-memory",
             "label": "Customer agents hosted on this server, real MCP protocol",
         },
         "security": {

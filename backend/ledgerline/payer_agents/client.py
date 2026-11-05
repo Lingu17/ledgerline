@@ -14,6 +14,13 @@ from mcp import Client, StdioServerParameters
 from ..config import BACKEND_DIR
 
 
+def simulated_transport(ctx: Any) -> str:
+    """How this organization reaches the simulated payer agents. Practice companies ask them in-process over the same MCP
+    protocol (a process per question capped the server at about 30 judges at once); real companies keep the separate
+    process the server is configured for. The one rule for both asking and reporting it."""
+    return "memory" if (ctx.org or {}).get("kind") == "sample" else ctx.settings.payer_mcp_transport
+
+
 class SimulatedAgentFailed(RuntimeError):
     """Ledgerline's own simulated payer agent failed, for example on a signing key it cannot decrypt. That is a fault on
     this server, not the payer's answer: nothing is recorded and the payment stays waiting."""
@@ -103,9 +110,7 @@ def ask_agents(ctx, questions: list[dict[str, Any]], simulated=None) -> list[tup
             by_url.setdefault(urls[q["customer_id"]], []).append(i)
     local = [i for i, q in enumerate(questions) if q["customer_id"] not in urls]
     if local:
-        # Practice companies ask the simulated agents in-process over the same MCP protocol: a process per question
-        # capped the server at about 30 judges at once. Real companies keep the separate process.
-        transport = "memory" if (ctx.org or {}).get("kind") == "sample" else ctx.settings.payer_mcp_transport
+        transport = simulated_transport(ctx)
         answers, label = simulated(key_location(ctx.settings), [questions[i] for i in local], transport)
         for i, a in zip(local, answers):
             out[i] = (questions[i], a, label, None)
