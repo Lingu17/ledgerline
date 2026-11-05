@@ -1,6 +1,6 @@
 /* Product home page (#/home). Scoped under .lp so it never affects the app shell. */
 .lp { --lp-navy: #0b1626; --lp-navy-2: #12223a; --lp-mint: #5ec4b6; background: #fff; color: var(--ink); font-size: 16px; line-height: 1.55; overflow-x: hidden; }
-.lp-wrap { width: min(1160px, 100%); margin: 0 auto; padding: 0 24px; }
+.lp-wrap { width: min(1360px, 100%); margin: 0 auto; padding: 0 32px; }
 .lp a { text-decoration: none; }
 .lp-nav { position: sticky; top: 0; z-index: 20; background: rgba(11, 22, 38, 0.84); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
 .lp-nav-row { display: flex; align-items: center; gap: 28px; height: 64px; }
@@ -176,3 +176,33 @@
 .lp-footer nav { flex-wrap: wrap; }
 .doc-body section { scroll-margin-top: 80px; }
 .doc-body .help-current h2 { color: #0b5f58; }
+
+/* Wide screens: use the width, keep lines readable. */
+@media (min-width: 1500px) {
+  .lp-hero-grid { gap: 80px; }
+  .lp-hero h1 { font-size: 64px; }
+  .lp-lead { font-size: 19px; max-width: 620px; }
+}
+.lp-proof { list-style: none; padding: 0; margin: 28px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; max-width: 680px; }
+.lp-proof li { border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; padding: 10px 12px; background: rgba(255, 255, 255, 0.04); }
+.lp-proof b { display: block; font-size: 20px; color: #7fe0d2; }
+.lp-proof span { display: block; font-size: 12px; color: #c3cfdf; line-height: 1.35; margin-top: 2px; }
+.lp-agent-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.lp-agent-card { background: #fff; border: 1px solid #e3e8ef; border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.lp-agent-card h3 { margin: 4px 0 0; font-size: 19px; }
+.lp-agent-card p { margin: 0; color: #4a5a70; font-size: 14.5px; line-height: 1.55; }
+.lp-agent-card .lp-tag { align-self: flex-start; }
+.lp-tag.ok { background: #e3f6f2; color: #0f6d61; }
+.lp-mini-steps { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; color: #24364d; line-height: 1.7; }
+.lp-chat { display: grid; gap: 8px; margin-top: 6px; }
+.lp-bubble { font-size: 13px; line-height: 1.45; padding: 8px 11px; border-radius: 10px; max-width: 92%; }
+.lp-bubble small { display: block; font-size: 11px; font-weight: 600; opacity: 0.7; }
+.lp-bubble.me { background: #e3f6f2; justify-self: start; }
+.lp-bubble.them { background: #e6eefb; justify-self: end; }
+.lp-receipt { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 6px 0 0; font-size: 13px; background: #f5f7fa; border-radius: 10px; padding: 12px; }
+.lp-receipt dt { color: #6a7a90; }
+.lp-receipt dd { margin: 0; color: #172a42; }
+@media (max-width: 1000px) {
+  .lp-agent-grid { grid-template-columns: 1fr; }
+  .lp-proof { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

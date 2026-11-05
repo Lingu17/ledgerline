@@ -65,6 +65,14 @@ function Icon({ name }: { name: string }) {
   );
 }
 
+// Each figure is from a run documented in the repository (load test, measured value, accuracy run, CI).
+const PROOF: [string, string][] = [
+  ["100", "people at once in a load test, 0 errors"],
+  ["0", "refunds without a verified answer or a second person"],
+  ["61,063", "accuracy checks on 200 synthetic companies, 0 mismatches"],
+  ["5 / 5", "CI jobs green, including PostgreSQL"],
+];
+
 const CASES = [
   ["Exact", "Posted to the invoice"],
   ["Partial", "Invoice stays open, balance due"],
@@ -114,6 +122,7 @@ export function Landing() {
         <div className="lp-wrap lp-nav-row">
           <Logo />
           <nav className="lp-links" aria-label="Product">
+            <a href="#agent">The agent</a>
             <a href="#how">How it works</a>
             <a href="#features">Features</a>
             <a href="#safety">Safety</a>
@@ -142,6 +151,9 @@ export function Landing() {
               <a className="lp-btn outline lg" href="#how">See how it works</a>
             </div>
             <p className="lp-fineprint">Connect your Airwallex test account, or learn it first with a practice company.</p>
+            <ul className="lp-proof" aria-label="Measured, not claimed">
+              {PROOF.map(([n, t]) => <li key={t}><b>{n}</b><span>{t}</span></li>)}
+            </ul>
           </div>
 
           <div className="lp-stage" aria-hidden="true">
@@ -178,6 +190,50 @@ export function Landing() {
           <ul className="lp-case-grid">
             {CASES.map(([k, v]) => <li key={k}><b>{k}</b><span>{v}</span></li>)}
           </ul>
+        </div>
+      </section>
+
+      <section id="agent" className="lp-section">
+        <div className="lp-wrap">
+          <div className="lp-head">
+            <span className="lp-eyebrow dark">The agent at work</span>
+            <h2>It asks, it checks, it changes its mind, and it shows its receipts</h2>
+            <p>Rules in code decide every money movement, so any decision can be replayed to the same answer. The AI reads documents and explains; it never moves money.</p>
+          </div>
+          <div className="lp-agent-grid">
+            <article className="lp-agent-card">
+              <span className="lp-tag ok">No click</span>
+              <h3>Asks the moment a payment arrives</h3>
+              <p>An unclear payment comes in. Ledgerline's agent asks the payer's agent what it was for, over MCP, before anyone opens the inbox. If no agent answers, the payment simply waits and is asked again.</p>
+              <ol className="lp-mini-steps">
+                <li>Payment received: USD 1,200.00, no clear reference</li>
+                <li>Asked Dunmore's agent, with no click</li>
+                <li>3 of 3 checks passed</li>
+                <li>Held as customer credit</li>
+              </ol>
+            </article>
+            <article className="lp-agent-card">
+              <span className="lp-tag">Hear the two agents talk</span>
+              <h3>Agent to agent, with signed answers</h3>
+              <p>The guided tour plays the real conversation from the company's own records, in two voices where the browser has two. A signed answer is a claim, not a fact: it still has to pass three checks.</p>
+              <div className="lp-chat" aria-hidden="true">
+                <div className="lp-bubble me"><small>Ledgerline's agent</small>About DEP-1005, USD 1,200.00: the invoice it names is already paid.</div>
+                <div className="lp-bubble them"><small>Payer's agent (simulated)</small>Advance for the March subscription, PO 7781. Signed with its registered key.</div>
+                <div className="lp-bubble me"><small>Ledgerline's agent</small>Signature ✓ · this payment and fresh ✓ · our records agree ✓. Refund dropped; held as credit.</div>
+              </div>
+            </article>
+            <article className="lp-agent-card">
+              <span className="lp-tag">Decision receipt</span>
+              <h3>Proof for every decision</h3>
+              <p>Each payment the agent handled has a receipt: what was asked, the signed answer, the checks, a fresh replay of the rules, and the tamper-evident record it sits in.</p>
+              <dl className="lp-receipt" aria-hidden="true">
+                <dt>Checks</dt><dd>✓ Signature · ✓ Bound and fresh · ✓ Records agree</dd>
+                <dt>Decision</dt><dd>Refund dropped, held as credit</dd>
+                <dt>Replay</dt><dd>Same plan ✓</dd>
+                <dt>Recorded</dt><dd>Audit event 42, chain intact</dd>
+              </dl>
+            </article>
+          </div>
         </div>
       </section>
 
@@ -300,6 +356,7 @@ export function Landing() {
           <Logo />
           <p>Not a bank. Runs against the Airwallex test environment; no real money moves.</p>
           <nav aria-label="Footer">
+            <a href="#agent">The agent</a>
             <a href="#how">How it works</a>
             <a href="#faq">FAQ</a>
             <a href="#/architecture">Architecture</a>
