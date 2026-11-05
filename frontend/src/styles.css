@@ -387,3 +387,7 @@ main.content:focus { outline: none; }
 @media (max-width: 640px) { .show-sm { display: block; } }
 body.tour-open .content, body.tour-open .drawer-body { padding-bottom: 240px; }
 body.tour-open .toasts { top: 12px; bottom: auto; }
+
+.agent-activity { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.agent-activity li { padding: 8px 0; border-top: 1px solid var(--line); }
+.agent-activity li:first-child { border-top: 0; padding-top: 0; }

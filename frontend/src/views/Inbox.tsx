@@ -3,6 +3,7 @@ import { get, type AuditEvent, type Wallet } from "../api";
 import { Card, Empty, ErrorNote, Loading, Money, Pill, useLoad } from "../components/ui";
 import { CATEGORY_LABEL, money, plainReason, relativeDays, when, actionLabel, actorLabel, whenUtc, statusLabel } from "../format";
 import { go } from "../App";
+import { AgentActivity } from "../components/AgentActivity";
 
 interface Overview {
   wallets: Wallet[];
@@ -164,6 +165,8 @@ export function Inbox() {
               </table>
             )}
           </Card>
+
+          <AgentActivity limit={3} />
 
           <Card title="Reconciliation status">
             {!o ? <Loading rows={3} /> : o.scorecard.deposits === 0 ? (

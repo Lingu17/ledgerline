@@ -78,8 +78,10 @@ test("full journey as two people", async ({ page, browser }) => {
     await drawer.getByRole("button", { name: "Read text" }).click();
     await expect(drawer.getByText(/advisory|suggests/i).first()).toBeVisible({ timeout: 20_000 });
     // Resolve starts from what the reading suggested (or says why it cannot); nothing is recorded until a person does it.
+    // The reading must be on the payment before Resolve can start from it (a slow machine reloads it later).
+    await expect(drawer.getByText(/Remittance read by/).first()).toBeVisible({ timeout: 20_000 });
     await drawer.getByRole("button", { name: "Resolve…" }).click();
-    await expect(drawer.getByText(/remittance reading \(EV-DEP-1004-/).first()).toBeVisible();
+    await expect(drawer.getByText(/remittance reading \(EV-DEP-1004-/).first()).toBeVisible({ timeout: 20_000 });
     await drawer.getByRole("button", { name: "Cancel" }).click();
   });
   await step("balance request email draft on DEP-1003", async () => {
@@ -155,6 +157,11 @@ test("full journey as two people", async ({ page, browser }) => {
     await page.goto("/#/payments");
     await page.getByRole("button", { name: "Receive an unclear payment" }).click();
     await expect(page.getByText(/agent handled it with no click/)).toBeVisible({ timeout: 25_000 });
+    // The CEO view tells the same story from the audit log: asked with no click, checked, placed.
+    await page.goto("/#/ceo");
+    const panel = page.locator(".card", { has: page.getByRole("heading", { name: "What the agent did by itself" }) });
+    await expect(panel.getByText("No click").first()).toBeVisible({ timeout: 15_000 });
+    await expect(panel.getByText(/Asked the payer's agent, with no click → Checked the signed answer: 3 of 3 checks passed/).first()).toBeVisible();
   });
   await step("wrong-currency payment converted", async () => {
     await page.goto("/#/payments");

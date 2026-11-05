@@ -1,6 +1,7 @@
 import { get } from "../api";
 import { Card, ErrorNote, Loading, Money, Pill, useLoad } from "../components/ui";
 import { day, money, plainReason } from "../format";
+import { AgentActivity } from "../components/AgentActivity";
 
 interface Summary {
   verdict: "ok" | "attention" | "problem"; headline: string; lookahead_days: number; paused: boolean;
@@ -93,6 +94,8 @@ export function Ceo() {
           </dl>
         </Card>
       </div>
+
+      <AgentActivity />
 
       <Card title="Can I trust these numbers?">
         <dl className="kv">
