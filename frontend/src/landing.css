@@ -7,16 +7,16 @@
 .lp-logo { display: inline-flex; align-items: center; gap: 10px; color: #fff; font-weight: 600; font-size: 17px; letter-spacing: 0.01em; }
 .lp-links { display: flex; gap: 22px; margin-left: 12px; }
 .lp-links a { color: #b9c6d8; font-size: 14.5px; white-space: nowrap; }
-.lp-links a:hover { color: #fff; }
+@media (hover: hover) { .lp-links a:hover { color: #fff; } }
 .lp-nav-cta { margin-left: auto; display: flex; gap: 10px; }
 .lp-btn { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 16px; border-radius: 8px; font-weight: 600; font-size: 14.5px; border: 1px solid transparent; transition: transform 0.15s, background 0.15s; white-space: nowrap; }
 .lp-btn.lg { height: 48px; padding: 0 22px; font-size: 15.5px; }
 .lp-btn.primary { background: var(--lp-mint); color: #08202a; box-shadow: 0 8px 24px rgba(94, 196, 182, 0.28); }
-.lp-btn.primary:hover { background: #79d3c7; transform: translateY(-1px); }
+@media (hover: hover) { .lp-btn.primary:hover { background: #79d3c7; transform: translateY(-1px); } }
 .lp-btn.ghost { color: #dbe4ef; }
-.lp-btn.ghost:hover { background: rgba(255, 255, 255, 0.08); }
+@media (hover: hover) { .lp-btn.ghost:hover { background: rgba(255, 255, 255, 0.08); } }
 .lp-btn.outline { color: #fff; border-color: rgba(255, 255, 255, 0.28); }
-.lp-btn.outline:hover { background: rgba(255, 255, 255, 0.07); }
+@media (hover: hover) { .lp-btn.outline:hover { background: rgba(255, 255, 255, 0.07); } }
 
 .lp-hero { position: relative; overflow: hidden; color: #fff; padding: 72px 0 104px;
   background: radial-gradient(1200px 600px at 75% 30%, #173356 0%, transparent 60%), linear-gradient(180deg, var(--lp-navy) 0%, #0e1d33 100%); }
@@ -70,7 +70,7 @@
 
 .lp-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
 .lp-steps li { position: relative; border: 1px solid var(--line); border-radius: 14px; padding: 24px 22px; background: #fff; transition: transform 0.2s, box-shadow 0.2s; }
-.lp-steps li:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(15, 27, 45, 0.09); }
+@media (hover: hover) { .lp-steps li:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(15, 27, 45, 0.09); } }
 .lp-steps li:not(:last-child)::after { content: "→"; position: absolute; right: -16px; top: 26px; color: var(--teal); font-weight: 700; }
 .lp-step-n { font-family: var(--mono); font-size: 13px; color: var(--teal); font-weight: 600; background: var(--teal-soft); padding: 3px 8px; border-radius: 6px; }
 .lp-steps h3 { font-size: 20px; margin: 16px 0 8px; }
@@ -78,7 +78,7 @@
 
 .lp-features { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
 .lp-feature { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; }
-.lp-feature:hover { transform: translateY(-4px); border-color: #bfe0db; box-shadow: 0 18px 40px rgba(15, 27, 45, 0.08); }
+@media (hover: hover) { .lp-feature:hover { transform: translateY(-4px); border-color: #bfe0db; box-shadow: 0 18px 40px rgba(15, 27, 45, 0.08); } }
 .lp-icon { display: inline-flex; width: 42px; height: 42px; align-items: center; justify-content: center; border-radius: 10px; background: var(--lp-navy); color: var(--lp-mint); }
 .lp-feature h3 { font-size: 17px; margin: 16px 0 6px; }
 .lp-feature p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
