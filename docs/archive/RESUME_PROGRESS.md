@@ -1,7 +1,7 @@
 # Resume point (updated 5 Nov 2026)
 
 Branch `deploy/vercel-render` (snapshot also on `wip/payer-agent`); `main` moves only after the server reports the same
-commit. **Live: `a9d44fd`** (read back 5 Nov; health shows the commit; an old tab gets the new bundle on reload). Submit by 13 Nov 23:59 IST (owner). Feature
+commit. **Live: `fce6deb`** (read back 5 Nov; health shows the commit; an old tab gets the new bundle on reload). Submit by 13 Nov 23:59 IST (owner). Feature
 freeze 9 Nov; fixes only after.
 
 ## How releases are checked while CI is blocked
@@ -11,15 +11,15 @@ GitHub Actions is blocked by a billing hold (#164 onward): deploy on local check
 deploy. Never claim CI green. Cloud reports (Linux, systemd, load, security, browser matrix, restore drill, product
 audit) are on their `*-report` branches; never merge those.
 
-## Done since a9d44fd (working tree, then pushed)
+## Done since fce6deb (working tree)
 
 | Commit | What |
 |---|---|
-| next | Setup "second approver" counts owners and operators who joined; the Inbox guide card starts the Show me tour; P2-6 stated in README and SUBMISSION_DRAFT (invoice numbers are Ledgerline's own) |
+| next | Docs only: README test row and acceptance report updated to the 5 Nov runs (584/2 and 587/12 backend, browser 30/30); SUBMISSION_DRAFT step 10 (keep public until results) |
 
 ## Next
 
-1. Full suites, commit, send the hash, deploy after the reviewer's OK; read back.
+1. Commit the docs, send the hash, deploy after the reviewer's OK so `main` (what judges see on GitHub) carries them; read back.
 2. P2-6 (own invoice numbers) is deferred: ids are INV-#### in matching, the reader's checks, explain, stored plan
    inputs (Replay) and the harness, so it is not a small change before the 9 Nov freeze. The audit's P1, P2 and P3
    lists are otherwise done. Feature freeze 9 Nov; fixes only after.

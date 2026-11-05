@@ -27,6 +27,7 @@ The owner submits on HackerEarth. Nothing in this repository saves or submits an
 7. Licence: there is deliberately no LICENSE file, so the code stays all rights reserved even when the repository is public (the owner's choice). Add one only if you decide to.
 8. Security contact (optional, 1 minute): add `LEDGERLINE_SECURITY_CONTACT=mailto:<an address you choose>` (or an https:// page) to `/etc/ledgerline/ledgerline.env` and restart the app, so `/.well-known/security.txt` and the Security page show where to report problems. Until then both say no address is published.
 9. Submit on HackerEarth by 13 Nov 23:59 IST with the live link, the repository link and the video link.
+10. After submitting: keep the repository public until the results are announced, because judges open the link during judging and a private repository shows them a 404. Making it private afterwards is allowed, but it does not take back what was public: copies people cloned stay with them, and public forks stay public.
 
 **Limits, stated up front**
 
