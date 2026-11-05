@@ -34,15 +34,21 @@
 
 ---
 
-## The problem, in one line
+## In 30 seconds
 
-Money arrives with a missing reference, a fee taken off, in the wrong currency, or twice. Someone chases each case by email for days, and one wrong refund is real money gone.
+- **The problem:** a payment arrives that doesn't match an invoice. Someone emails the payer, waits, guesses, and sometimes refunds money that was really an advance.
+- **What Ledgerline does:** rules in code match what is clear. For the rest, **its agent asks the payer's own agent** what the payment was for, **checks the signed answer three ways**, and changes its plan **before any money moves**. Small verified refunds go out under your limit; anything bigger needs two people.
+- **What you get:** fewer payments for a person to chase, no wrong refunds, one screen that says whether the company is safe, and a record of every decision that can be replayed and cannot be quietly edited.
 
-## Try it alone in 3 steps (about 5 minutes)
+## Try it in 5 minutes
 
-1. Open **[the live app](https://35-207-220-110.sslip.io)** → **Get started** → choose **Practice company**. Any name and email work, with a password of 12+ characters. Nothing is emailed.
-2. **Payments → DEP-1005 → Ask payer's agent.** The payment looks like a duplicate, so the first plan proposes a refund and holds it. The payer's agent answers with a signed claim that it was an advance. Three checks pass and the plan changes to **advance credit**. No wrong refund leaves. Then try **DEP-1004**: its signature is valid but the claim is false, so it is **rejected** and sent to a person with the reason.
-3. **Practice steps → run to the end.** Approve the over-limit refund under **Approvals**, then press **Send as practice teammate**, because the person who approves a refund the agent proposed can't also send it. Watch the bank go **SENT → PAID** and the ledger balance to the cent.
+1. Open **[the live app](https://35-207-220-110.sslip.io)** → **Get started** → **Practice company**. Any name and email (nothing is emailed), a password of 12+ characters.
+2. **The agent on its own: Payments → Receive an unclear payment.** It arrives, the agent asks the payer's agent, checks the signed answer and places the money, with no click. A real company works this way for every unclear payment.
+3. **Payments → DEP-1005 → Ask payer's agent.** It looks like a duplicate, so the first plan holds a refund. The signed answer says it was an advance; three checks pass and the plan changes to **credit**. No wrong refund leaves. Press **Explain this decision** and **Replay this decision**. Then **DEP-1004**: correctly signed but false, so it is **rejected** and goes to a person with the reason.
+4. **Practice steps → run to the end.** Approve the over-limit refund, then **Send as practice teammate** (whoever approves an agent-proposed refund can't also send it). The bank goes **SENT → PAID** and the ledger balances to the cent.
+5. **CEO view:** the whole company on one screen, including **What the agent did by itself**, read from the audit log.
+
+More detail: the [judge quickstart](docs/JUDGE_QUICKSTART.md). For your own company, choose **My company** and connect your Airwallex sandbox keys under Settings.
 
 ## What it decides by itself, and what it never does
 
@@ -79,14 +85,16 @@ Money arrives with a missing reference, a fee taken off, in the wrong currency, 
 | **Cash in the right place** | Each bill gets one answer: pay it, convert only what is short, delay it, or ask a person. It can also bring cash in early |
 | **Proof for an audit** | Every decision shows its reason, can be replayed to the same answer, and sits in a tamper-evident log; a practice company can try to tamper with it and watch the chain catch the row |
 
-### Why a judge should look closer
+### For judges: each criterion, with evidence you can check
 
-| What stands out | Where to check it |
-|:--|:--|
-| **Agents on both sides of a payment.** The customer's agent answers over MCP with a signed claim, treated as a claim and not a fact | Payments → DEP-1005 and DEP-1004 |
-| **The decision changes when evidence arrives,** before any money moves, and the whole path is on screen | Payments → any payment → Decision path |
-| **Money rules live in code.** Claude reads messy emails and PDFs through typed tools, cannot state an amount, and can never move money | [Money rules](#%EF%B8%8F-money-rules-the-code-enforces) |
-| **Real Airwallex sandbox runs,** with honest labels on everything that is simulated | [Measured, not claimed](#-measured-not-claimed) |
+| Criterion | What Ledgerline shows | Check it in two minutes |
+|:--|:--|:--|
+| **Real-world usefulness** | Unclear incoming payments are a daily cost for any company billing in several currencies. Useful today without any payer agent: rules, the document reader and one queue | Inbox → Needs a decision; CEO view |
+| **How agentic** | The agent asks on arrival with no click, believes only answers that pass three checks, changes its own plan, and sends small verified refunds within your limit. The model never decides money; rules do, and a replay proves it | Payments → Receive an unclear payment; CEO view → What the agent did by itself |
+| **Originality** | Agent-to-agent reconciliation: the payer's agent answers over MCP with an Ed25519-signed claim, treated as a claim and checked against your records. A published [spec](docs/PAYER_AGENT_SPEC.md) with a test vector makes it a protocol anyone can implement | Payments → DEP-1005 (verified) and DEP-1004 (signed but false) |
+| **Money safety** | Approvals bound to the exact amount and destination, proposer ≠ approver ≠ sender, expiry, pause, one live refund per payment, SENT is not final | [Money rules](#%EF%B8%8F-money-rules-the-code-enforces); Approvals |
+| **Completeness** | Multi-company app with roles, CSV, ledger, treasury, CEO view; ran on the real Airwallex sandbox; CI green on every job including PostgreSQL | [Measured, not claimed](#-measured-not-claimed) |
+| **Honesty** | Every simulated part is labelled; the limits are in one table | [What is real](#what-is-real-and-what-is-simulated) · [Judge Q&A](docs/JUDGE_QA.md) |
 
 ---
 
@@ -111,6 +119,7 @@ Money arrives with a missing reference, a fee taken off, in the wrong currency, 
 | **Exact-balance request** | A payment link and a ready email draft for what is still owed | Link created live; paid link tested |
 | **Wrong-currency payments** | Recommends converting only what the invoice needs, or holding; a person clicks | Tested |
 | **CEO view** | One screen for whoever runs the company | Tested |
+| **What the agent did by itself** | On the CEO view and the Inbox, payment by payment: the steps the rules and the agent took without a person, read from the audit log ("No click" only when the agent asked on its own) | Tested |
 | **Live rates** | Airwallex sandbox rates, refreshed every minute on a connected account | Live |
 | **Background checks** | Finds paid links and missed deposits by itself | Tested |
 | **Ledger to the cent** | Double entry, balanced per currency, and currencies are never added together | Live |
@@ -120,13 +129,7 @@ Money arrives with a missing reference, a fee taken off, in the wrong currency, 
 
 ---
 
-## 🚀 Try it (five minutes)
-
-1. Open **https://35-207-220-110.sslip.io** → **Get started** → any name and email (nothing is emailed) → **Practice company**.
-2. The **Inbox** has a short guide. **Payments → DEP-1005 → Ask payer's agent**: the duplicate turns out to be an advance, and the refund is dropped. A practice company waits for you to press this so you can watch; **Receive an unclear payment** shows a payment handled with no click, which is how a real company works. That payment is built to match the simulated agent's table, and it works once per company.
-3. **Payments → DEP-1004 → Ask payer's agent**: a correctly signed but false answer is rejected.
-4. **Practice steps**: a currency conversion, a refund you approve, and the bank moving from SENT to PAID. Alone, press **Send as practice teammate** to send the refund you approved. That labelled stand-in exists only in practice companies, the server refuses it anywhere else, and a real company needs a second real member.
-5. **CEO view**: the whole company on one screen.
+## 🏢 Practice company or your own
 
 Each company's data is isolated. A practice company uses made-up data and a simulated bank. For your own company, choose **My company** and connect your Airwallex sandbox keys under Settings.
 
