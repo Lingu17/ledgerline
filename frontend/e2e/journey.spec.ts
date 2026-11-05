@@ -157,11 +157,24 @@ test("full journey as two people", async ({ page, browser }) => {
     await page.goto("/#/payments");
     await page.getByRole("button", { name: "Receive an unclear payment" }).click();
     await expect(page.getByText(/agent handled it with no click/)).toBeVisible({ timeout: 25_000 });
-    // The CEO view tells the same story from the audit log: asked with no click, checked, placed.
+    // The CEO view tells the same story from the audit log: asked with no click, checked, placed. Reading it, and
+    // opening its receipt, writes nothing and calls no model: GET only.
+    const posts: string[] = [];
+    const onRequest = (r: { method: () => string; url: () => string }) => { if (r.method() !== "GET") posts.push(`${r.method()} ${r.url()}`); };
+    page.on("request", onRequest);
     await page.goto("/#/ceo");
     const panel = page.locator(".card", { has: page.getByRole("heading", { name: "What the agent did by itself" }) });
     await expect(panel.getByText("No click").first()).toBeVisible({ timeout: 15_000 });
     await expect(panel.getByText(/Asked the payer's agent, with no click → Checked the signed answer: 3 of 3 checks passed/).first()).toBeVisible();
+    const row = panel.locator("li", { has: page.getByText("No click") }).first();
+    await row.getByRole("button", { name: "Receipt" }).click();
+    const receipt = row.locator(".receipt");
+    await expect(receipt.getByText("Same plan ✓", { exact: false })).toBeVisible({ timeout: 15_000 });
+    await expect(receipt.getByText(/chain intact/)).toBeVisible();
+    await expect(receipt.getByText("✓", { exact: false })).toHaveCount(4);  // three checks and the replay
+    await expect(receipt.getByText(/held as customer credit/)).toBeVisible();
+    page.off("request", onRequest);
+    expect(posts).toEqual([]);
   });
   await step("wrong-currency payment converted", async () => {
     await page.goto("/#/payments");
