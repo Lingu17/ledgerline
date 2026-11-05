@@ -57,9 +57,9 @@ test("capture README screenshots", async ({ page }) => {
   await page.getByRole("button", { name: "Send as practice teammate" }).click();
   await expect(page.getByText(/The practice teammate sent refund/).first()).toBeVisible();
   await page.goto("/#/walkthrough");
-  await runNext(page); // record approval step
-  await runNext(page); // SENT
-  await runNext(page); // PAID
+  // Whatever is left of the story (the practice bank may already have reported SENT and PAID).
+  await page.waitForLoadState("networkidle");
+  for (let i = 0; i < 4 && (await page.getByRole("button", { name: "Run", exact: true }).count()) > 0; i++) await runNext(page);
   await shot(page, "08-walkthrough-done");
   await page.goto("/#/ledger");
   await shot(page, "09-ledger");
