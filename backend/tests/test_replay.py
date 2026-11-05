@@ -109,3 +109,15 @@ def test_a_real_company_can_replay_too(app):
     c.post("/api/payments", json={"external_ref": "R-1", "currency": "GBP", "amount": "10.00", "payer_name": "ACME LTD", "reference": ""})
     dep = c.get("/api/deposits").json()[0]["id"]
     assert replays(c, dep)[0]["ok"]
+
+
+def test_stored_rule_wording_is_kept_so_plans_made_before_a_display_fix_still_replay(client):
+    """The rules' own sentence for an already-paid reference reads awkwardly ("..., which every referenced invoice is
+    already settled."). The screen rewords it (plainReason); the rule text must stay as it is, because Replay compares the
+    stored plan with a fresh run, and plans stored in live companies would otherwise all show a difference."""
+    client.post("/api/demo/step", json={"step": "deposits"})
+    first = client.get("/api/deposits/DEP-1005").json()["plans"][0]
+    question = next(a["question"] for a in first["actions"] if a["type"] == "ask_payer_agent")
+    assert question == "Deposit DEP-1005 references INV-2244, which every referenced invoice is already settled."
+    r = replays(client, "DEP-1005")[0]
+    assert r["replayable"] and r["ok"], r

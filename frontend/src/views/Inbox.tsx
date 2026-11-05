@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { get, type AuditEvent, type Wallet } from "../api";
 import { Card, Empty, ErrorNote, Loading, Money, Pill, useLoad } from "../components/ui";
-import { CATEGORY_LABEL, money, plainReason, relativeDays, when, actionLabel, actorLabel, whenUtc } from "../format";
+import { CATEGORY_LABEL, money, plainReason, relativeDays, when, actionLabel, actorLabel, whenUtc, statusLabel } from "../format";
 import { go } from "../App";
 
 interface Overview {
@@ -133,7 +133,7 @@ export function Inbox() {
                         <div className="primary-text">{w.kind === "deposit" ? w.payer_name : w.kind === "approval" ? `${w.id.startsWith("PAY-") ? "Bill payment" : "Refund"} to ${w.payer_name}` : `Operation ${w.id}`}</div>
                         <div className="secondary"><span className="mono">{w.id}</span>{w.reason ? ` · ${plainReason(w.reason)}` : ""}</div>
                       </td>
-                      <td><Pill status={w.status} /></td>
+                      <td><Pill status={w.status} label={statusLabel(w.status, status.data?.org?.kind === "sample")} /></td>
                       <td className="num"><Money minor={w.amount_minor} ccy={w.currency} /></td>
                       <td className="hide-sm muted small">{QUEUE_ACTION[w.status] ?? "Open"}</td>
                     </tr>

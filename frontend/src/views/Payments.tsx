@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { get, getPage, post, type Approval, type AuditEvent, type Customer, type Deposit, type Evidence, type Invoice, type Operation, type Plan } from "../api";
 import { Card, Checks, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
-import { CATEGORY_LABEL, SOURCE_LABEL, STATUS_LABEL, money, parseMajor, plainAmount, plainReason, majorString, when, day, actionLabel, whenUtc } from "../format";
+import { CATEGORY_LABEL, SOURCE_LABEL, STATUS_LABEL, money, parseMajor, plainAmount, plainReason, majorString, when, day, actionLabel, whenUtc, statusLabel } from "../format";
 import { go, type Route } from "../App";
 import { describe } from "./Inbox";
 import { useAuth } from "../auth";
@@ -42,7 +42,7 @@ export function Payments({ route }: { route: Route }) {
         <div className="field">
           <label htmlFor="pay-status">Status</label>
           <select id="pay-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s ? STATUS_LABEL[s] : "All statuses"}</option>)}
+            {STATUSES.map((s) => <option key={s} value={s}>{s ? statusLabel(s, orgStatus.data?.org?.kind === "sample") ?? STATUS_LABEL[s] : "All statuses"}</option>)}
           </select>
         </div>
         <div className="field">
@@ -80,7 +80,7 @@ export function Payments({ route }: { route: Route }) {
                     <td><div className="primary-text">{d.payer_name}</div><div className="secondary">{d.customer_name ?? "Unidentified"} · {SOURCE_LABEL[d.source] ?? d.source}</div></td>
                     <td className="hide-sm mono small">{d.reference || <span className="muted">none</span>}</td>
                     <td className="num"><Money minor={d.amount_minor} ccy={d.currency} /></td>
-                    <td><Pill status={d.status} /></td>
+                    <td><Pill status={d.status} label={statusLabel(d.status, orgStatus.data?.org?.kind === "sample")} /></td>
                     <td className="hide-sm small">{CATEGORY_LABEL[d.category ?? ""] ?? d.category}{d.plan_count > 1 && <span className="muted"> · revised</span>}</td>
                     <td className="num hide-sm">{d.buckets.unapplied ? <Money minor={d.buckets.unapplied} ccy={d.currency} /> : <span className="muted">—</span>}</td>
                   </tr>
@@ -173,7 +173,7 @@ function DepositDrawer({ id, onClose }: { id: string; onClose: () => void }) {
       {!x ? <Loading rows={8} /> : (
         <>
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <div className="row"><Pill status={x.status} /><span className="small">{CATEGORY_LABEL[x.category ?? ""] ?? x.category}</span></div>
+            <div className="row"><Pill status={x.status} label={statusLabel(x.status, bank.data?.org?.kind === "sample")} /><span className="small">{CATEGORY_LABEL[x.category ?? ""] ?? x.category}</span></div>
             <span className="muted small">Reference: <span className="mono">{x.reference || "none"}</span></span>
           </div>
           <div className="notice small"><b>Next:</b> {nextStep(x, bank.data?.org?.kind === "sample")}</div>
@@ -336,7 +336,7 @@ const ACTION_TEXT: Record<string, (a: any, ccy: string) => string> = {
   allocate: (a, c) => `Apply ${money(a.amount_minor, c)} to ${a.invoice_id}`,
   write_off_fee: (a, c) => `Write off ${money(a.amount_minor, c)} bank fee on ${a.invoice_id}`,
   payment_link: (a, c) => `Request the ${money(a.amount_minor, c)} balance on ${a.invoice_id}`,
-  ask_payer_agent: (a) => `Ask ${a.customer_id}'s agent: ${a.question}`,
+  ask_payer_agent: (a) => `Ask ${a.customer_id}'s agent: ${plainReason(a.question)}`,
   hold_unapplied: (a, c) => `Hold ${money(a.amount_minor, c)} unapplied`,
   propose_refund: (a, c) => `Proposed refund of ${money(a.amount_minor, c)} (held until evidence)`,
   cancel_proposed_refund: () => "Drop the proposed refund before any money moves",

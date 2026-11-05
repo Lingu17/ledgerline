@@ -159,7 +159,10 @@ const ACTION_LABEL: Record<string, string> = {
   "plan.initial": "Matched by the rules", "plan.revised": "Plan revised", "plan.operator": "Decided by a person",
   "evidence.received": "Payer's agent answered", "evidence.extracted": "Remittance read", "agent.asked_automatically": "Payer's agent asked automatically",
   "allocation.created": "Applied to an invoice", "credit.created": "Held as customer credit", "writeoff.created": "Bank fee written off",
-  "payment_link.drafted": "Balance request drafted", "approval.created": "Approval requested", "approval.approved": "Approved",
+  "payment_link.drafted": "Balance request drafted",
+  "payment_link.draft_fallback": "Balance request ready as an email draft (no hosted link)",
+  "payment_link.sandbox_created": "Payment link created", "payment_link.paid": "Payment link paid",
+  "payment_link.creation_unknown": "Payment link outcome unknown (check with the bank)", "approval.created": "Approval requested", "approval.approved": "Approved",
   "approval.rejected": "Rejected", "approval.invalidated": "Approval voided (something changed)", "approval.expired": "Approval expired",
   "approval.returned_to_person": "Returned to a person (over the limit)", "refund.created": "Refund sent to the bank",
   "refund.recorded_outside": "Refund recorded as paid outside", "refund.ambiguous": "Refund outcome unknown: checking",
@@ -218,4 +221,10 @@ export function actorLabel(actor: string): string {
   if (ACTOR_LABEL[actor]) return ACTOR_LABEL[actor];
   if (actor.startsWith("payer_agent:")) return `Payer's agent (${actor.slice(12)})`;
   return actor;
+}
+
+/** "Asking payer" is true where the agent asks by itself, on arrival and again on retry. A practice company waits for a
+ *  person to press Ask payer's agent, so there the same status reads "Ready to ask payer". */
+export function statusLabel(status: string, practice: boolean): string | undefined {
+  return status === "awaiting_evidence" && practice ? "Ready to ask payer" : undefined;
 }
