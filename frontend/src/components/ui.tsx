@@ -157,6 +157,9 @@ export function Card({ title, actions, children, pad = true }: { title?: ReactNo
   );
 }
 
+// Open drawers and dialogs, innermost last: only the top one holds focus.
+const openTraps: HTMLElement[] = [];
+
 function useFocusTrap(onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   // Callers pass a new onClose on every render; keep the latest without re-running the effect (re-running would
@@ -168,6 +171,15 @@ function useFocusTrap(onClose: () => void) {
     const node = ref.current;
     node?.querySelector<HTMLElement>("button, input, select, textarea, [tabindex]")?.focus();
     lockScroll(1);
+    if (node) openTraps.push(node);
+    // Safari does not Tab to buttons and links by default, so the first/last check below may never see focus leave.
+    // Whatever moves focus outside the top-most open dialog, bring it back inside.
+    const onFocusIn = (e: FocusEvent) => {
+      if (!node || openTraps[openTraps.length - 1] !== node) return;
+      const target = e.target as Node | null;
+      if (target && !node.contains(target)) node.querySelector<HTMLElement>("button, input, select, textarea, [tabindex]")?.focus();
+    };
+    document.addEventListener("focusin", onFocusIn);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close.current();
       if (e.key === "Tab" && node) {
@@ -187,6 +199,9 @@ function useFocusTrap(onClose: () => void) {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      document.removeEventListener("focusin", onFocusIn);
+      const i = node ? openTraps.lastIndexOf(node) : -1;
+      if (i >= 0) openTraps.splice(i, 1);
       lockScroll(-1);
       prev?.focus();
     };
@@ -195,10 +210,21 @@ function useFocusTrap(onClose: () => void) {
 }
 
 // The page behind an open drawer or dialog does not scroll; nested ones (a dialog over a drawer) are counted.
+// iOS before 16 ignores overflow: hidden on <body>, so the page is pinned with position: fixed at its scroll position
+// and put back where it was when the last one closes.
 let scrollLocks = 0;
+let pinnedAt = 0;
 function lockScroll(delta: number) {
+  const before = scrollLocks;
   scrollLocks = Math.max(0, scrollLocks + delta);
-  document.body.style.overflow = scrollLocks > 0 ? "hidden" : "";
+  const b = document.body.style;
+  if (before === 0 && scrollLocks > 0) {
+    pinnedAt = window.scrollY;
+    Object.assign(b, { overflow: "hidden", position: "fixed", top: `-${pinnedAt}px`, left: "0", right: "0", width: "100%" });
+  } else if (before > 0 && scrollLocks === 0) {
+    Object.assign(b, { overflow: "", position: "", top: "", left: "", right: "", width: "" });
+    window.scrollTo(0, pinnedAt);
+  }
 }
 
 export function Drawer({ title, subtitle, onClose, children }: { title: ReactNode; subtitle?: ReactNode; onClose: () => void; children: ReactNode }) {

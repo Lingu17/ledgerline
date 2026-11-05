@@ -27,8 +27,8 @@ docs, not built) · WONTFIX (decided, with the reason).
 | 14 | No line on why the LLM does not decide, or what the payer gains | Judge review | **FIXED** in `ea5fff5` and `265707e`. One sentence each, README first screen and JUDGE_QA |
 | 15 | Screenshots date from 3 Nov; the UI changed on 5 Nov | Judge review | Regenerate and check each by eye |
 | 16 | Safari: evidence download revokes the object URL immediately (`api.ts:97`) | Browser matrix #9 | **FIXED**: the link is added to the page, clicked, and removed with its object URL 30 s later. Attach the anchor to the page and revoke after a short delay |
-| 17 | Safari: dialog focus can escape (`ui.tsx`) | Browser matrix #10 | focusout-based trap |
-| 18 | iOS before 16: the page behind a drawer scrolls | Browser matrix #11 | Lock body scroll with `position: fixed` while open |
+| 17 | Safari: dialog focus can escape (`ui.tsx`) | Browser matrix #10 | **FIXED**: a `focusin` guard brings focus back into the top-most open drawer or dialog (a stack handles a dialog over a drawer). focusout-based trap |
+| 18 | iOS before 16: the page behind a drawer scrolls | Browser matrix #11 | **FIXED**: the body is pinned with `position: fixed` at its scroll position while a drawer or dialog is open, and put back after the last one closes. Lock body scroll with `position: fixed` while open |
 | 19 | Date-time separator can differ by browser (`format.ts:34`) | Browser matrix #12 | Build the string with `formatToParts` |
 | 20 | Hover colours stick after a tap on iOS (measured again 5 Nov: still open) | Browser matrix #13, final verify | Wrap hover rules in `@media (hover: hover)` |
 | 21 | `harden.sh status` prints a journalctl error without the Ops Agent; empty drop-in folder prints nothing | systemd check (cosmetic) | `2>/dev/null` on the Ops Agent lines; print "none" when the folder is empty |
