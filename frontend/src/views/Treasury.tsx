@@ -93,6 +93,7 @@ export function Treasury({ localMode, recordsOnly = false }: { localMode: boolea
       <div className="split">
         <Card title="Bills" pad={false} actions={op && <><button className="btn small" onClick={() => setModal("import")}>Import CSV</button><button className="btn small primary" onClick={() => setModal("obligation")}>Add bill</button></>}>
           {d.obligations.length === 0 && <Empty title="No upcoming bills">Add supplier bills and payroll so Ledgerline can keep each currency covered.</Empty>}
+          {d.obligations.length > 0 && <div className="small muted show-sm" style={{ padding: "8px 16px 0" }}>Swipe the table sideways to see every column.</div>}
           <div className="table-wrap">
           <table>
             <thead><tr><th>Payee</th><th>Due</th><th className="num">Amount</th><th>Status</th></tr></thead>
@@ -142,7 +143,8 @@ export function Treasury({ localMode, recordsOnly = false }: { localMode: boolea
       </div>
 
       <Card title="Conversions" pad={false}>
-        {d.conversions.length === 0 ? <Empty title="No conversions yet">A conversion appears here once you book one for a bill or a wrong-currency payment.</Empty> : (
+        {d.conversions.length === 0 ? <Empty title="No conversions yet">A conversion appears here once you book one for a bill or a wrong-currency payment.</Empty> : (<>
+          <div className="small muted show-sm" style={{ padding: "8px 16px 0" }}>Swipe the table sideways to see every column.</div>
           <div className="table-wrap">
           <table>
             <thead><tr><th>Operation</th><th>Status</th><th className="num">Sold</th><th className="num">Bought</th><th /></tr></thead>
@@ -162,7 +164,7 @@ export function Treasury({ localMode, recordsOnly = false }: { localMode: boolea
             </tbody>
           </table>
           </div>
-        )}
+        </>)}
       </Card>
       {modal === "import" && <CsvImport title="Import bills" path="/treasury/obligations/import" columns="payee,currency,amount,due_date,priority,defer_until,description"
         example={"Northbeam Payroll,EUR,9000.00,2026-11-28,critical,,November payroll\nStudio Fabrik,EUR,1200.00,2026-11-20,flexible,2026-12-15,Design retainer"} onClose={() => setModal("")} />}
