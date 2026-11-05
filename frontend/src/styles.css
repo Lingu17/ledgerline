@@ -381,6 +381,7 @@ main.content:focus { outline: none; }
 /* Phones: no zoom on focus, fingers-sized targets, and room for the Show me tour */
 @media (max-width: 820px) { input, select, textarea { font-size: 16px; } }
 @media (pointer: coarse) { .btn { height: auto; min-height: 44px; } .btn.small { min-height: 36px; } }
+@media (pointer: coarse) { .toast button { min-width: 44px; min-height: 44px; margin: -12px -10px -12px 0; font-size: 18px; } }
 .show-sm { display: none; }
 @media (max-width: 640px) { .show-sm { display: block; } }
 body.tour-open .content, body.tour-open .drawer-body { padding-bottom: 240px; }
