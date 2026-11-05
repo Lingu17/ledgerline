@@ -2,7 +2,7 @@
 
 Every issue found by the reviews and cloud checks, in one place, with its status. Each report is kept on its own
 branch (`origin/<name>-report`) and is not merged into `main`. Status was checked against the code on
-`deploy/vercel-render` at `da83451` (live: `b3ba221`) on 5 Nov 2026.
+`deploy/vercel-render` at `da83451` (live: `b3ba221`) on 5 Nov 2026, and updated with the final verification report the same day.
 
 **Status:** FIXED (in code and tested) · OPEN (still to do) · OWNER (only the owner can do it) · DEFERRED (stated in the
 docs, not built) · WONTFIX (decided, with the reason).
@@ -30,10 +30,15 @@ docs, not built) · WONTFIX (decided, with the reason).
 | 17 | Safari: dialog focus can escape (`ui.tsx`) | Browser matrix #10 | focusout-based trap |
 | 18 | iOS before 16: the page behind a drawer scrolls | Browser matrix #11 | Lock body scroll with `position: fixed` while open |
 | 19 | Date-time separator can differ by browser (`format.ts:34`) | Browser matrix #12 | Build the string with `formatToParts` |
-| 20 | Hover colours stick after a tap on iOS | Browser matrix #13 | Wrap hover rules in `@media (hover: hover)` |
+| 20 | Hover colours stick after a tap on iOS (measured again 5 Nov: still open) | Browser matrix #13, final verify | Wrap hover rules in `@media (hover: hover)` |
 | 21 | `harden.sh status` prints a journalctl error without the Ops Agent; empty drop-in folder prints nothing | systemd check (cosmetic) | `2>/dev/null` on the Ops Agent lines; print "none" when the folder is empty |
-| 22 | `/ceo`, `/overview` and `/ledger` are the heaviest reads under load | Load test #6 | Only if final-verify shows them slow at 50 judges |
-| 23 | Firefox and WebKit never tested (cloud downloads blocked) | Browser matrix | Final-verify retries; otherwise one manual pass in Safari on an iPhone or Mac |
+| 22 | Settings and `/api/status` say `mcp/stdio` for a practice company, whose answers are `mcp/in-memory` (`routes.py:68` reports the server setting) | Final verify N1 | Report `mcp/in-memory` when the org is a practice company, the same rule as `client.py:96`; fix the requirements-matrix line |
+| 23 | Firefox and WebKit never tested (cloud downloads blocked twice) | Browser matrix, final verify | One manual pass in Safari on an iPhone or Mac (owner), covering items 16 to 19 |
+| 24 | `DEPLOYMENT.md:88` says the app sends its own CSP; it does not (the live `Caddyfile.single` does) | Final verify N3 | Change the doc to say `Caddyfile.single` sends it. Lower risk than adding a second CSP in the app |
+| 25 | Treasury Bills and Conversions tables scroll sideways at 390 px with no hint; the earlier fix covered only two tables | Final verify N5, browser #4 partly | `stack-sm` on both, or the swipe hint Wallet position already has |
+| 26 | Toast × Dismiss is 21 px tall on phones | Final verify N4 | 44 px minimum under `pointer: coarse` |
+| 27 | Phone tests create their own context and drop the device settings (`saas.spec.ts:150, 321, 359, 552`) | Final verify N6 | Spread `test.info().project.use` into `newContext` |
+| 28 | Trailing-dot numeric hosts (`https://2130706433./`) pass registration; nothing is called (glibc does not resolve them, and the connect guard refuses) | Final verify N2 | `host.rstrip(".")` before the numeric and localhost checks |
 
 ## Owner
 
@@ -62,9 +67,9 @@ docs, not built) · WONTFIX (decided, with the reason).
 | Linux check | Sender-off file ownership, `files` refusal, PG test fixture, empty dir, PostgreSQL refusal (f5a3b8e) |
 | systemd check | P1 settings read from the environment, P2 ping, P3 start reaches the trap (ceb5058) |
 | Product audit | All P1, P2 and P3 except P2-6 (9418445 to fce6deb) |
-| Load test | Practice agents in-process (aab8d3e), scrypt outside the lock (6c4475c), keep-alive 75 s |
-| Security scan | M1 one hop without an edge secret, L1 real 404s, I1 numeric hosts (c2edadc); throttle race caught in review and fixed (fcadcb9) |
-| Browser matrix | #1–8: 16 px inputs, tour overlap, Treasury buttons, touch targets, inert menu, copy feedback, 100dvh (f13d6d7) |
+| Load test | Practice agents in-process (aab8d3e), scrypt outside the lock (6c4475c), keep-alive 75 s. Final verify, 5 Nov: 100 judges with 0 errors, 0 locked, 0 resets; slowest p95 0.51 s (was 34 s). The heaviest reads (`/ceo` 1.38 s p95) only show at about 75 requests a second, far above judges clicking, so they are left as they are |
+| Security scan | M1 one hop without an edge secret, L1 real 404s, I1 numeric hosts (c2edadc); throttle race caught in review and fixed (fcadcb9). Final verify, 5 Nov: M1, L1, I1 and the login burst (exactly 5 of 20 or 50 reach the check) confirmed fixed; isolation held |
+| Browser matrix | #1–3 and #5–8: 16 px inputs, tour overlap, toasts, touch targets, inert menu, copy feedback, 100dvh (f13d6d7), confirmed by final verify. #4 partly (see item 25) |
 | Recovery drill | Step 6 rewritten as one script; plain refusals; drill VM local only, no cloud identity (8d76391, 5359e17) |
 | Judge review | First Recent activity row of a new practice company read "Payment link draft fallback": plain labels for every link outcome (`c959804`) |
 | Reviewer finds | Why-card free text, backoff per organization, restore_check forged setting, update rollback, delete-company race, cache headers |
