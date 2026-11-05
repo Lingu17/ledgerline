@@ -25,6 +25,12 @@ interface DepositForStory {
   evidence: { source: string; verdict: string; checks: Check[]; envelope: Record<string, any> }[];
 }
 
+// The note is the payer agent's own words (a customer's own agent may send anything): kept short, shown as text only.
+function cap(text: string, max = 200): string {
+  const t = text.trim();
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+}
+
 export async function loadStory(depositId: string): Promise<AgentStory> {
   const d = await get<DepositForStory>(`/deposits/${depositId}`);
   const ask = d.plans[0]?.actions.find((a) => a.type === "ask_payer_agent");
@@ -36,7 +42,7 @@ export async function loadStory(depositId: string): Promise<AgentStory> {
     amount: money(d.amount_minor, d.currency),
     payer: d.customer_name ?? d.payer_name,
     question: ask?.question ? plainReason(ask.question) : null,
-    answer: claim ? String(claim.note ?? `${String(claim.reason ?? "").replace(/_/g, " ")} for ${claim.invoice_id}`) : null,
+    answer: claim ? cap(String(claim.note ?? `${String(claim.reason ?? "").replace(/_/g, " ")} for ${claim.invoice_id}`)) : null,
     keyId: ev?.envelope?.key_id ?? null,
     source: ev?.source ?? null,
     verdict: ev?.verdict ?? null,
