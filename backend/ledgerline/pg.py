@@ -297,10 +297,14 @@ def lock_key(schema: str) -> int:
     return int.from_bytes(hashlib.sha256(schema.encode()).digest()[:8], "big", signed=True)
 
 
+class SchemaMissing(RuntimeError):
+    """The schema does not exist and the caller asked not to create it (see PgConnection(create=False))."""
+
+
 class PgConnection:
     """One pooled connection pinned to one schema, with the sqlite3 surface the code uses."""
 
-    def __init__(self, url: str, schema: str) -> None:
+    def __init__(self, url: str, schema: str, create: bool = True) -> None:
         if not _SCHEMA_RE.match(schema):
             raise ValueError(f"invalid schema name {schema!r}")
         self.schema = schema
@@ -309,10 +313,14 @@ class PgConnection:
         self._in_tx = False
         try:
             with self._raw.cursor() as cur, bounded(self._raw, "schema pinning"):
-                cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+                if create:
+                    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
                 cur.execute(f'SET search_path TO "{schema}"')
                 cur.execute("SELECT current_schema()")
-                if cur.fetchone()[0] != schema:  # defence in depth: never run tenant SQL in another schema
+                pinned = cur.fetchone()[0]
+                if pinned is None and not create:  # current_schema() is NULL when no schema on the path exists
+                    raise SchemaMissing(f"schema {schema!r} does not exist")
+                if pinned != schema:  # defence in depth: never run tenant SQL in another schema
                     raise RuntimeError(f"search_path did not pin schema {schema!r}")
         except BaseException:
             self._pool.putconn(self._raw)

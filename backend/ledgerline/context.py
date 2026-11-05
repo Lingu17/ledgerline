@@ -86,10 +86,18 @@ class AppContext:
                         raise
                     self._initialised = True
                     return conn
-        if isinstance(self.settings.db_path, Path) and not self.settings.db_path.exists():
-            # The organization was deleted while something still held this context: never recreate an empty database.
-            raise RuntimeError("this organization's data no longer exists")
-        return db.connect(self.settings.db_path)
+        # The organization may have been deleted while something still held this context: never recreate an empty
+        # database (a SQLite file, or a PostgreSQL schema, which connecting would otherwise create).
+        if isinstance(self.settings.db_path, Path):
+            if not self.settings.db_path.exists():
+                raise RuntimeError("this organization's data no longer exists")
+            return db.connect(self.settings.db_path)
+        from .pg import SchemaMissing
+
+        try:
+            return db.connect(self.settings.db_path, create=False)
+        except SchemaMissing as exc:
+            raise RuntimeError("this organization's data no longer exists") from exc
 
     @contextmanager
     def conn(self) -> Iterator[sqlite3.Connection]:
