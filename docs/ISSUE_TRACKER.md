@@ -11,13 +11,13 @@ docs, not built) · WONTFIX (decided, with the reason).
 
 | # | Issue | Source | Fix (checked against the code) |
 |:--|:--|:--|:--|
-| 1 | PostgreSQL CI job fails: a fault in our in-process simulated agent was recorded as the payer's "rejected" answer (test_postgres line 328) | CI run 41959776624 | `SimulatedAgentFailed` then 503, nothing recorded; regression test. In progress |
-| 2 | Plan v1 text "…references INV-2244, which every referenced invoice is already settled" (`matching.py:170`) | Judge review | **Display-side only.** `replay.py:75-77` compares stored summary and actions, so changing the rule text would make Replay say "different plan" for every stored plan. Add a test that an old plan still replays the same |
-| 3 | "Asking payer" shown on a practice payment nobody has asked yet (`format.ts:68`) | Judge review | Label from the data: "Ready to ask payer" until an ask exists, then "Asking payer" (true for real companies, which ask on arrival) |
+| 1 | PostgreSQL CI job fails: a fault in our in-process simulated agent was recorded as the payer's "rejected" answer (test_postgres line 328) | CI run 41959776624 | **FIXED** in `b9dba60` (CI to confirm on PostgreSQL). `SimulatedAgentFailed` then 503, nothing recorded; regression test |
+| 2 | Plan v1 text "…references INV-2244, which every referenced invoice is already settled" (`matching.py:170`) | Judge review | **FIXED** in `c959804`: the plan card now runs the ask step through plainReason; `test_stored_rule_wording_is_kept_so_plans_made_before_a_display_fix_still_replay`. **Display-side only.** `replay.py:75-77` compares stored summary and actions, so changing the rule text would make Replay say "different plan" for every stored plan. Add a test that an old plan still replays the same |
+| 3 | "Asking payer" shown on a practice payment nobody has asked yet (`format.ts:68`) | Judge review | **FIXED** in `c959804`: by organization, the fact that decides it. A real company asks on arrival and on retry, so a payment still waiting there is being asked ("Asking payer"); a practice company waits for the button ("Ready to ask payer"). Label from the data: "Ready to ask payer" until an ask exists, then "Asking payer" (true for real companies, which ask on arrival) |
 | 4 | README L123 and L457 say a customer's own agent cannot connect / "would register" keys | Judge review | Correct both; the feature exists and is tested |
 | 5 | SUBMISSION_DRAFT says "four" Claude tools | Judge review | Five (`claude_reader.py`: invoice match, customer credit, refund, conversion, escalate) |
 | 6 | SUBMISSION_DRAFT says missed deposits are checked every two minutes | Judge review | Links every 2 min, deposits every 5th round, about 10 min (`watcher.py:24`) |
-| 7 | Time saved: CEO view assumes 15 min a payment (`ceo.py:13`), docs assume 5 | Judge review | Use 5 everywhere (the conservative figure, already in three places) |
+| 7 | Time saved: CEO view assumes 15 min a payment (`ceo.py:13`), docs assume 5 | Judge review | **FIXED** in `7f25ec1`: `MINUTES_PER_PAYMENT = 5`, pinned by test_ceo. Use 5 everywhere (the conservative figure, already in three places) |
 | 8 | No answer to "what can a stolen payer key do?" | Judge review | From the code: only under the auto-limit with verified evidence, never more than the deposit's unapplied amount, only to the customer's registered refund destination, one live approval per deposit, stopped by pause (`payouts.py:74-130`) |
 | 9 | Test counts differ between README and JUDGE_QA | Judge review | One set of numbers from the latest run, with where each comes from |
 | 10 | JUDGE_QA "about 30 judges" has no backing on `main` | Judge review | Add the load report to `docs/archive`, update with the final-verify figures, or drop the number |
@@ -66,4 +66,5 @@ docs, not built) · WONTFIX (decided, with the reason).
 | Security scan | M1 one hop without an edge secret, L1 real 404s, I1 numeric hosts (c2edadc); throttle race caught in review and fixed (fcadcb9) |
 | Browser matrix | #1–8: 16 px inputs, tour overlap, Treasury buttons, touch targets, inert menu, copy feedback, 100dvh (f13d6d7) |
 | Recovery drill | Step 6 rewritten as one script; plain refusals; drill VM local only, no cloud identity (8d76391, 5359e17) |
+| Judge review | First Recent activity row of a new practice company read "Payment link draft fallback": plain labels for every link outcome (`c959804`) |
 | Reviewer finds | Why-card free text, backoff per organization, restore_check forged setting, update rollback, delete-company race, cache headers |
