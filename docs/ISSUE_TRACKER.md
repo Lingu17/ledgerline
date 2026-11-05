@@ -26,7 +26,7 @@ docs, not built) · WONTFIX (decided, with the reason).
 | 13 | The limits text appears three times, nearly verbatim | Judge review | **FIXED** in `ea5fff5`, `fdf271e`, `265707e`, `f2705ed`. One table on the README first screen; short summary and a link elsewhere; owner checklist in its own file |
 | 14 | No line on why the LLM does not decide, or what the payer gains | Judge review | **FIXED** in `ea5fff5` and `265707e`. One sentence each, README first screen and JUDGE_QA |
 | 15 | Screenshots date from 3 Nov; the UI changed on 5 Nov | Judge review | Regenerate and check each by eye |
-| 16 | Safari: evidence download revokes the object URL immediately (`api.ts:97`) | Browser matrix #9 | Attach the anchor to the page and revoke after a short delay |
+| 16 | Safari: evidence download revokes the object URL immediately (`api.ts:97`) | Browser matrix #9 | **FIXED**: the link is added to the page, clicked, and removed with its object URL 30 s later. Attach the anchor to the page and revoke after a short delay |
 | 17 | Safari: dialog focus can escape (`ui.tsx`) | Browser matrix #10 | focusout-based trap |
 | 18 | iOS before 16: the page behind a drawer scrolls | Browser matrix #11 | Lock body scroll with `position: fixed` while open |
 | 19 | Date-time separator can differ by browser (`format.ts:34`) | Browser matrix #12 | Build the string with `formatToParts` |

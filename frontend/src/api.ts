@@ -93,8 +93,15 @@ export async function download(path: string, filename: string) {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.style.display = "none";
+  // Safari starts the download only for a link that is in the page, and reads the file after click() returns: keep the
+  // link and the object URL alive for a moment before cleaning up.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 30_000);
 }
 
 // ---------------------------------------------------------------- types
