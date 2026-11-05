@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -11,11 +12,12 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, Stric
 from .. import agent_loop, audit, bill_payments, ceo, claude_reader, db, demo, early_pay, ledger, payouts, treasury, webhooks, workspace, wrong_currency
 from ..clock import iso
 from ..context import AppContext, validate_policy
-from ..payer_agents.client import ask_agents, explain_payments
+from ..payer_agents.client import SimulatedAgentFailed, ask_agents, explain_payments
 from ..providers.local import DEMO_RATES
 from ..reconcile import deposit_buckets, latest_plan, pending_agent_questions, record_agent_answer
 from .security import require_operator, require_owner, require_reader
 
+log = logging.getLogger("ledgerline.api")
 router = APIRouter()
 read = [Depends(require_reader)]
 
@@ -201,7 +203,12 @@ def ask_agent(request: Request, deposit_id: str, operator: str = Depends(require
         qs = [q for q in pending_agent_questions(conn) if q["deposit_id"] == deposit_id]
     if not qs:
         raise HTTPException(409, "deposit is not awaiting a payer agent answer")
-    _q, answer, transport, problem = ask_agents(ctx, qs[:1], simulated=explain_payments)[0]
+    try:
+        _q, answer, transport, problem = ask_agents(ctx, qs[:1], simulated=explain_payments)[0]
+    except SimulatedAgentFailed as exc:
+        log.error("ask-agent %s: %s", deposit_id, exc)
+        raise HTTPException(503, "The practice payer agent could not answer because of a problem on this server, not the payer's. "
+                                 "Nothing was recorded and the payment stays waiting.") from exc
     if answer is None:
         raise HTTPException(502, f"could not ask the customer's own agent: {problem}. The payment stays waiting.")
     with ctx.conn() as conn, db.transaction(conn):

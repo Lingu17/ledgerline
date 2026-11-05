@@ -14,6 +14,11 @@ from mcp import Client, StdioServerParameters
 from ..config import BACKEND_DIR
 
 
+class SimulatedAgentFailed(RuntimeError):
+    """Ledgerline's own simulated payer agent failed, for example on a signing key it cannot decrypt. That is a fault on
+    this server, not the payer's answer: nothing is recorded and the payment stays waiting."""
+
+
 def _parse_result(result: Any) -> dict[str, Any]:
     structured = getattr(result, "structured_content", None)
     if isinstance(structured, dict):
@@ -26,7 +31,8 @@ def _parse_result(result: Any) -> dict[str, Any]:
 
 
 async def _call_all(target: Any, requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = []
+    out: list[dict[str, Any]] = []
+    failed: str | None = None
     async with Client(target, read_timeout_seconds=30) as client:
         tools = await client.list_tools()
         if "explain_payment" not in {t.name for t in tools.tools}:
@@ -34,9 +40,15 @@ async def _call_all(target: Any, requests: list[dict[str, Any]]) -> list[dict[st
         for req in requests:
             result = await client.call_tool("explain_payment", req)
             if getattr(result, "is_error", False):
-                out.append({"status": "error", "detail": str(getattr(result, "content", ""))})
-            else:
-                out.append(_parse_result(result))
+                # Same as the separate process failing to load its keys: an error here, never a "rejected" answer
+                # recorded against the customer. Raised after the session closes, so callers see this exception
+                # itself rather than a task-group wrapper.
+                text = " ".join(getattr(b, "text", "") or "" for b in getattr(result, "content", None) or [])
+                failed = f"the simulated payer agent failed: {text or 'no detail'}"[:300]
+                break
+            out.append(_parse_result(result))
+    if failed:
+        raise SimulatedAgentFailed(failed)
     return out
 
 
