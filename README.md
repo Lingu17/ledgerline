@@ -38,7 +38,7 @@
 
 - **The problem:** a payment arrives that doesn't match an invoice. Someone emails the payer, waits, guesses, and sometimes refunds money that was really an advance.
 - **What Ledgerline does:** rules in code match what is clear. For the rest, **its agent asks the payer's own agent** what the payment was for, **checks the signed answer three ways**, and changes its plan **before any money moves**. Small verified refunds go out under your limit; anything bigger needs two people.
-- **What you get:** fewer payments for a person to chase, no wrong refunds, one screen that says whether the company is safe, and a record of every decision that can be replayed and cannot be quietly edited.
+- **What you get:** fewer payments for a person to chase, no refund without a verified answer or a second person, one screen that says whether the company is safe, and a record of every decision that can be replayed and cannot be quietly edited.
 
 ## Try it in 5 minutes
 
@@ -92,8 +92,8 @@ More detail: the [judge quickstart](docs/JUDGE_QUICKSTART.md). For your own comp
 | **Real-world usefulness** | Unclear incoming payments are a daily cost for any company billing in several currencies. Useful today without any payer agent: rules, the document reader and one queue | Inbox → Needs a decision; CEO view |
 | **How agentic** | The agent asks on arrival with no click, believes only answers that pass three checks, changes its own plan, and sends small verified refunds within your limit. The model never decides money; rules do, and a replay proves it | Payments → Receive an unclear payment; CEO view → What the agent did by itself |
 | **Originality** | Agent-to-agent reconciliation: the payer's agent answers over MCP with an Ed25519-signed claim, treated as a claim and checked against your records. A published [spec](docs/PAYER_AGENT_SPEC.md) with a test vector makes it a protocol anyone can implement | Payments → DEP-1005 (verified) and DEP-1004 (signed but false) |
-| **Money safety** | Approvals bound to the exact amount and destination, proposer ≠ approver ≠ sender, expiry, pause, one live refund per payment, SENT is not final | [Money rules](#%EF%B8%8F-money-rules-the-code-enforces); Approvals |
-| **Completeness** | Multi-company app with roles, CSV, ledger, treasury, CEO view; ran on the real Airwallex sandbox; CI green on every job including PostgreSQL | [Measured, not claimed](#-measured-not-claimed) |
+| **Money safety** | Approvals bound to the exact amount and destination, proposer ≠ approver, and when the agent proposes a refund the person who approves it cannot also send it; expiry, pause, one live refund per payment, SENT is not final | [Money rules](#%EF%B8%8F-money-rules-the-code-enforces); Approvals |
+| **Completeness** | Multi-company app with roles, CSV, ledger, treasury, CEO view; ran on the real Airwallex sandbox (the flows listed in What is real); CI green on every job including PostgreSQL | [Measured, not claimed](#-measured-not-claimed) |
 | **Honesty** | Every simulated part is labelled; the limits are in one table | [What is real](#what-is-real-and-what-is-simulated) · [Judge Q&A](docs/JUDGE_QA.md) |
 
 ---
