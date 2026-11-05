@@ -33,26 +33,37 @@ export function majorString(minor: number): string {
 
 // Times read in the viewer's own time zone, with its short name ("05 Nov, 10:22 GMT+5:30"); whenUtc gives the
 // same moment in UTC for tooltips. Calendar dates (day) stay as written: a due date is a day, not a moment.
-const dtf = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
-const utc = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+const dtf = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
+const utc = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" });
 const df = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+
+// Each browser joins the pieces its own way (Safari can write "at"), so the strings are built from the parts.
+function parts(f: Intl.DateTimeFormat, d: Date): Record<string, string> {
+  return Object.fromEntries(f.formatToParts(d).filter((x) => x.type !== "literal").map((x) => [x.type, x.value]));
+}
 
 export function when(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : dtf.format(d);
+  if (isNaN(d.getTime())) return iso;
+  const p = parts(dtf, d);
+  return `${p.day} ${p.month}, ${p.hour}:${p.minute} ${p.timeZoneName}`;
 }
 
 export function whenUtc(iso: string | null | undefined): string | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? undefined : `${utc.format(d)} UTC`;
+  if (isNaN(d.getTime())) return undefined;
+  const p = parts(utc, d);
+  return `${p.day} ${p.month} ${p.year}, ${p.hour}:${p.minute} UTC`;
 }
 
 export function day(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : df.format(d);
+  if (isNaN(d.getTime())) return iso;
+  const p = parts(df, d);
+  return `${p.day} ${p.month} ${p.year}`;
 }
 
 export function relativeDays(iso: string, now: string): string {
