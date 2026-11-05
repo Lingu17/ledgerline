@@ -206,3 +206,4 @@
   .lp-agent-grid { grid-template-columns: 1fr; }
   .lp-proof { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+.lp-example { align-self: flex-start; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6a7a90; }

@@ -160,7 +160,7 @@ export function Landing() {
             <div className="lp-card3d">
               <div className="lp-mock-head">
                 <span className="dot" /><span className="dot" /><span className="dot" />
-                <b>Inbox</b><span className="lp-mock-pill">3 need a decision</span>
+                <b>Inbox</b><span className="lp-example" style={{ marginLeft: 8 }}>Example</span><span className="lp-mock-pill">3 need a decision</span>
               </div>
               <div className="lp-mock-row">
                 <div><b>Fjord Logistikk AS</b><small>EUR 1,750.00 · no reference</small></div>
@@ -216,6 +216,7 @@ export function Landing() {
               <span className="lp-tag">Hear the two agents talk</span>
               <h3>Agent to agent, with signed answers</h3>
               <p>The guided tour plays the real conversation from the company's own records, in two voices where the browser has two. A signed answer is a claim, not a fact: it still has to pass three checks.</p>
+              <span className="lp-example">Example</span>
               <div className="lp-chat" aria-hidden="true">
                 <div className="lp-bubble me"><small>Ledgerline's agent</small>About DEP-1005, USD 1,200.00: the invoice it names is already paid.</div>
                 <div className="lp-bubble them"><small>Payer's agent (simulated)</small>Advance for the March subscription, PO 7781. Signed with its registered key.</div>
@@ -226,6 +227,7 @@ export function Landing() {
               <span className="lp-tag">Decision receipt</span>
               <h3>Proof for every decision</h3>
               <p>Each payment the agent handled has a receipt: what was asked, the signed answer, the checks, a fresh replay of the rules, and the tamper-evident record it sits in.</p>
+              <span className="lp-example">Example</span>
               <dl className="lp-receipt" aria-hidden="true">
                 <dt>Checks</dt><dd>✓ Signature · ✓ Bound and fresh · ✓ Records agree</dd>
                 <dt>Decision</dt><dd>Refund dropped, held as credit</dd>

@@ -13,7 +13,7 @@
   <img alt="Airwallex" src="https://img.shields.io/badge/Airwallex-sandbox%20verified-612fff">
   <img alt="Claude" src="https://img.shields.io/badge/Claude-opus--5--5%20·%20advisory%20only-d97757">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-signed%20payer%20agents-444">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.12+%20·%20FastAPI-3776ab?logo=python&logoColor=white">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.13+%20·%20FastAPI-3776ab?logo=python&logoColor=white">
   <img alt="React" src="https://img.shields.io/badge/React-18%20·%20TypeScript-149eca?logo=react&logoColor=white">
   <img alt="CI" src="https://github.com/Lingu17/ledgerline/actions/workflows/ci.yml/badge.svg">
 </p>
@@ -401,7 +401,7 @@ Every rule is enforced by the API; the UI only hides what you cannot do.
 
 | Layer | Choice | Why |
 |:--|:--|:--|
-| API | Python 3.12+, FastAPI, Pydantic | Typed request bodies; money in integer minor units only |
+| API | Python 3.13+ (CI on 3.13 and 3.14), FastAPI, Pydantic | Typed request bodies; money in integer minor units only |
 | Storage | SQLite per company (WAL); PostgreSQL 17 supported | One file per company is simple isolation; PostgreSQL runs the same tests in CI |
 | Agents | MCP (Model Context Protocol), Ed25519 signatures | Payer agents answer a typed tool; answers are signed claims, checked three ways |
 | AI | Claude (`claude-opus-5-5`), typed tools only | Reads remittance emails and PDFs; no tool can state an amount or an account |
@@ -440,7 +440,7 @@ PostgreSQL tests run when `LEDGERLINE_TEST_DATABASE_URL` points at a PostgreSQL 
 ## 🧪 Run it yourself
 
 <details>
-<summary><b>Locally (Python 3.12+, Node 22.12+)</b></summary>
+<summary><b>Locally (Python 3.13+, Node 22.12+)</b></summary>
 
 Linux or macOS:
 
