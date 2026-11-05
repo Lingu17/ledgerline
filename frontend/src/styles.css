@@ -391,3 +391,11 @@ body.tour-open .toasts { top: 12px; bottom: auto; }
 .agent-activity { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .agent-activity li { padding: 8px 0; border-top: 1px solid var(--line); }
 .agent-activity li:first-child { border-top: 0; padding-top: 0; }
+
+.agent-chat { display: grid; gap: 6px; margin: 0 0 10px; max-height: 40vh; overflow-y: auto; }
+.agent-chat .bubble { display: grid; gap: 2px; padding: 6px 9px; border-radius: 8px; font-size: 12.5px; max-width: 92%; transition: opacity 0.2s; }
+.agent-chat .bubble .who { font-size: 11px; font-weight: 600; opacity: 0.75; }
+.agent-chat .bubble.ledgerline { background: var(--teal-soft); justify-self: start; }
+.agent-chat .bubble.payer { background: var(--blue-soft); justify-self: end; }
+.agent-chat .bubble.later { opacity: 0.35; }
+.agent-chat .bubble.now { outline: 2px solid var(--teal-strong); }

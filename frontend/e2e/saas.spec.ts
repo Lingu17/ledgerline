@@ -617,3 +617,52 @@ test("payment detail shows the decision path and accounts for every cent", async
   await page.getByRole("button", { name: "Replay this decision" }).first().click();
   await expect(page.getByText("Same plan.")).toBeVisible();
 });
+
+test("show me: the two agents talk, from this company's own data, only after Play, and go quiet on close", async ({ browser }) => {
+  const ctx = await browser.newContext(phoneContext());
+  // A stand-in for the browser's speech, so the test hears what would be said without a sound card.
+  await ctx.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    const log = { spoken: [] as string[], cancels: 0 };
+    w.__speech = log;
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: class {
+      text: string; lang = ""; voice = null; onstart: (() => void) | null = null; constructor(t: string) { this.text = t; } } });
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: {
+      speak: (u: { text: string; onstart: (() => void) | null }) => { log.spoken.push(u.text); u.onstart?.(); },
+      cancel: () => { log.cancels += 1; }, pause: () => {}, resume: () => {}, getVoices: () => [], speaking: false } });
+  });
+  const page = await ctx.newPage();
+  await signUp(page, { org: `Voice ${uniq()}`, email: `voice-${uniq()}@e2e.test`, sample: true });
+  await page.getByRole("button", { name: "Show me" }).click();
+  const tour = page.getByRole("region", { name: "Show me tour" });
+  const heard = () => page.evaluate(() => (window as unknown as { __speech: { spoken: string[]; cancels: number } }).__speech);
+  const next = async () => {
+    await tour.getByRole("button", { name: "Next" }).click();
+    await expect(tour.getByText("Working…")).toHaveCount(0, { timeout: 30_000 });
+  };
+  await page.waitForTimeout(500);
+  expect((await heard()).spoken).toEqual([]);  // never on its own
+  await tour.getByRole("button", { name: "Hear the two agents talk" }).click();
+  await expect.poll(async () => (await heard()).spoken.length).toBe(1);
+  expect((await heard()).spoken[0]).toContain("Made-up customers and invoices in USD, EUR and GBP.");
+  await next();
+  await expect.poll(async () => (await heard()).spoken.length).toBe(2);  // each caption once
+  expect((await heard()).spoken[1]).toContain("Rules in code made the first plan for each.");
+  await next();  // DEP-1005: the conversation, read from the payment
+  const dep = await (await page.request.get("/api/deposits/DEP-1005")).json();
+  const key = dep.evidence.reverse().find((e: { source: string }) => e.source === "mcp_signed").envelope.key_id as string;
+  await expect.poll(async () => (await heard()).spoken.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(7);
+  const talk = (await heard()).spoken.slice(2);
+  expect(talk[0]).toMatch(/^Ledgerline's agent: About DEP-1005, USD 1,200\.00:/);
+  expect(talk[1]).toContain(`Signed with key ${key}.`);
+  expect(talk[1]).toMatch(/^Dunmore Analytics LLC's agent \(simulated\):/);
+  expect(talk.slice(2, 5).every((t) => t.endsWith("passed."))).toBe(true);
+  expect(talk[5]).toContain("held as customer credit");
+  await expect(tour.getByText("Simulated payer agent: real signatures and checks")).toBeVisible();
+  await expect(tour.getByText(`Signed with key ${key}.`, { exact: false })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);  // fits 375 px
+  const before = (await heard()).cancels;
+  await tour.getByRole("button", { name: "Close" }).click();
+  expect((await heard()).cancels).toBeGreaterThan(before);
+  await ctx.close();
+});
