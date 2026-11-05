@@ -39,6 +39,9 @@ docs, not built) · WONTFIX (decided, with the reason).
 | 26 | Toast × Dismiss is 21 px tall on phones | Final verify N4 | 44 px minimum under `pointer: coarse` |
 | 27 | Phone tests create their own context and drop the device settings (`saas.spec.ts:150, 321, 359, 552`) | Final verify N6 | Spread `test.info().project.use` into `newContext` |
 | 28 | Trailing-dot numeric hosts (`https://2130706433./`) pass registration; nothing is called (glibc does not resolve them, and the connect guard refuses) | Final verify N2 | `host.rstrip(".")` before the numeric and localhost checks |
+| 29 | PostgreSQL: a context held during company deletion recreates an empty schema (`pg.py` runs CREATE SCHEMA IF NOT EXISTS on every connect; the 245da67 guard covers SQLite only). Never affected live (SQLite) | CI rehearsal | `d8580d0` on `ci-rehearsal-fixes`: `PgConnection(create=False)` raises `SchemaMissing`; cherry-pick |
+| 30 | PostgreSQL: the deletion test asserts a folder that never exists on PostgreSQL (test bug) | CI rehearsal | `d8580d0`: `_org_storage()` checks the folder on SQLite and both schemas on PostgreSQL |
+| 31 | In-process agent decrypts PostgreSQL keys inside the MCP call (the cause of #1) | CI rehearsal | `b44469d`: decrypt in the caller as stdio does; wrap `KeyStoreError` as `SimulatedAgentFailed` so the route still returns 503 |
 
 ## Owner
 
