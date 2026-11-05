@@ -49,3 +49,28 @@ def test_status_reports_the_transport_each_company_really_uses(tmp_path):
     signup(real, email="r@t.test", org="Real", start_with="empty")
     assert practice.get("/api/status").json()["payer_agents"]["transport"] == "mcp/in-memory"
     assert real.get("/api/status").json()["payer_agents"]["transport"] == "mcp/stdio"
+
+
+def test_keys_held_in_the_database_are_decrypted_before_any_mcp_call(client, monkeypatch):
+    """On PostgreSQL the keys are decrypted in the caller, as the separate-process path always did; a wrong server secret
+    stops there (the same 503, nothing recorded) and never reaches the MCP layer."""
+    from ledgerline.payer_agents import keys
+
+    client.post("/api/demo/step", json={"step": "deposits"})
+    before = client.get("/api/deposits/DEP-1005").json()
+    reached_mcp = []
+    monkeypatch.setattr(keys, "key_location", lambda settings: keys.PgKeys(target=None, secret="wrong"))
+
+    def undecryptable(loc):
+        if isinstance(loc, keys.PgKeys):
+            raise KeyStoreError("cannot decrypt the signing key for CUST-DUNMORE: wrong LEDGERLINE_SECRET_KEY or tampered row")
+        reached_mcp.append(loc)
+        return {}
+
+    monkeypatch.setattr(keys, "load_keys", undecryptable)
+    monkeypatch.setattr(server, "load_keys", undecryptable)
+    r = client.post("/api/deposits/DEP-1005/ask-agent")
+    assert r.status_code == 503 and "not the payer's" in r.json()["detail"]
+    assert reached_mcp == []
+    after = client.get("/api/deposits/DEP-1005").json()
+    assert after["status"] == "awaiting_evidence" and after["evidence"] == before["evidence"] and after["plans"] == before["plans"]

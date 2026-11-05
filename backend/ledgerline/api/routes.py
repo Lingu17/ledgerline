@@ -207,7 +207,7 @@ def ask_agent(request: Request, deposit_id: str, operator: str = Depends(require
         _q, answer, transport, problem = ask_agents(ctx, qs[:1], simulated=explain_payments)[0]
     except SimulatedAgentFailed as exc:
         log.error("ask-agent %s: %s", deposit_id, exc)
-        raise HTTPException(503, "The practice payer agent could not answer because of a problem on this server, not the payer's. "
+        raise HTTPException(503, "Ledgerline's simulated payer agent could not answer because of a problem on this server, not the payer's. "
                                  "Nothing was recorded and the payment stays waiting.") from exc
     if answer is None:
         raise HTTPException(502, f"could not ask the customer's own agent: {problem}. The payment stays waiting.")

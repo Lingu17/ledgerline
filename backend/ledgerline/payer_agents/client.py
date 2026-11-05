@@ -150,18 +150,24 @@ def explain_payments(
     """Call explain_payment for each request over one MCP session. Returns (answers, transport label)."""
     if not requests:
         return [], "none"
+    from .keys import EnvKeys, KeyStoreError, PgKeys, load_keys
+
+    # Keys held in the database are decrypted here, before any MCP call, for both transports: a key that cannot be
+    # decrypted (a wrong LEDGERLINE_SECRET_KEY) is a fault on this server, so nothing is recorded and the payment waits.
+    try:
+        keys = load_keys(data_dir) if isinstance(data_dir, PgKeys) else None
+    except KeyStoreError as exc:
+        raise SimulatedAgentFailed(f"the simulated payer agents' keys could not be loaded: {exc}") from exc
     if transport == "memory":
         from .server import build_server
 
-        target: Any = build_server(data_dir)
+        target: Any = build_server(EnvKeys(keys) if keys is not None else data_dir)
         label = "mcp/in-memory"
     else:
         from mcp.client.stdio import get_default_environment
 
-        from .keys import PgKeys, load_keys
-
-        if isinstance(data_dir, PgKeys):
-            env = {**get_default_environment(), "LEDGERLINE_AGENT_KEYS": json.dumps(load_keys(data_dir))}
+        if keys is not None:
+            env = {**get_default_environment(), "LEDGERLINE_AGENT_KEYS": json.dumps(keys)}
             args = ["-m", "ledgerline.payer_agents.server"]
         else:
             env, args = None, ["-m", "ledgerline.payer_agents.server", "--data-dir", str(data_dir)]
