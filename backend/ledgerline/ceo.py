@@ -10,7 +10,7 @@ from .money import CURRENCY_EXPONENT
 from .reconcile import invoice_views
 
 # An assumption, shown beside the figure it produces. Nothing has measured how long a payment takes a real team.
-MINUTES_PER_PAYMENT = 15
+MINUTES_PER_PAYMENT = 5  # the same assumption as README and MEASURED_VALUE: conservative, not measured
 
 
 def _needing(n: int) -> str:

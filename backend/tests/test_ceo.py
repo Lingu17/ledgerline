@@ -11,6 +11,7 @@ def test_practice_company_summary_matches_the_scorecard(client):
     assert c["agent"]["payments"] == score["deposits"] == 6
     assert c["agent"]["settled_without_person"] == score["settled_without_human"]
     assert c["agent"]["estimated_minutes_saved"] == score["settled_without_human"] * c["agent"]["minutes_per_payment_assumed"]
+    assert c["agent"]["minutes_per_payment_assumed"] == 5  # the README and MEASURED_VALUE use the same 5 minutes
     assert c["trust"]["ledger_balanced"] and c["trust"]["log_intact"] and c["trust"]["double_payments"] == 0
     assert {x["currency"] for x in c["currencies"]} == {"USD", "EUR", "GBP"}
     assert c["verdict"] == "attention" and c["needs_you_total"] > 0
