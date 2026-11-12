@@ -33,6 +33,8 @@ export default defineConfig({
       LEDGERLINE_SIGNUP_PER_IP_HOUR: "100000",
       LEDGERLINE_SIGNUP_PER_IP_DAY: "100000",
       LEDGERLINE_SIGNUP_PER_DAY: "100000",
+      LEDGERLINE_JUDGE_DEMO_PER_IP_HOUR: "100000",
+      LEDGERLINE_JUDGE_DEMO_PER_DAY: "100000",
       // Test only: lets a customer's agent be http://127.0.0.1. The hosted app never sets this.
       LEDGERLINE_PAYER_AGENT_ALLOW_LOOPBACK: "1",
     },
