@@ -129,6 +129,7 @@ export function Landing() {
             <a href="#safety">Safety</a>
             <a href="#faq">FAQ</a>
             <a href="#/architecture">Architecture</a>
+            <a href="/evidence">Evidence</a>
           </nav>
           <div className="lp-nav-cta">
             {!signedIn && <a className="lp-btn ghost" href="#/signin">Sign in</a>}
@@ -364,6 +365,7 @@ export function Landing() {
             <a href="#how">How it works</a>
             <a href="#faq">FAQ</a>
             <a href="#/architecture">Architecture</a>
+            <a href="/evidence">Evidence</a>
             <a href="#/privacy">Privacy</a>
             <a href="#/terms">Terms</a>
             <a href="#/security">Security</a>

@@ -1,6 +1,7 @@
 """FastAPI application factory."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sqlite3
@@ -165,6 +166,25 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         """What any visitor may see: the version, and where to report a security problem (if the operator set one)."""
         return JSONResponse({"version": app.version, "commit": commit, "security_contact": settings.security_contact},
                             headers={"Cache-Control": "no-store"})
+
+    def _committed(name: str) -> dict:
+        """A committed evidence file (docs/evidence), as deployed with the code. Nothing live is called."""
+        path = REPO_DIR / "docs" / "evidence" / name
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {"missing": True, "file": f"docs/evidence/{name}"}
+
+    @app.get("/api/public/evidence", include_in_schema=False)
+    def public_evidence() -> JSONResponse:
+        """Real Airwallex sandbox runs and the outside payer agent run, read from committed files only."""
+        return JSONResponse({"commit": commit, "sandbox": _committed("sandbox-runs.json"),
+                             "outside_agent": _committed("outside-agent-run.json")}, headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/public/attacks", include_in_schema=False)
+    def public_attacks() -> JSONResponse:
+        """The attack suite's latest result, written by the test run (scripts/attack_report.py), never by hand."""
+        return JSONResponse(_committed("attacks.json"), headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/public/changelog", include_in_schema=False)
     def changelog() -> PlainTextResponse:

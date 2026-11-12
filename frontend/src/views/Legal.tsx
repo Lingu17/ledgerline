@@ -5,7 +5,7 @@ import { Logo } from "./Landing";
 const UPDATED = "4 November 2026";
 
 /** Public pages (privacy, terms, security): readable signed in or out, plain words, nothing promised that the code does not do. */
-function DocPage({ title, children }: { title: string; children: React.ReactNode }) {
+export function DocPage({ title, children, updated = UPDATED, wide = false }: { title: string; children: React.ReactNode; updated?: string | null; wide?: boolean }) {
   useEffect(() => {
     document.title = `${title} · Ledgerline`;
     window.scrollTo(0, 0);
@@ -24,9 +24,9 @@ function DocPage({ title, children }: { title: string; children: React.ReactNode
           </nav>
         </div>
       </header>
-      <main className="lp-wrap doc-body">
+      <main className="lp-wrap doc-body" style={wide ? { maxWidth: 1200 } : undefined}>
         <h1>{title}</h1>
-        <p className="doc-updated">Last updated {UPDATED}</p>
+        {updated && <p className="doc-updated">Last updated {updated}</p>}
         {children}
       </main>
       <LegalFooter />
@@ -158,7 +158,7 @@ export function Security() {
       <ul>
         <li>Two people: whoever proposes a refund or bill payment cannot approve it, and when the agent proposed a refund, the person who approves it cannot also send it.</li>
         <li>An approval is bound to the exact amount, currency, destination and evidence. If any of them changes, the approval is void.</li>
-        <li>An approval not sent within 72 hours goes back to the approvers.</li>
+        <li>An approval not sent in time (72 hours by default; an Owner can set 1 to 720) goes back to the approvers.</li>
         <li>One live refund per payment, with a stable request id, so a timeout cannot pay twice. Only PAID counts as done.</li>
         <li>A pause switch stops every payment out at once; matching keeps running.</li>
         <li>Optionally, the operator can move the Airwallex keys into a separate process that the app cannot read; the app then asks it to send by id only. A compromised app could still request a send that its own database says was approved.</li>

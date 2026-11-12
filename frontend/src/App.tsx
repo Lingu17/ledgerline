@@ -20,11 +20,15 @@ import { Architecture } from "./views/Architecture";
 import { ShowMe } from "./components/ShowMe";
 import { Changelog, Help, Privacy, Security, Terms, VersionLine } from "./views/Legal";
 import { PageError } from "./components/PageError";
+import { Proof } from "./views/Proof";
 
 export type Route = { page: string; params: URLSearchParams };
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, "");
+  // Public pages also have plain addresses: /evidence and /attacks.
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, "");
+  if (!raw && (path === "evidence" || path === "attacks")) return { page: path === "evidence" ? "proof" : "attacks", params: new URLSearchParams() };
   const [page, query = ""] = raw.split("?");
   return { page: page || "inbox", params: new URLSearchParams(query) };
 }
@@ -276,6 +280,7 @@ function Gate() {
   if (route.page === "privacy") return <Privacy />;
   if (route.page === "terms") return <Terms />;
   if (route.page === "security") return <Security />;
+  if (route.page === "proof") return <Proof />;
   if (route.page === "changelog") return <Changelog />;
   if (route.page === "help") return <Help topic={route.params.get("topic")} />;
   if (!me) {

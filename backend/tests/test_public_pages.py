@@ -95,3 +95,18 @@ def test_a_deploy_reaches_returning_visitors_and_built_files_are_cached(client):
     missing = client.get("/assets/index-missing.js")
     assert missing.status_code == 404 and "immutable" not in missing.headers.get("cache-control", "")
     assert client.get("/api/health").headers["cache-control"] == "no-store"
+
+
+def test_the_public_evidence_page_reads_only_committed_files(client):
+    """No sign-in, no live call: the sandbox runs and the outside-agent record come from docs/evidence."""
+    from .conftest import new_client
+    from ledgerline import REPO_DIR
+    import json as _json
+
+    r = new_client(client.app).get("/api/public/evidence")
+    assert r.status_code == 200
+    body = r.json()
+    committed = _json.loads((REPO_DIR / "docs" / "evidence" / "sandbox-runs.json").read_text(encoding="utf-8"))
+    assert body["sandbox"] == committed and len(body["sandbox"]["runs"]) >= 8 and body["sandbox"]["simulated_only"]
+    assert all(run["proves"] and run["ids"] and run["date"] for run in body["sandbox"]["runs"])
+    assert "runs" in body["outside_agent"]  # a placeholder until a real outside run is committed
