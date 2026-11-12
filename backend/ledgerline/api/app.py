@@ -206,6 +206,8 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         return PlainTextResponse(f"Contact: {settings.security_contact}\nExpires: {expires}\nPreferred-Languages: en\n"
                                  f"Canonical: {base}/.well-known/security.txt\nPolicy: {base}/#/security\n")
 
+    from ..payer_agents.client import probe_mcp
+
     @app.get("/api/health", include_in_schema=False)
     def health(request: Request) -> JSONResponse:
         """Liveness and readiness for the host's health check: control database readable and data directory writable."""
@@ -220,6 +222,8 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
                 storage = "persistent mount" if settings.require_persistent_mount else "local directory"
             body = {"status": "ok", "version": app.version, "commit": commit, "control_schema": schema, "storage": storage,
                     "bank": settings.provider, "claude": "configured" if settings.claude_configured else "not configured",
+                    # The simulated payer agents, reached over MCP (a real session listing the tools, refreshed every 5 min).
+                    "payer_agents_mcp": probe_mcp(settings),
                     # The caller's own address as resolved through trusted proxies (verifies proxy configuration).
                     "client": client_ip(request),
                     # Hop count of the caller's own forwarding chain (no addresses), for calibrating LEDGERLINE_TRUSTED_PROXY_HOPS.

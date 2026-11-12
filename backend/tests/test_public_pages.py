@@ -130,3 +130,18 @@ def test_the_committed_attack_report_matches_the_suite(client):
     badge = _json.loads((REPO_DIR / "docs" / "evidence" / "attacks-badge.json").read_text(encoding="utf-8"))
     assert badge["message"].startswith(f"{r['blocked']}/{r['total']}") and badge["color"] == "brightgreen"
 
+
+def test_health_reports_whether_the_payer_agents_answer_over_mcp(client, monkeypatch):
+    from ledgerline.payer_agents import client as mcp_client
+
+    monkeypatch.setattr(mcp_client, "_probe_state", {"at": None, "result": None, "running": False})
+    first = mcp_client.probe_mcp(client.app.state.settings, wait=True)
+    assert first["status"] == "ok" and first["memory"] == "ok", first
+    body = client.get("/api/health").json()
+    assert body["status"] == "ok" and body["payer_agents_mcp"] == first  # cached: the probe does not start a process each time
+
+    def broken(*_a, **_k):
+        raise OSError("no server")
+    monkeypatch.setattr(mcp_client, "_probe_state", {"at": None, "result": None, "running": False})
+    monkeypatch.setattr(mcp_client.anyio, "run", broken)
+    assert mcp_client.probe_mcp(client.app.state.settings, wait=True)["status"] == "unreachable"

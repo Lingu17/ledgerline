@@ -176,3 +176,59 @@ def explain_payments(
         with _STDIO_SLOTS:  # each call starts a process (about 1 s of CPU and 50 MB): at most three at once
             return anyio.run(_call_all, target, requests), label
     return anyio.run(_call_all, target, requests), label
+
+
+async def _list_tools(target: Any) -> list[str]:
+    async with Client(target, read_timeout_seconds=10) as client:
+        return sorted(t.name for t in (await client.list_tools()).tools)
+
+
+_PROBE_TTL = 300.0
+_probe_lock = threading.Lock()
+_probe_state: dict[str, Any] = {"at": None, "result": None, "running": False}
+
+
+def _probe_now(settings: Any) -> dict[str, Any]:
+    from .server import build_server
+
+    out: dict[str, Any] = {"checked": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    for name in sorted({"memory", settings.payer_mcp_transport}):
+        try:
+            if name == "memory":
+                target: Any = build_server(settings.data_dir)
+            else:
+                target = StdioServerParameters(command=sys.executable, args=["-m", "ledgerline.payer_agents.server",
+                                               "--data-dir", str(settings.data_dir)], cwd=str(BACKEND_DIR))
+            tools = anyio.run(_list_tools, target)
+            out[name] = "ok" if "explain_payment" in tools else "explain_payment missing"
+        except Exception as exc:  # noqa: BLE001 - reported, never raised from a health probe
+            out[name] = f"unreachable: {type(exc).__name__}"[:120]
+    out["status"] = "ok" if all(v == "ok" for k, v in out.items() if k != "checked") else "unreachable"
+    return out
+
+
+def probe_mcp(settings: Any, wait: bool = False) -> dict[str, Any]:
+    """Whether the simulated payer agents answer over MCP, for /api/health: a real MCP session that lists the tools, over
+    both transports (in-process for practice companies, the configured one for real companies). Refreshed at most every
+    five minutes, in the background, so the health probe itself stays fast; the first call answers "checking" unless
+    wait=True. Never raises."""
+    with _probe_lock:
+        fresh = _probe_state["at"] is not None and time.monotonic() - _probe_state["at"] < _PROBE_TTL
+        if fresh or _probe_state["running"]:
+            return _probe_state["result"] or {"status": "checking"}
+        _probe_state["running"] = True
+
+    def refresh() -> None:
+        try:
+            result = _probe_now(settings)
+        finally:
+            with _probe_lock:
+                _probe_state.update(at=time.monotonic(), running=False)
+        with _probe_lock:
+            _probe_state["result"] = result
+
+    if wait:
+        refresh()
+        return _probe_state["result"]
+    threading.Thread(target=refresh, name="mcp-probe", daemon=True).start()
+    return _probe_state["result"] or {"status": "checking"}
