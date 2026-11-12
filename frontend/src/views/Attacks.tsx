@@ -31,7 +31,7 @@ export function Attacks() {
               {r.blocked}/{r.total} blocked · {r.moved_minor_total === 0 ? "$0 moved" : `${r.moved_minor_total ?? "unknown"} minor units moved`}
             </span>
           </p>
-          <p className="small muted">Last run {r.generated_at} on commit {r.commit}. The suite also runs in CI on every push
+          <p className="small muted">Last run {r.generated_at}, on the code of commit {r.commit} (the last change to the backend). The suite also runs in CI on every push
             (<code>backend/tests/test_attacks.py</code>); this page shows the committed report from <code>scripts/attack_report.py</code>.</p>
           <div className="table-wrap">
             <table className="stack-sm">

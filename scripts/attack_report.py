@@ -49,7 +49,10 @@ def main() -> int:
         attacks.append({"id": name.removeprefix("test_"), **meta, "result": "blocked" if blocked else "NOT BLOCKED",
                         "moved": m})
     total = sum(m["amount_minor"] for m in moved.values()) if moved else None
-    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    # The code that was tested: the last commit that changed the backend or this script (docs-only commits after it
+    # do not change what ran, so the page keeps naming the code, not the commit that stores this report).
+    commit = subprocess.run(["git", "log", "-1", "--format=%h", "--", "backend", "scripts/attack_report.py"], cwd=ROOT,
+                            capture_output=True, text=True).stdout.strip()
     report = {
         "what": "Hostile attempts run against the simulated bank (no real money). Each must be refused and move nothing.",
         "how": "backend/tests/test_attacks.py, run by scripts/attack_report.py; money is measured on the simulated bank's own "
