@@ -193,3 +193,39 @@ def test_the_attacks_page_links_the_ci_run_on_the_live_commit(client, monkeypatc
     monkeypatch.setattr(ci_lookup, "_fetch", down)
     live = new_client(client.app).get("/api/public/attacks").json()["live"]
     assert live["ci"] is None and live["actions_url"].endswith("/actions")
+
+
+def test_numbers_judges_read_agree_with_the_code(ctx):
+    """The attack count and the reference company's "4 of 6" are typed in a few documents; they must match the code."""
+    import json as _json
+    import re
+
+    from ledgerline import REPO_DIR, payouts
+    from ledgerline.demo import run_step, scorecard
+
+    from .conftest import one, run_to
+
+    docs = {name: (REPO_DIR / name).read_text(encoding="utf-8") for name in
+            ("README.md", "docs/SUBMISSION.md", "docs/JUDGE_QA.md", "docs/JUDGE_QUICKSTART.md")}
+    total = _json.loads((REPO_DIR / "docs" / "evidence" / "attacks.json").read_text(encoding="utf-8"))["total"]
+    words = {25: "twenty-five"}
+    for name, text in docs.items():
+        for n in re.findall(r"(\d+) hostile", text):
+            assert int(n) == total, f"{name} says {n} hostile attempts; the suite has {total}"
+        for n in re.findall(r"(\d+)/(\d+) blocked", text):
+            assert n == (str(total), str(total)), f"{name} says {n}"
+        if "wenty-five hostile" in text:
+            assert words.get(total) == "twenty-five", f"{name} spells out 25 hostile attempts; the suite has {total}"
+
+    run_to(ctx, "treasury")
+    a = one(ctx, "SELECT * FROM approvals WHERE status = 'pending' AND deposit_id = 'DEP-1006'")
+    payouts.decide(ctx, a["id"], approve=True, actor="approver", seen_scope_hash=a["scope_hash"])
+    payouts.execute_refund(ctx, a["id"], "op")
+    for step in ("approve", "bank_sent", "bank_paid"):
+        run_step(ctx, step, "op")
+    s = scorecard(ctx)
+    phrase = f"{s['settled_without_human']} of {s['deposits']}"
+    for name, text in docs.items():
+        for found in re.findall(r"(\d+) of (\d+) (?:payments|deposits)", text):
+            assert " of ".join(found) == phrase, f"{name} says {' of '.join(found)}; the reference company gives {phrase}"
+    assert phrase in docs["README.md"]
