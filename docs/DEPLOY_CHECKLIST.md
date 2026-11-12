@@ -20,10 +20,10 @@ sudo systemctl kill -s KILL ledgerline
 sleep 5 && systemctl is-active ledgerline && curl -s https://35-207-220-110.sslip.io/api/health
 ```
 
-Reboot: both services are enabled, so they start with the machine.
+Reboot: the app and Caddy are enabled, so they start with the machine (the separate sending service is installed only if you turned it on; then add ledgerline-send).
 
 ```bash
-systemctl is-enabled ledgerline ledgerline-send caddy
+systemctl is-enabled ledgerline caddy
 ```
 
 ```bash
