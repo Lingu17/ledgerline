@@ -21,6 +21,7 @@ import { ShowMe } from "./components/ShowMe";
 import { Changelog, Help, Privacy, Security, Terms, VersionLine } from "./views/Legal";
 import { PageError } from "./components/PageError";
 import { Proof } from "./views/Proof";
+import { Attacks } from "./views/Attacks";
 
 export type Route = { page: string; params: URLSearchParams };
 
@@ -281,6 +282,7 @@ function Gate() {
   if (route.page === "terms") return <Terms />;
   if (route.page === "security") return <Security />;
   if (route.page === "proof") return <Proof />;
+  if (route.page === "attacks") return <Attacks />;
   if (route.page === "changelog") return <Changelog />;
   if (route.page === "help") return <Help topic={route.params.get("topic")} />;
   if (!me) {

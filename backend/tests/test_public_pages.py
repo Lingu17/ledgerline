@@ -110,3 +110,23 @@ def test_the_public_evidence_page_reads_only_committed_files(client):
     assert body["sandbox"] == committed and len(body["sandbox"]["runs"]) >= 8 and body["sandbox"]["simulated_only"]
     assert all(run["proves"] and run["ids"] and run["date"] for run in body["sandbox"]["runs"])
     assert "runs" in body["outside_agent"]  # a placeholder until a real outside run is committed
+
+
+def test_the_committed_attack_report_matches_the_suite(client):
+    """The /attacks page and the README badge read docs/evidence/attacks.json. It must list exactly the attacks in
+    tests/test_attacks.py, all blocked with nothing moved, or CI fails and the report must be regenerated."""
+    from .conftest import new_client
+    from .test_attacks import ATTACKS
+
+    r = new_client(client.app).get("/api/public/attacks").json()
+    assert [a["id"] for a in r["attacks"]] == [n.removeprefix("test_") for n in ATTACKS], "run scripts/attack_report.py"
+    assert r["total"] == len(ATTACKS) == r["blocked"] and r["moved_minor_total"] == 0
+    zero = {"transfers": 0, "amount_minor": 0, "conversions": 0}
+    assert all(a["result"] == "blocked" and a["moved"] == zero for a in r["attacks"])
+    assert all(a[k] == ATTACKS["test_" + a["id"]][k] for a in r["attacks"] for k in ("category", "tried", "rule"))
+    from ledgerline import REPO_DIR
+    import json as _json
+
+    badge = _json.loads((REPO_DIR / "docs" / "evidence" / "attacks-badge.json").read_text(encoding="utf-8"))
+    assert badge["message"].startswith(f"{r['blocked']}/{r['total']}") and badge["color"] == "brightgreen"
+
