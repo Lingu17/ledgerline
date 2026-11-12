@@ -40,10 +40,14 @@ def attack(category: str, tried: str, rule: str):
 # --- measuring money on the simulated bank --------------------------------------------------------------------------
 
 def bank_state(ctx) -> dict[str, int]:
+    def value(row, name):  # SQLite rows index by position, PostgreSQL rows by column name
+        return row[name] if hasattr(row, "keys") else row[0]
+
     with ctx.local_bank._conn() as c:
-        n, total = c.execute("SELECT COUNT(*), COALESCE(SUM(amount_minor), 0) FROM transfers").fetchone()
-        conversions = c.execute("SELECT COUNT(*) FROM conversions").fetchone()[0]
-    return {"transfers": n, "amount_minor": total, "conversions": conversions}
+        n = value(c.execute("SELECT COUNT(*) AS n FROM transfers").fetchone(), "n")
+        total = value(c.execute("SELECT COALESCE(SUM(amount_minor), 0) AS total FROM transfers").fetchone(), "total")
+        conversions = value(c.execute("SELECT COUNT(*) AS n FROM conversions").fetchone(), "n")
+    return {"transfers": int(n), "amount_minor": int(total), "conversions": int(conversions)}
 
 
 class Watch:
