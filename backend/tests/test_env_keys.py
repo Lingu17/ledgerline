@@ -24,3 +24,14 @@ def test_sender_key_path_and_security_contact_come_from_the_real_environment(mon
     assert s.sender_socket == "unix:/run/ledgerline-send/send.sock"
     assert s.connections_key_path == tmp_path / "connections.key"
     assert s.security_contact == "https://example.com/security"
+
+
+def test_every_setting_is_documented_in_env_example():
+    from ledgerline.config import BACKEND_DIR, _ENV_KEYS
+
+    text = (BACKEND_DIR / ".env.example").read_text(encoding="utf-8")
+    assert [k for k in _ENV_KEYS if f"\n{k}=" not in text] == []
+    values = dict(line.split("=", 1) for line in text.splitlines() if "=" in line and not line.startswith("#"))
+    for secret in ("AIRWALLEX_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_CLIENT_SECRET", "LEDGERLINE_SECRET_KEY", "LEDGERLINE_EDGE_SECRET",
+                   "AIRWALLEX_WEBHOOK_SECRET", "LEDGERLINE_WEBHOOK_SECRET"):
+        assert values.get(secret, "") == "", f"{secret} must be blank in the example"
