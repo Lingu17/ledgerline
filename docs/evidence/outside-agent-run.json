@@ -1,6 +1,6 @@
 {
   "label": "separate machine, separate key, operated by the Ledgerline author",
-  "what": "The reference payer agent (tools/payer_agent at commit 2dc7082) ran on a separate Google Cloud e2-micro VM (us-central1) behind Caddy at https://104-197-66-69.sslip.io/mcp, with an Ed25519 key generated on that VM; the private key never left it. The live site asked it about DEP-1005 in a one-click judge-demo practice company (simulated bank, made-up data). No money moved. The VM was operated by the Ledgerline author, so this is not an independent party or a customer.",
+  "what": "The reference payer agent (tools/payer_agent at commit 2dc7082) ran on a separate Google Cloud e2-micro VM (us-central1) behind Caddy at https://104-197-66-69.sslip.io/mcp, with an Ed25519 key generated on that VM; the private key never left it. The live site asked it about DEP-1005 in a one-click judge-demo practice company (simulated bank, made-up data). No money moved. The VM was operated by the Ledgerline author, so this is not an independent party or a customer. The judge-demo company that recorded it is deleted after 48 hours, and the VM was stopped after the run, so its /mcp address no longer answers: this file, checked by the validator, is the record.",
   "date": "2026-11-12",
   "validated_by": "scripts/validate_outside_run.py",
   "runs": [
