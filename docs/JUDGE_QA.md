@@ -3,7 +3,7 @@
 What is real and what is simulated is one table on the README's first screen: [what is real](../README.md#what-is-real-and-what-is-simulated). The answers below do not repeat it.
 
 **Didn't your server sign both sides?**
-For the built-in payer agents in practice companies, yes: their keys are held on this server, and we label them simulated. A customer's own agent signs with its own key, which the server never holds. That path has run twice outside the server: on 3 Nov from the owner's own PC, and in a run recorded on the [evidence page](https://35-207-220-110.sslip.io/evidence) when one is committed in `docs/evidence/outside-agent-run.json`. Both were operated by the Ledgerline author, so they show the mechanism across the internet with a separate key, not an independent party.
+For the built-in payer agents in practice companies, yes: their keys are held on this server, and we label them simulated. A customer's own agent signs with its own key, which the server never holds. That path has run once outside the server: on 3 Nov from the owner's own PC ([INTEGRATION_EVIDENCE](INTEGRATION_EVIDENCE.md)). It was operated by the Ledgerline author, so it shows the mechanism across the internet with a separate key, not an independent party.
 
 **Who approved the live payments?**
 The owner, using two of their own accounts: one proposed and the other approved, for the sandbox refund (APR-FC97829A, SENT → PAID) and the EUR 100 bill payment (PAY-6C76DB78). That shows the control and the bank call, not independent review. The two-person rule checks accounts, not people.

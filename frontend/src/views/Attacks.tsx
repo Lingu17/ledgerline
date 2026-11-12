@@ -34,7 +34,7 @@ export function Attacks() {
           </p>
           <p className="small" data-testid="attack-trace">
             Last run: {r.generated_at.slice(0, 10)} · commit <code>{r.commit}</code> ·{" "}
-            {r.live?.ci
+            {r.live?.ci && r.live.ci.url.startsWith("https://github.com/")
               ? <a href={r.live.ci.url}>CI run #{r.live.ci.run_number}</a>
               : <a href={r.live?.actions_url ?? "https://github.com/Lingu17/ledgerline/actions"}>CI runs</a>}
             {r.live?.ci && <> ({r.live.ci.status === "completed" ? (r.live.ci.conclusion === "success" ? "passed" : r.live.ci.conclusion) : "running"})</>}

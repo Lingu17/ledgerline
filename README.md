@@ -22,7 +22,7 @@ Short, honest answers to the questions judges ask: [Judge Q&A](docs/JUDGE_QA.md)
 - Multi-currency accounts and Airwallex's own FX quotes let a bill be paid by converting only what is short.
 - Refund destinations are validated by Airwallex's beneficiary API before they are saved. All of this ran on the real sandbox: [evidence](https://35-207-220-110.sslip.io/evidence).
 
-**Business model (a proposal, not tested with customers):** a monthly subscription per company, priced by payments reconciled, for finance teams of small companies that bill in several currencies. The payer-agent protocol stays open and free to implement, so payers have no cost to join. This is a proposal; the next step is a pilot with a small number of SMEs that receive cross-border payments on Airwallex.
+**Business model (not tested with customers):** a monthly subscription per company, priced by payments reconciled, for finance teams of small companies that bill in several currencies. The payer-agent protocol stays open and free to implement, so payers have no cost to join. This is a proposal; the next step is a pilot with a small number of SMEs that receive cross-border payments on Airwallex.
 
 ## Judge it in 3 minutes
 
