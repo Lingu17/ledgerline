@@ -40,6 +40,7 @@ def _me(request: Request, token: str) -> dict[str, Any]:
         "role": info.role,
         "organizations": orgs,
         "signup_enabled": request.app.state.settings.allow_signup,
+        "judge_demo": _control(request).judge_demo_person(info.user_id, info.org_id),
     }
 
 
@@ -76,6 +77,29 @@ def signup(request: Request, response: Response, body: SignupBody) -> dict[str, 
 class LoginBody(BaseModel):
     email: str = Field(max_length=254)
     password: str = Field(max_length=256)
+
+
+@router.post("/auth/judge-demo")
+def judge_demo(request: Request, response: Response) -> dict[str, Any]:
+    """One click: a practice company of its own, with the reference payments, and two demo people (Judge A, the Owner,
+    and Teammate B, an Operator). Simulated bank only; deleted after 48 hours."""
+    _check_origin(request)
+    s = request.app.state.settings
+    if not s.judge_demo:
+        raise HTTPException(403, "the one-click judge demo is switched off on this server")
+    token, org_id = _control(request).create_judge_demo(ip=_ip(request), user_agent=_ua(request), limits=s.judge_demo_limits)
+    request.app.state.orgs.provision(org_id, sample=True)
+    set_session_cookie(request, response, token)
+    return _me(request, token)
+
+
+@router.post("/auth/judge-demo/switch")
+def judge_demo_switch(request: Request, response: Response) -> dict[str, Any]:
+    """Become the other demo person (A or B) of the same demo company, to be the second person in the two-person rule."""
+    _, token = require_session(request, mutating=True)
+    new = _control(request).switch_judge_demo_person(token, _ua(request))
+    set_session_cookie(request, response, new)
+    return _me(request, new)
 
 
 @router.post("/auth/login")
@@ -339,6 +363,8 @@ def _no_money_activity(p: Principal) -> None:
 @router.post("/integrations/airwallex/connect")
 def connect_airwallex(request: Request, body: ConnectAirwallexBody, p: Principal = Depends(require_role("owner"))) -> dict[str, Any]:
     """Check the organization's own sandbox keys against Airwallex first; save them only if they work."""
+    if _control(request).is_judge_demo(p.session.org_id):
+        raise HTTPException(403, "a judge demo company runs on the simulated bank only; it cannot connect Airwallex keys")
     from ..connections import discover_accounts, seal
     from ..providers.airwallex import AirwallexSandbox
     from ..providers.base import ProviderAmbiguous, ProviderError

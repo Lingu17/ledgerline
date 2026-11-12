@@ -337,4 +337,5 @@ export interface Me {
   role: Role | null;
   organizations: { id: string; name: string; kind: "workspace" | "sample"; role: Role }[];
   signup_enabled: boolean;
+  judge_demo?: { you: string; other: string; deleted_after: string } | null;
 }

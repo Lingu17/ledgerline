@@ -41,6 +41,8 @@ NO_PASSWORD = "none$oauth-only"
 _EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$")
 
 
+JUDGE_DEMO_TTL = timedelta(hours=48)
+
 class AuthError(ValueError):
     """Authentication or authorization failure."""
 
@@ -569,6 +571,88 @@ class ControlPlane:
             c.execute("DELETE FROM memberships WHERE org_id = ? AND user_id = ?", (org_id, user_id))
             c.execute("UPDATE sessions SET org_id = NULL WHERE user_id = ? AND org_id = ?", (user_id, org_id))
             self._audit(c, user_id, "member.left", org_id, {"user_id": user_id})
+
+    # ---------------------------------------------------------------------------------------------- judge demo
+    def create_judge_demo(self, *, ip: str, user_agent: str, limits: tuple[int, int]) -> tuple[str, str]:
+        """One click: a practice company of its own, with two demo people, A (Owner) and B (Operator), so a judge can be
+        both sides of the two-person rule. No password is shown or needed: the browser keeps the session. Counted apart
+        from sign-ups, so judges on one network do not use up the sign-up limit."""
+        tag = secrets.token_hex(4)
+        a_id, b_id = "usr_" + uuid.uuid4().hex[:12], "usr_" + uuid.uuid4().hex[:12]
+        unusable = hash_password(secrets.token_urlsafe(32))  # never shown: these people sign in only through this click
+        now = self.clock.now()
+        key = self._creation_key(ip)
+        with self.conn() as c, db.transaction(c):
+            c.execute("DELETE FROM creations WHERE at < ?", (iso(now - timedelta(days=2)),))
+            hour, day = iso(now - timedelta(hours=1)), iso(now - timedelta(days=1))
+            if int(c.execute("SELECT COUNT(*) FROM creations WHERE ip = ? AND what = 'judge_demo' AND at >= ?", (key, hour)).fetchone()[0]) >= limits[0]:
+                raise AuthError(429, "too many demo companies from your network in the last hour; try again later", retry_after=3600)
+            if int(c.execute("SELECT COUNT(*) FROM creations WHERE what = 'judge_demo' AND at >= ?", (day,)).fetchone()[0]) >= limits[1]:
+                raise AuthError(429, "this server has reached today's limit for demo companies; try again tomorrow", retry_after=86400)
+            c.execute("INSERT INTO creations(at, ip, what) VALUES (?,?,?)", (iso(now), key, "judge_demo"))
+            for uid, email, name in ((a_id, f"judge-{tag}@demo.ledgerline.invalid", "Judge A"),
+                                     (b_id, f"teammate-{tag}@demo.ledgerline.invalid", "Teammate B")):
+                c.execute("INSERT INTO users(id, email, name, password_hash, created_at, password_changed_at) VALUES (?,?,?,?,?,?)",
+                          (uid, email, name, unusable, self.now(), self.now()))
+            org_id = self._insert_org(c, f"Judge demo {tag}", "sample", a_id)
+            c.execute("INSERT INTO memberships VALUES (?,?,?,?)", (b_id, org_id, "operator", self.now()))
+            c.execute("INSERT INTO judge_demos VALUES (?,?,?,?)", (org_id, a_id, b_id, self.now()))
+            self._audit(c, f"judge-{tag}", "judge_demo.created", org_id, {"ip": ip})
+            return self._new_session(c, a_id, org_id, user_agent), org_id
+
+    def judge_demo_person(self, user_id: str, org_id: str | None) -> dict[str, Any] | None:
+        """For a demo person: who they are, who the other person is, and when the demo is deleted."""
+        if not org_id:
+            return None
+        with self.conn() as c:
+            d = db.row(c, "SELECT * FROM judge_demos WHERE org_id = ?", (org_id,))
+        if not d or user_id not in (d["owner_user_id"], d["teammate_user_id"]):
+            return None
+        a = user_id == d["owner_user_id"]
+        return {"you": "Judge A (Owner)" if a else "Teammate B (Operator)",
+                "other": "Teammate B (Operator)" if a else "Judge A (Owner)",
+                "deleted_after": iso(parse_iso(d["created_at"]) + JUDGE_DEMO_TTL)}
+
+    def is_judge_demo(self, org_id: str | None) -> bool:
+        if not org_id:
+            return False
+        with self.conn() as c:
+            return db.row(c, "SELECT 1 FROM judge_demos WHERE org_id = ?", (org_id,)) is not None
+
+    def switch_judge_demo_person(self, token: str, user_agent: str = "") -> str:
+        """Become the other demo person of the same demo company, for the second-person step. Demo people only."""
+        info = self.authenticate(token)
+        if info is None:
+            raise AuthError(401, "sign in required")
+        with self.conn() as c, db.transaction(c):
+            d = db.row(c, "SELECT * FROM judge_demos WHERE org_id = ?", (info.org_id,))
+            if not d or info.user_id not in (d["owner_user_id"], d["teammate_user_id"]):
+                raise AuthError(403, "only the two people of a judge demo can switch between each other")
+            other = d["teammate_user_id"] if info.user_id == d["owner_user_id"] else d["owner_user_id"]
+            c.execute("UPDATE sessions SET revoked_at = ? WHERE token_hash = ?", (self.now(), token_hash(token)))
+            return self._new_session(c, other, d["org_id"], user_agent)
+
+    def expired_judge_demos(self) -> list[str]:
+        with self.conn() as c:
+            cutoff = iso(self.clock.now() - JUDGE_DEMO_TTL)
+            return [r["org_id"] for r in db.rows(c, "SELECT org_id FROM judge_demos WHERE created_at < ?", (cutoff,))]
+
+    def forget_judge_demo(self, org_id: str) -> None:
+        """Delete a demo company from the control plane, with its two demo people. The caller deletes its storage."""
+        with self.conn() as c, db.transaction(c):
+            d = db.row(c, "SELECT * FROM judge_demos WHERE org_id = ?", (org_id,))
+            if not d:
+                return
+            c.execute("UPDATE sessions SET revoked_at = ?, org_id = NULL WHERE org_id = ?", (self.now(), org_id))
+            for table in ("memberships", "invitations", "password_resets"):
+                c.execute(f"DELETE FROM {table} WHERE org_id = ?", (org_id,))  # fixed table names only
+            c.execute("DELETE FROM organizations WHERE id = ?", (org_id,))
+            for uid in (d["owner_user_id"], d["teammate_user_id"]):
+                if not db.row(c, "SELECT 1 FROM memberships WHERE user_id = ?", (uid,)):
+                    c.execute("UPDATE users SET email = ?, name = 'Deleted demo', password_hash = '', disabled = 1 WHERE id = ?",
+                              (f"deleted-{uid}@deleted.invalid", uid))
+            c.execute("DELETE FROM judge_demos WHERE org_id = ?", (org_id,))
+            self._audit(c, "system", "judge_demo.deleted", org_id, {"after_hours": int(JUDGE_DEMO_TTL.total_seconds() // 3600)})
 
     def delete_org(self, org_id: str, actor_email: str, confirm_name: Any) -> dict[str, Any]:
         """Remove an organization from the control plane. The caller deletes its storage afterwards."""

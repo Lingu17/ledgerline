@@ -112,6 +112,8 @@ class Settings:
     trusted_proxy_hops: int = 0
     # New accounts and organizations: per client address per hour and per day, and for the whole server per day.
     signup_limits: tuple[int, int, int] = (10, 40, 500)
+    judge_demo: bool = True  # one-click judge demo on the landing page
+    judge_demo_limits: tuple[int, int] = (30, 300)  # per address an hour, per server a day
     require_persistent_mount: str | None = None
     # The Airwallex credentials are the operator's single sandbox account. Only organizations listed here
     # (by id) may switch to it; every other organization stays on the simulated bank.
@@ -239,6 +241,9 @@ def load_settings(overrides: dict[str, str] | None = None) -> Settings:
     s.trusted_proxy_hops = max(0, min(5, int(env.get("LEDGERLINE_TRUSTED_PROXY_HOPS") or 0)))
     s.signup_limits = tuple(max(1, int(env.get(k) or d)) for k, d in (("LEDGERLINE_SIGNUP_PER_IP_HOUR", 10), ("LEDGERLINE_SIGNUP_PER_IP_DAY", 40),
                                                                      ("LEDGERLINE_SIGNUP_PER_DAY", 500)))
+    s.judge_demo = env.get("LEDGERLINE_JUDGE_DEMO", "1").strip().lower() not in ("0", "false", "no")
+    s.judge_demo_limits = (max(1, int(env.get("LEDGERLINE_JUDGE_DEMO_PER_IP_HOUR") or 30)),
+                           max(1, int(env.get("LEDGERLINE_JUDGE_DEMO_PER_DAY") or 300)))
     s.require_persistent_mount = env.get("LEDGERLINE_REQUIRE_PERSISTENT_MOUNT") or None
     s.sandbox_org_ids = frozenset(x.strip() for x in env.get("LEDGERLINE_SANDBOX_ORGS", "").split(",") if x.strip())
     s.claude_daily_limit = max(0, int(env.get("LEDGERLINE_CLAUDE_DAILY_LIMIT") or 25))

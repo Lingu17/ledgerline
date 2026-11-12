@@ -222,6 +222,7 @@ function Shell({ me }: { me: Me }) {
           <div className="topbar-right">
             <a className="btn small ghost" href={`#/help?topic=${page}`}>Help</a>
             {isSample && !tour && <button className="btn small" onClick={() => setTour(true)}>Show me</button>}
+            <JudgeSwitch />
             {s?.paused && (
               <a className="badge paused" href="#/settings" title={s.pause_info ? `Paused by ${s.pause_info.by}${s.pause_info.reason ? `: ${s.pause_info.reason}` : ""}` : "Money-out paused"}><b>Money-out paused</b></a>
             )}
@@ -298,5 +299,24 @@ export function App() {
         <Gate />
       </AuthProvider>
     </ToastProvider>
+  );
+}
+
+
+/** In a one-click judge demo: who you are (Judge A or Teammate B) and a switch to the other person, so one judge can be
+ *  both people of the two-person rule. Shown only to the two demo people. */
+function JudgeSwitch() {
+  const { me, setMe } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const d = me?.judge_demo;
+  if (!d) return null;
+  return (
+    <span className="row" style={{ gap: 6 }} title={`Demo company, deleted after ${new Date(d.deleted_after).toLocaleString()}`}>
+      <span className="pill ok hide-sm">You are {d.you}</span>
+      <button className="btn small" disabled={busy} onClick={async () => {
+        setBusy(true);
+        try { setMe(await post<Me>("/auth/judge-demo/switch")); } finally { setBusy(false); }
+      }}>Switch to {d.other.split(" (")[0]}</button>
+    </span>
   );
 }

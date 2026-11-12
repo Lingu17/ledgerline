@@ -668,3 +668,15 @@ test("show me: the two agents talk, from this company's own data, only after Pla
   expect((await heard()).cancels).toBeGreaterThan(before);
   await ctx.close();
 });
+
+test("judge demo: one click opens a practice company, and the judge can switch to Teammate B", async ({ page }) => {
+  await page.goto("/#/home");
+  await page.getByRole("button", { name: "Judge demo — one click" }).click();
+  await expect(page.getByLabel("Main navigation")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("You are Judge A (Owner)")).toBeVisible();
+  await expect(page.getByText("DEP-1005").first()).toBeVisible();
+  await page.getByRole("button", { name: "Switch to Teammate B" }).click();
+  await expect(page.getByText("You are Teammate B (Operator)")).toBeVisible();
+  await page.getByRole("button", { name: "Switch to Judge A" }).click();
+  await expect(page.getByText("You are Judge A (Owner)")).toBeVisible();
+});

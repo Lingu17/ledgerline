@@ -137,6 +137,14 @@ CREATE TABLE password_resets (
   used_at TEXT
 )
 """),
+    (7, "one-click judge demos: a practice company with two demo people, deleted after 48 hours", """
+CREATE TABLE judge_demos (
+  org_id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL,
+  teammate_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+"""),
 ]
 
 

@@ -14,7 +14,7 @@ import threading
 from datetime import timedelta
 from typing import Any
 
-from . import agent_loop, db, early_pay, payment_links, sandbox_receipts
+from . import judge_demo, agent_loop, db, early_pay, payment_links, sandbox_receipts
 from .clock import iso
 
 log = logging.getLogger("ledgerline.watcher")
@@ -70,6 +70,10 @@ def start(app: Any, seconds: int) -> threading.Thread | None:
                 sweep(app.state.orgs, app.state.control, deposits=round_no % DEPOSITS_EVERY == 0)
             except Exception as exc:  # noqa: BLE001 - the loop outlives a bad round
                 log.warning("watcher: round failed: %s", type(exc).__name__)
+            try:
+                judge_demo.cleanup(app)  # demo companies older than 48 hours
+            except Exception as exc:  # noqa: BLE001
+                log.warning("watcher: demo cleanup failed: %s", type(exc).__name__)
 
     thread = threading.Thread(target=run, name="ledgerline-watcher", daemon=True)
     thread.start()

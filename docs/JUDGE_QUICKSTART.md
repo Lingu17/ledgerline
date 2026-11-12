@@ -4,16 +4,19 @@
 
 ## Five-minute path
 
-1. Open the link and click **Get started**.
-2. Enter any name, organization and email (nothing is emailed) and a password of 12+ characters with upper- and lower-case letters and a digit.
-3. Choose **Practice company**. You get your own isolated organization with made-up data; other judges cannot see it.
-   Short on time? Press **Show me** at the top right: a seven-stop tour that runs the practice story and explains each screen. It never approves or sends money.
+1. Open the link and press **Judge demo — one click**. You get a practice company of your own (made-up data, simulated
+   bank, deleted after 48 hours) and you are signed in as **Judge A**, its Owner. No email or password.
+2. The top bar shows **You are Judge A (Owner)** and a **Switch to Teammate B** button: Teammate B is a second, real
+   member of your demo company, for the two-person step later.
+3. Short on time? Press **Show me** at the top right: a seven-stop tour that runs the practice story and explains each
+   screen, and can read it aloud (**Hear the two agents talk**). It never approves or sends money.
+   (To try your own company instead: **Create an organization**, any name and email, a 12+ character password.)
 4. **Inbox**: cash by currency and the payments that need a decision. A practice company waits for you, so its unclear payments read **Ready to ask payer**.
 5. **Payments → DEP-1005** (Dunmore, looks like a duplicate) → **Ask payer's agent**. The payer's agent answers over MCP with an Ed25519-signed claim; all three checks pass (signature, bound to this deposit and fresh, our records agree) and the plan is revised: the money becomes **advance credit** instead of a refund. No money moved. Press **Replay this decision** on any plan in its history: the same rules run again on the inputs stored with that plan and give the same plan.
 6. Still on DEP-1005, press **Explain this decision** under **Why this plan**: a short explanation written only from the plan's facts, citing the payment, the plan and the evidence by id. It is labelled advice; the rules decided.
 7. **Payments → DEP-1004** (Fjord) → **Ask payer's agent**. The agent claims another customer's invoice; the signature verifies but the records check fails, so the claim is **rejected** and the case goes to a person with the reason.
 8. Optional: on DEP-1004 click **Read remittance…** and paste any remittance email (or upload a PDF). Claude reads it and must answer through a typed tool; the result is stored as **advisory evidence**, checked against the records and used only to fill in **Resolve** for a person to confirm. Each organization has a small daily Claude budget.
-9. **Practice steps** runs the rest of the story: the balance request for the short payment, FX for the EUR bill, and the over-limit refund: you approve it (Approvals → Approve…) and a different member sends it. Alone, press **Send as practice teammate**: a labelled stand-in that exists only in practice companies and is refused by the server anywhere else; a real company needs a second real member. The bank then reports SENT (liability kept) and PAID (released).
+9. **Practice steps** runs the rest of the story: the balance request for the short payment, FX for the EUR bill, and the over-limit refund: you approve it (Approvals → Approve…) and a different member sends it. Press **Switch to Teammate B** at the top and send it as Teammate B (or press **Send as practice teammate**, a labelled stand-in that exists only in practice companies). The person who approved it cannot send it. The bank then reports SENT (liability kept) and PAID (released).
 10. Back on the **Inbox**, **Reconciliation status** shows the scorecard: 6 deposits received, 4 decided with no person, 1 decided by a person, 1 waiting for a person, 0 duplicate payouts.
 11. **The agent on its own: Payments → Receive an unclear payment.** A new payment arrives, and the agent asks the payer's agent, checks the signed answer and places the money, with no click. This is how a real company works: it asks the moment a payment arrives (a practice company only waits on DEP-1004 to DEP-1006 so you can watch). The payment is built to match the simulated agent's answers and works once per company; the scorecard then reads 7 received and 5 decided with no person.
 12. **Ledger**: deposits = applied + credits + refunds + not yet placed, per currency, to the cent.

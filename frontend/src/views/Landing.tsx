@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { post, type Me } from "../api";
 import { useAuth } from "../auth";
 import { Globe } from "../components/Globe";
 import "../landing.css";
@@ -147,7 +148,8 @@ export function Landing() {
               something does not add up, and keeps a person in control of money leaving above the limit you set.
             </p>
             <div className="lp-hero-cta">
-              <a className="lp-btn primary lg" href={primary.href}>{primary.label}</a>
+              {!signedIn && <JudgeDemoButton />}
+              <a className={`lp-btn ${signedIn ? "primary" : "outline"} lg`} href={primary.href}>{primary.label}</a>
               <a className="lp-btn outline lg" href="#how">See how it works</a>
             </div>
             <p className="lp-fineprint">Connect your Airwallex test account, or learn it first with a practice company.</p>
@@ -371,5 +373,31 @@ export function Landing() {
         </div>
       </footer>
     </div>
+  );
+}
+
+
+/** One click: a practice company of your own with the reference payments, signed in as Judge A, with Teammate B one
+ *  click away. Simulated bank only, deleted after 48 hours. */
+function JudgeDemoButton() {
+  const { setMe } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 6 }}>
+      <button className="lp-btn primary lg" disabled={busy} onClick={async () => {
+        setBusy(true);
+        setErr(null);
+        try {
+          setMe(await post<Me>("/auth/judge-demo"));
+          window.location.hash = "/inbox";
+        } catch (e) {
+          setErr((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}>{busy ? "Opening your demo…" : "Judge demo — one click"}</button>
+      {err && <small style={{ color: "#ffb4a8" }}>{err}</small>}
+    </span>
   );
 }
