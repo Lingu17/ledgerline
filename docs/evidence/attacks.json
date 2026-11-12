@@ -1,8 +1,8 @@
 {
   "what": "Hostile attempts run against the simulated bank (no real money). Each must be refused and move nothing.",
   "how": "backend/tests/test_attacks.py, run by scripts/attack_report.py; money is measured on the simulated bank's own transfer and conversion records before and after each attempt.",
-  "generated_at": "2026-11-12T08:33:24Z",
-  "commit": "cbb122b",
+  "generated_at": "2026-11-12T08:33:57Z",
+  "commit": "7050654",
   "total": 25,
   "blocked": 25,
   "moved_minor_total": 0,
