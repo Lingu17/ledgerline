@@ -1,6 +1,134 @@
 {
-  "placeholder": true,
-  "status": "NOT YET RUN. This file is a placeholder: no outside-agent exchange has been recorded here yet.",
-  "how_to_fill": "Follow docs/OUTSIDE_AGENT_RUN.md, then replace this whole file with the 'Download proof' file from the live site.",
-  "runs": []
+  "label": "separate machine, separate key, operated by the Ledgerline author",
+  "what": "The reference payer agent (tools/payer_agent at commit 2dc7082) ran on a separate Google Cloud e2-micro VM (us-central1) behind Caddy at https://104-197-66-69.sslip.io/mcp, with an Ed25519 key generated on that VM; the private key never left it. The live site asked it about DEP-1005 in a one-click judge-demo practice company (simulated bank, made-up data). No money moved. The VM was operated by the Ledgerline author, so this is not an independent party or a customer.",
+  "date": "2026-11-12",
+  "validated_by": "scripts/validate_outside_run.py",
+  "runs": [
+    {
+      "audit_event": 36,
+      "at": "2026-11-12T09:15:46Z",
+      "deposit_id": "DEP-1005",
+      "checks": {
+        "binding": true,
+        "records": true,
+        "signature": true
+      },
+      "endpoint_host": "104-197-66-69.sslip.io",
+      "evidence_id": "EV-DEP-1005-1",
+      "key_id": "ed25519:6a1450cce767715e",
+      "plan_after": {
+        "category": "verified_advance_credit",
+        "version": 2
+      },
+      "plan_before": {
+        "category": "apparent_duplicate",
+        "version": 1
+      },
+      "signature_valid": true,
+      "verdict": "verified"
+    }
+  ],
+  "site": "https://35-207-220-110.sslip.io",
+  "company": "Judge demo 2ab6a338",
+  "registered": {
+    "customer_id": "CUST-DUNMORE",
+    "agent_url": "https://104-197-66-69.sslip.io/mcp",
+    "public_key": "Ek3vxV1NC4mzVFDPw07iU7lOLrWyHlo3IjfhbMxqM3I=",
+    "key_id": "ed25519:6a1450cce767715e",
+    "set_at": "2026-11-12T09:15:43Z"
+  },
+  "evidence": {
+    "id": "EV-DEP-1005-1",
+    "deposit_id": "DEP-1005",
+    "version": 1,
+    "source": "mcp_signed",
+    "transport": "mcp/http 104-197-66-69.sslip.io",
+    "verdict": "verified",
+    "checks": [
+      {
+        "name": "signature",
+        "label": "Signed by the registered customer key",
+        "passed": true,
+        "detail": "Ed25519 signature valid for ed25519:6a1450cce767715e (key set by judge-2ab6a338@demo.ledgerline.invalid on 2026-11-12)"
+      },
+      {
+        "name": "binding",
+        "label": "Names this exact deposit and is fresh",
+        "passed": true,
+        "detail": "matches deposit id, currency and amount; within validity window"
+      },
+      {
+        "name": "records",
+        "label": "Our records agree",
+        "passed": true,
+        "detail": "INV-2291 belongs to CUST-DUNMORE; advance_payment fits the amount"
+      }
+    ],
+    "envelope": {
+      "alg": "Ed25519",
+      "claim": {
+        "amount_minor": 120000,
+        "currency": "USD",
+        "customer_id": "CUST-DUNMORE",
+        "deposit_id": "DEP-1005",
+        "expires_at": "2026-11-12T09:20:46Z",
+        "invoice_id": "INV-2291",
+        "issued_at": "2026-11-12T09:15:46Z",
+        "nonce": "9176b794adffe88c",
+        "note": "Advance for the March platform subscription (our PO 7781). Answered by our own agent, signed with our own key.",
+        "reason": "advance_payment",
+        "schema": "ledgerline.explain_payment.v1"
+      },
+      "key_id": "ed25519:6a1450cce767715e",
+      "signature": "I3NHs85GVN4FV+A/1oFEDD7gbd/j8mtikbfdvtncspUqMhUxinZJHs6SSkYNr3HI3KMgXhXfuAS92KLblzp5Bw=="
+    },
+    "created_at": "2026-11-12T09:15:46Z"
+  },
+  "plan_after": {
+    "version": 2,
+    "category": "verified_advance_credit",
+    "status": null
+  },
+  "builtin_agents": {
+    "DEP-1004": {
+      "key_id": "ed25519:b425989791e873bc",
+      "source": "mcp_signed",
+      "transport": "mcp/in-memory"
+    },
+    "DEP-1006": {
+      "key_id": "ed25519:a6c420824d46dfed",
+      "source": "mcp_signed",
+      "transport": "mcp/in-memory"
+    }
+  },
+  "proof": {
+    "what": "Answers from a payer agent running outside this server, each checked three ways before any plan changed",
+    "organization": "Judge demo 2ab6a338",
+    "generated_at": "2026-11-12T09:15:46Z",
+    "runs": [
+      {
+        "audit_event": 36,
+        "at": "2026-11-12T09:15:46Z",
+        "deposit_id": "DEP-1005",
+        "checks": {
+          "binding": true,
+          "records": true,
+          "signature": true
+        },
+        "endpoint_host": "104-197-66-69.sslip.io",
+        "evidence_id": "EV-DEP-1005-1",
+        "key_id": "ed25519:6a1450cce767715e",
+        "plan_after": {
+          "category": "verified_advance_credit",
+          "version": 2
+        },
+        "plan_before": {
+          "category": "apparent_duplicate",
+          "version": 1
+        },
+        "signature_valid": true,
+        "verdict": "verified"
+      }
+    ]
+  }
 }

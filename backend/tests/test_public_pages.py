@@ -229,3 +229,25 @@ def test_numbers_judges_read_agree_with_the_code(ctx):
         for found in re.findall(r"(\d+) of (\d+) (?:payments|deposits)", text):
             assert " of ".join(found) == phrase, f"{name} says {' of '.join(found)}; the reference company gives {phrase}"
     assert phrase in docs["README.md"]
+
+
+def test_the_committed_outside_agent_run_validates():
+    """docs/evidence/outside-agent-run.json, shown on /evidence, must pass the standalone validator and carry the exact
+    label: separate machine, separate key, operated by the Ledgerline author."""
+    import importlib.util
+    import json as _json
+
+    from ledgerline import REPO_DIR
+
+    spec = importlib.util.spec_from_file_location("validate_outside_run", REPO_DIR / "scripts" / "validate_outside_run.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    data = _json.loads((REPO_DIR / "docs" / "evidence" / "outside-agent-run.json").read_text(encoding="utf-8"))
+    results = mod.validate(data)
+    assert all(ok for ok, _ in results), [what for ok, what in results if not ok]
+    assert data["label"] == "separate machine, separate key, operated by the Ledgerline author"
+    text = (data["what"] + data["label"]).lower()
+    assert "independent party" in text and "not an independent" in text and "customer" in text
+    tampered = _json.loads(_json.dumps(data))
+    tampered["evidence"]["envelope"]["claim"]["amount_minor"] += 1
+    assert not all(ok for ok, _ in mod.validate(tampered))

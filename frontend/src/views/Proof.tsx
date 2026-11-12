@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { DocPage } from "./Legal";
 
 interface Run { date: string; title: string; ids: string[]; result: string; proves: string }
-interface Outside { placeholder?: boolean; status?: string; runs?: Record<string, unknown>[]; generated_at?: string }
+interface Outside { placeholder?: boolean; status?: string; runs?: Record<string, unknown>[]; generated_at?: string;
+  label?: string; what?: string; date?: string; validated_by?: string }
 interface Evidence { commit: string; sandbox: { what: string; source: string; runs: Run[]; simulated_only: string[] }; outside_agent: Outside }
 
 /** Public, read only: what ran on the real Airwallex sandbox, with dates and ids, read from committed files. The page
@@ -43,7 +44,12 @@ export function Proof() {
           {outside?.placeholder || !outside?.runs?.length
             ? <p className="small">Not recorded yet in <code>docs/evidence/outside-agent-run.json</code>. The 3 Nov run above was on the owner's own machine;
                 the steps to record one from a second machine are in <code>docs/OUTSIDE_AGENT_RUN.md</code>.</p>
-            : <div className="table-wrap"><table className="stack-sm">
+            : <>
+              {outside.label && <p><span className="pill info" data-testid="outside-label">{outside.label}</span></p>}
+              {outside.what && <p className="small">{outside.what}</p>}
+              {outside.validated_by && <p className="small muted">Checked by <code>{outside.validated_by}</code> against <code>docs/evidence/outside-agent-run.json</code>:
+                the signature, that the key differs from every key this server holds, ids, times and the three checks.</p>}
+              <div className="table-wrap"><table className="stack-sm">
                 <thead><tr><th>When</th><th>Payment</th><th>Agent host</th><th>Key</th><th>Checks</th><th>Plan</th></tr></thead>
                 <tbody>{outside.runs.map((r, i) => {
                   const run = r as { at: string; deposit_id: string; endpoint_host: string; key_id: string; checks: Record<string, boolean>;
@@ -52,7 +58,7 @@ export function Proof() {
                     <td className="mono small">{run.key_id}</td><td className="small">{Object.entries(run.checks).map(([k, v]) => `${v ? "✓" : "✗"} ${k}`).join(" · ")}</td>
                     <td className="small">{run.plan_before?.category ?? "—"} → {run.plan_after?.category ?? "—"}</td></tr>;
                 })}</tbody>
-              </table></div>}
+              </table></div></>}
           <h2>Simulated only</h2>
           <p className="small">Tested automatically on the simulated bank, never run on the sandbox:</p>
           <ul>{e.sandbox.simulated_only.map((s) => <li key={s}>{s}</li>)}</ul>

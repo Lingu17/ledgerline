@@ -27,7 +27,7 @@ It is a working multi-company web app with roles, CSV import and export, a ledge
 ## What is real and what is simulated
 
 - **Real Airwallex sandbox (test money):** signed deposit webhooks, a refund SENT → PAID as one transfer, a currency conversion, a EUR 100 bill payment, a paid early-payment link, beneficiary validation and live rates. Dates and ids: https://35-207-220-110.sslip.io/evidence
-- **Real mechanism:** MCP, Ed25519 signatures and the three checks. The reference payer agent answered the live site across the internet from the owner's own PC, with a key the server never held.
+- **Real mechanism:** MCP, Ed25519 signatures and the three checks. The reference payer agent answered the live site across the internet twice, with a key the server never held: on 3 Nov from the owner's own PC, and on 12 Nov from a separate cloud VM whose key was generated on that VM (recorded in `docs/evidence/outside-agent-run.json` and checked by `scripts/validate_outside_run.py`). Separate machine, separate key, operated by the Ledgerline author: not an independent party.
 - **Simulated:** the built-in payer agents in practice companies (fixed answers, keys on the server); agent-proposed refunds, automatic refunds under the limit, failed and timed-out transfers, the pause switch and wrong-currency conversion are tested on the simulated bank only.
 - **Limits:** no live money; no outside company runs a payer agent yet; the two-person rule checks accounts, not people (both live payments out used two of the owner's accounts).
 
