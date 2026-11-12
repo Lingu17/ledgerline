@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { get, getPage, post, type AuditEvent, type Customer, type Invoice } from "../api";
+import { download, get, getPage, post, type AuditEvent, type Customer, type Invoice } from "../api";
 import { useAuth } from "../auth";
 import { Card, CsvImport, Drawer, Empty, ErrorNote, Field, Loading, Modal, Money, Pill, useAction, useLoad } from "../components/ui";
 import { PAGE_SIZE, Pager } from "../components/Pager";
@@ -318,6 +318,8 @@ function PayerAgentForm({ customer, onClose }: { customer: Customer; onClose: ()
         {err && <div className="notice risk small" role="alert" style={{ marginTop: 12 }}>{err}</div>}
         <div className="form-actions">
           {customer.agent_url && <button type="button" className="btn danger" disabled={!!busy} onClick={remove}>Stop using its own agent</button>}
+          {customer.agent_url && <button type="button" className="btn" title="Every answer from an outside agent, with its key, checks and plan change, from the audit log"
+            onClick={() => download("/agents/outside-proof", "outside-agent-run.json").catch(() => {})}>Download proof</button>}
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" disabled={!!busy}>Save</button>
         </div>

@@ -439,3 +439,28 @@ def test_a_redirect_to_another_origin_is_not_followed():
         s.close()
     # The client may retry its first request, but only ever at the agent's own address, never at the redirect target.
     assert hits and set(hits) == {"/mcp"}
+
+
+def test_an_outside_exchange_is_recorded_as_proof_an_owner_can_download(loopback_app, agent):
+    """The record a reviewer reads: where the answer came from, which key signed it, the three checks, and the plan
+    before and after. Downloaded as the evidence file the docs commit."""
+    c = practice_client(loopback_app)
+    register(c, agent["url"], agent["public_key"])
+    assert c.post("/api/deposits/DEP-1005/ask-agent").status_code == 200
+    r = c.get("/api/agents/outside-proof")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    runs = r.json()["runs"]
+    assert len(runs) == 1
+    run = runs[0]
+    assert run["deposit_id"] == "DEP-1005" and run["endpoint_host"] == "127.0.0.1"
+    assert run["key_id"] == crypto.key_id_for(agent["public_key"]) and run["signature_valid"] is True
+    assert run["checks"] == {"signature": True, "binding": True, "records": True} and run["verdict"] == "verified"
+    assert run["plan_before"]["category"] == "apparent_duplicate" and run["plan_after"]["category"] == "verified_advance_credit"
+    # The simulated agents on this server leave no such record: only an outside agent's answer counts as one.
+    c2 = practice_client(loopback_app, email="second@practice.test")
+    c2.post("/api/deposits/DEP-1005/ask-agent")
+    assert c2.get("/api/agents/outside-proof").json()["runs"] == []
+    from .test_saas import _invite_and_join
+
+    op = _invite_and_join(c, loopback_app, "op2@practice.test", "operator")
+    assert op.get("/api/agents/outside-proof").status_code == 403  # an Owner's download

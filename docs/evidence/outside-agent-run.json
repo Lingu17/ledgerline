@@ -1,0 +1,6 @@
+{
+  "placeholder": true,
+  "status": "NOT YET RUN. This file is a placeholder: no outside-agent exchange has been recorded here yet.",
+  "how_to_fill": "Follow docs/OUTSIDE_AGENT_RUN.md, then replace this whole file with the 'Download proof' file from the live site.",
+  "runs": []
+}

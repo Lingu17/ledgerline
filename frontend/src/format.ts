@@ -168,7 +168,7 @@ const ACTION_LABEL: Record<string, string> = {
   "deposit.received": "Payment received", "deposit.settled": "Payment settled", "deposit.resolved_by_operator": "Resolved by a person",
   "deposit.conversion_requested": "Conversion requested", "payment.recorded_manually": "Payment recorded by hand",
   "plan.initial": "Matched by the rules", "plan.revised": "Plan revised", "plan.operator": "Decided by a person",
-  "evidence.received": "Payer's agent answered", "evidence.extracted": "Remittance read", "agent.asked_automatically": "Payer's agent asked automatically",
+  "evidence.received": "Payer's agent answered", "evidence.extracted": "Remittance read", "agent.asked_automatically": "Payer's agent asked automatically", "agent.outside_answer": "Answer from the customer's own agent (outside this server)",
   "allocation.created": "Applied to an invoice", "credit.created": "Held as customer credit", "writeoff.created": "Bank fee written off",
   "payment_link.drafted": "Balance request drafted",
   "payment_link.draft_fallback": "Balance request ready as an email draft (no hosted link)",

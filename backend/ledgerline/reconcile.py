@@ -400,6 +400,19 @@ def record_agent_answer(conn: sqlite3.Connection, ctx: AppContext, deposit_id: s
               "applicable_minor": applicable, "already_used": already_used}
     plan = plan_after_answer(result, deposit, applicable)
     revised = _store_and_apply(conn, ctx, deposit, plan, kind="revised", evidence_id=ev_id, inputs=inputs)
+    if transport.startswith("mcp/http"):
+        # A customer's own agent, outside this server: one record with what a reviewer needs to check the exchange.
+        reg = registry.get(asked_customer_id) or {}
+        audit.record(conn, now, f"payer_agent:{asked_customer_id}", "agent.outside_answer", "deposit", deposit_id, {
+            "evidence_id": ev_id,
+            "endpoint_host": transport.split(" ", 1)[1] if " " in transport else "",
+            "key_id": reg.get("key_id"),
+            "signature_valid": any(c["name"] == "signature" and c["passed"] for c in result["checks"]),
+            "checks": {c["name"]: c["passed"] for c in result["checks"]},
+            "verdict": result["verdict"],
+            "plan_before": {"version": plan_now["version"], "category": plan_now["category"]} if plan_now else None,
+            "plan_after": {"version": revised["version"], "category": revised["category"]},
+        })
     return {"evidence_id": ev_id, "verification": result, "plan": revised}
 
 

@@ -364,6 +364,23 @@ class PayerAgentBody(BaseModel):
     public_key: StrictStr = Field(max_length=100)
 
 
+@router.get("/agents/outside-proof")
+def outside_agent_proof(request: Request, owner: str = Depends(require_owner)) -> Response:
+    """Owner only: every exchange with a customer's own agent over the network, as recorded in the audit log, ready to
+    commit as evidence (docs/evidence/outside-agent-run.json). Read only."""
+    ctx = ctx_of(request)
+    with ctx.conn() as conn:
+        rows = db.rows(conn, "SELECT id, at, entity_id, detail FROM audit_events WHERE action = 'agent.outside_answer' ORDER BY id")
+    body = {
+        "what": "Answers from a payer agent running outside this server, each checked three ways before any plan changed",
+        "organization": (ctx.org or {}).get("name"),
+        "generated_at": iso(ctx.clock.now()),
+        "runs": [{"audit_event": r["id"], "at": r["at"], "deposit_id": r["entity_id"], **json.loads(r["detail"])} for r in rows],
+    }
+    return Response(json.dumps(body, indent=2), media_type="application/json",
+                    headers={"Content-Disposition": 'attachment; filename="outside-agent-run.json"'})
+
+
 @router.put("/customers/{customer_id}/payer-agent")
 def set_payer_agent(request: Request, customer_id: str, body: PayerAgentBody, owner: str = Depends(require_owner)) -> dict[str, Any]:
     """Owner only: ask this customer's own agent at this URL; its answers must be signed by this public key."""
