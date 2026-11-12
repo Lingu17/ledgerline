@@ -15,12 +15,14 @@ When a payment arrives that matches no invoice, Ledgerline's agent asks the paye
 The answer comes back signed; Ledgerline checks the signature, that it is about this payment and still fresh, and that its own records agree.
 Only then does the plan change: in the reference company 4 of 6 payments are decided with no person, and no refund leaves without a verified answer or a second person.
 
+Short, honest answers to the questions judges ask: [Judge Q&A](docs/JUDGE_QA.md).
+
 **Why Airwallex**
 - Deposits arrive as signed Airwallex webhooks, and refunds and bill payments go out as Airwallex transfers that are booked only at PAID.
 - Multi-currency accounts and Airwallex's own FX quotes let a bill be paid by converting only what is short.
 - Refund destinations are validated by Airwallex's beneficiary API before they are saved. All of this ran on the real sandbox: [evidence](https://35-207-220-110.sslip.io/evidence).
 
-**Business model (a proposal, not tested with customers):** a monthly subscription per company, priced by payments reconciled, for finance teams of small companies that bill in several currencies. The payer-agent protocol stays open and free to implement, so payers have no cost to join.
+**Business model (a proposal, not tested with customers):** a monthly subscription per company, priced by payments reconciled, for finance teams of small companies that bill in several currencies. The payer-agent protocol stays open and free to implement, so payers have no cost to join. This is a proposal; the next step is a pilot with a small number of SMEs that receive cross-border payments on Airwallex.
 
 ## Judge it in 3 minutes
 

@@ -31,6 +31,10 @@ It is a working multi-company web app with roles, CSV import and export, a ledge
 - **Simulated:** the built-in payer agents in practice companies (fixed answers, keys on the server); agent-proposed refunds, automatic refunds under the limit, failed and timed-out transfers, the pause switch and wrong-currency conversion are tested on the simulated bank only.
 - **Limits:** no live money; no outside company runs a payer agent yet; the two-person rule checks accounts, not people (both live payments out used two of the owner's accounts).
 
+## Business model
+
+A monthly subscription per company, priced by payments reconciled, for finance teams of small companies that bill in several currencies; the payer-agent protocol stays open and free to implement. This is a proposal; the next step is a pilot with a small number of SMEs that receive cross-border payments on Airwallex.
+
 ## Links
 
 - Live app: https://35-207-220-110.sslip.io
@@ -38,6 +42,7 @@ It is a working multi-company web app with roles, CSV import and export, a ledge
 - Video: VIDEO_LINK
 - Sandbox evidence: https://35-207-220-110.sslip.io/evidence
 - Attacks: https://35-207-220-110.sslip.io/attacks
+- Judge Q&A: https://github.com/Lingu17/ledgerline/blob/main/docs/JUDGE_QA.md
 - Judge quickstart: https://github.com/Lingu17/ledgerline/blob/main/docs/JUDGE_QUICKSTART.md
 - Payer agent spec: https://github.com/Lingu17/ledgerline/blob/main/docs/PAYER_AGENT_SPEC.md
 
