@@ -22,6 +22,7 @@
 12. **Ledger**: deposits = applied + credits + refunds + not yet placed, per currency, to the cent.
     **Activity → Try to tamper** (practice companies only): it changes one recorded amount directly in the database, as an insider could; the hash chain catches it at exactly that row. **Restore the original** puts it back and records that the tamper test was tried.
 13. **CEO view**: the whole company on one screen.
+14. **Attacks** ([/attacks](https://35-207-220-110.sslip.io/attacks), no sign-in): 25 hostile attempts on the simulated bank, each refused, with what stopped it and the money measured before and after. **Evidence** ([/evidence](https://35-207-220-110.sslip.io/evidence)): every run on the real Airwallex sandbox, with dates, ids and what it proves.
 
 **Bring your own payer agent (optional, about 5 minutes).** The agent runs on your machine with its own key; the live site needs a public https address, so a free Cloudflare quick tunnel provides one. From a copy of the repository:
 

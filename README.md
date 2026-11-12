@@ -1,35 +1,48 @@
+# Ledgerline: agent-to-agent payment reconciliation
+
+<sub>Not related to other projects, packages or repositories that use the name Ledgerline.</sub>
+
+<p>
+  <a href="https://github.com/Lingu17/ledgerline/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Lingu17/ledgerline/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="#run-the-tests"><img alt="Tests" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FLingu17%2Fledgerline%2Fmain%2Fdocs%2Fevidence%2Ftests-badge.json"></a>
+  <a href="https://35-207-220-110.sslip.io/attacks"><img alt="Attacks blocked" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FLingu17%2Fledgerline%2Fmain%2Fdocs%2Fevidence%2Fattacks-badge.json"></a>
+  <a href="https://35-207-220-110.sslip.io"><img alt="Live demo" src="https://img.shields.io/badge/live%20demo-35--207--220--110.sslip.io-5ec4b6"></a>
+  <a href="VIDEO_LINK"><img alt="Video" src="https://img.shields.io/badge/video-3%20minutes-d97757"></a>
+  <img alt="Airwallex sandbox, test money only" src="https://img.shields.io/badge/Airwallex%20sandbox-test%20money%20only-612fff">
+</p>
+
+When a payment arrives that matches no invoice, Ledgerline's agent asks the payer's own agent what it was for.
+The answer comes back signed; Ledgerline checks the signature, that it is about this payment and still fresh, and that its own records agree.
+Only then does the plan change: in the reference company 4 of 6 payments are decided with no person, and no refund leaves without a verified answer or a second person.
+
+**Why Airwallex**
+- Deposits arrive as signed Airwallex webhooks, and refunds and bill payments go out as Airwallex transfers that are booked only at PAID.
+- Multi-currency accounts and Airwallex's own FX quotes let a bill be paid by converting only what is short.
+- Refund destinations are validated by Airwallex's beneficiary API before they are saved. All of this ran on the real sandbox: [evidence](https://35-207-220-110.sslip.io/evidence).
+
+**Business model (a proposal, not tested with customers):** a monthly subscription per company, priced by payments reconciled, for finance teams of small companies that bill in several currencies. The payer-agent protocol stays open and free to implement, so payers have no cost to join.
+
+## Judge it in 3 minutes
+
+1. **[Open the live app](https://35-207-220-110.sslip.io) → Judge demo — one click.** You get a practice company of your own (simulated bank, deleted after 48 hours), signed in as Judge A, with Teammate B one click away.
+2. **Payments → DEP-1005 → Ask payer's agent.** It looks like a duplicate, so the first plan holds a refund; the signed answer says it was an advance, all three checks pass, and the plan changes to credit.
+3. **Payments → DEP-1004 → Ask payer's agent.** Correctly signed but false: the records check fails, so it is rejected and goes to a person with the reason.
+4. **[/attacks](https://35-207-220-110.sslip.io/attacks):** 25 hostile attempts on the simulated bank, each refused, with what stopped it and the money measured before and after.
+5. **[/evidence](https://35-207-220-110.sslip.io/evidence):** every run on the real Airwallex sandbox, with dates, ids and what it proves, and what is simulated only.
+6. **CEO view:** the whole company on one screen, including what the agent did by itself.
+
+**Fresh clone, practice company, simulated bank (Python 3.13+, Node 22.12+):**
+
+```bash
+git clone https://github.com/Lingu17/ledgerline && cd ledgerline
+python scripts/setup.py
+python scripts/start.py
+```
+
+Then open http://localhost:8000. No keys needed; see [Run it yourself](#-run-it-yourself) for details.
+
 <p align="center">
   <a href="https://35-207-220-110.sslip.io"><img src="docs/assets/banner.svg" alt="Ledgerline: when a payment doesn't match, my agent asks the payer's agent and verifies the answer before any money moves" width="100%"></a>
-</p>
-
-<p align="center">
-  <a href="https://35-207-220-110.sslip.io"><img alt="Live app" src="https://img.shields.io/badge/live-35--207--220--110.sslip.io-5ec4b6?style=for-the-badge&logo=googlecloud&logoColor=white"></a>
-  <a href="https://35-207-220-110.sslip.io/#/architecture"><img alt="3D architecture" src="https://img.shields.io/badge/architecture-interactive%203D-0d2038?style=for-the-badge"></a>
-  <a href="docs/JUDGE_QUICKSTART.md"><img alt="Judge quickstart" src="https://img.shields.io/badge/judges-5--minute%20path-ffd68c?style=for-the-badge"></a>
-</p>
-
-<p align="center">
-  <img alt="Track" src="https://img.shields.io/badge/track-Treasury%20%26%20Ops-1f6feb">
-  <img alt="Airwallex" src="https://img.shields.io/badge/Airwallex-sandbox%20verified-612fff">
-  <img alt="Claude" src="https://img.shields.io/badge/Claude-opus--5--5%20·%20advisory%20only-d97757">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-signed%20payer%20agents-444">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.13+%20·%20FastAPI-3776ab?logo=python&logoColor=white">
-  <img alt="React" src="https://img.shields.io/badge/React-18%20·%20TypeScript-149eca?logo=react&logoColor=white">
-  <img alt="CI" src="https://github.com/Lingu17/ledgerline/actions/workflows/ci.yml/badge.svg">
-</p>
-
-<h3 align="center">When a payment doesn't match, Ledgerline's agent asks the payer's agent,<br>checks the answer, and only then decides. A person stays in control of any money that leaves.</h3>
-
-<p align="center"><b>For small companies that bill in several currencies.</b> Sandbox and made-up data only: no real money moves.</p>
-
-<p align="center">Load test: <b>100</b> people using it at once, <b>0</b> errors · <b>0</b> refunds without a verified answer or a second person · CI green, including the whole suite on PostgreSQL</p>
-
-<p align="center">
-  <a href="https://35-207-220-110.sslip.io"><b>▶ Try it live</b></a> ·
-  <!-- Owner: replace the next line with <a href="(video URL)"><b>🎬 Watch the 3-minute video</b></a> once it is recorded. -->
-  <b>🎬 3-minute video: coming before 13 Nov</b> ·
-  <a href="docs/JUDGE_QUICKSTART.md"><b>Judge quickstart</b></a> ·
-  <a href="docs/JUDGE_QA.md"><b>Judge Q&amp;A</b></a>
 </p>
 
 <p align="center"><sub>
@@ -42,7 +55,9 @@
 <a href="#%EF%B8%8F-architecture">Architecture</a> ·
 <a href="#%EF%B8%8F-money-rules-the-code-enforces">Money rules</a> ·
 <a href="#-tech-stack">Tech stack</a> ·
-<a href="#-run-it-yourself">Run it</a>
+<a href="#-run-it-yourself">Run it</a> ·
+<a href="docs/JUDGE_QUICKSTART.md">Judge quickstart</a> ·
+<a href="docs/JUDGE_QA.md">Judge Q&amp;A</a>
 </sub></p>
 
 ---
@@ -55,10 +70,10 @@
 
 ## Try it in 5 minutes
 
-1. Open **[the live app](https://35-207-220-110.sslip.io)** → **Get started** → **Practice company**. Any name and email (nothing is emailed), a password of 12+ characters.
+1. Open **[the live app](https://35-207-220-110.sslip.io)** → **Judge demo — one click**: a practice company of your own, signed in as Judge A, with Teammate B one click away (deleted after 48 hours). Or **Get started** → **Practice company** with any name and email (nothing is emailed) and a password of 12+ characters.
 2. **The agent on its own: Payments → Receive an unclear payment.** It arrives, the agent asks the payer's agent, checks the signed answer and places the money, with no click. A real company works this way for every unclear payment.
 3. **Payments → DEP-1005 → Ask payer's agent.** It looks like a duplicate, so the first plan holds a refund. The signed answer says it was an advance; three checks pass and the plan changes to **credit**. No wrong refund leaves. Press **Explain this decision** and **Replay this decision**. Then **DEP-1004**: correctly signed but false, so it is **rejected** and goes to a person with the reason.
-4. **Practice steps → run to the end.** Approve the over-limit refund, then **Send as practice teammate** (whoever approves an agent-proposed refund can't also send it). The bank goes **SENT → PAID** and the ledger balances to the cent.
+4. **Practice steps → run to the end.** Approve the over-limit refund, then **Switch to Teammate B** and send it (or **Send as practice teammate**) (whoever approves an agent-proposed refund can't also send it). The bank goes **SENT → PAID** and the ledger balances to the cent.
 5. **CEO view:** the whole company on one screen, including **What the agent did by itself**, read from the audit log.
 
 More detail: the [judge quickstart](docs/JUDGE_QUICKSTART.md). For your own company, choose **My company** and connect your Airwallex sandbox keys under Settings.
