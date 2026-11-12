@@ -2,6 +2,24 @@
 
 What is real and what is simulated is one table on the README's first screen: [what is real](../README.md#what-is-real-and-what-is-simulated). The answers below do not repeat it.
 
+**Didn't your server sign both sides?**
+For the built-in payer agents in practice companies, yes: their keys are held on this server, and we label them simulated. A customer's own agent signs with its own key, which the server never holds. That path has run twice outside the server: on 3 Nov from the owner's own PC, and in a run recorded on the [evidence page](https://35-207-220-110.sslip.io/evidence) when one is committed in `docs/evidence/outside-agent-run.json`. Both were operated by the Ledgerline author, so they show the mechanism across the internet with a separate key, not an independent party.
+
+**Who approved the live payments?**
+The owner, using two of their own accounts: one proposed and the other approved, for the sandbox refund (APR-FC97829A, SENT → PAID) and the EUR 100 bill payment (PAY-6C76DB78). That shows the control and the bank call, not independent review. The two-person rule checks accounts, not people.
+
+**Is /attacks live?**
+No. It shows the committed report from the last run of `backend/tests/test_attacks.py` (25 hostile attempts on the simulated bank), with its date and the commit of the code it ran on. The same suite runs in CI on every push; the page links the CI run on the commit the live server runs, read from GitHub. A test fails if the report is older than the code it describes. Running attacks on every page load was left out on purpose: it would put load on the live server for every visitor.
+
+**What happens before any payer runs an agent?**
+Ledgerline is useful without one. Rules in code settle the clear payments, write off fees within tolerance and prepare balance requests. For an unclear payment, the remittance email or PDF can be read (as advice only), and the payment goes to one queue with the reason and the next step. Asking the payer's agent is an extra path for the payments rules alone cannot settle.
+
+**How does Airwallex gain?** (our view, not Airwallex's)
+Reconciliation is where a finance team spends its time after the money arrives. Ledgerline works on an Airwallex account: deposit webhooks, transfers booked at PAID, conversions at Airwallex's own quotes, beneficiary validation and payment links. Fewer unexplained payments make it easier for a small company to receive cross-border payments there, and an open payer-agent protocol could let Airwallex customers answer each other's questions directly.
+
+**What breaks at scale, and what's next?**
+Today it runs on one server with one SQLite file per company; PostgreSQL is supported and runs the whole test suite in CI, but is not used live. Payer agents are asked in rounds with a time budget, and a failing agent is left alone for a while, so one slow payer cannot stall others. Claude reads have daily budgets per company and per server. In a [load test](archive/LOAD_TEST_2026-11.md) with simulated users, 100 judges at once finished the walkthrough with no errors (slowest p95 0.74 s) once practice companies asked their agents in-process; before that fix, 100 judges caused errors. Next: move live data to PostgreSQL, turn on the separate sending service that holds the bank keys, and run a pilot with a small number of SMEs that receive cross-border payments on Airwallex.
+
 **Who would actually answer your agent call today?**
 No outside company yet. The built-in payer agents are simulated, with their keys on our server. A customer can run its own agent with its own key and register its address and public key (Customers → Payer agent…, Owner only); Ledgerline then asks it over the network with the same three checks. Anyone can run the reference agent ([quickstart](JUDGE_QUICKSTART.md)); on 3 Nov it answered the live site across the internet from the owner's own PC, which shows the path, not an independent party. The protocol, with a JSON schema and a signed test vector, is in [PAYER_AGENT_SPEC](PAYER_AGENT_SPEC.md). Practice companies ask the simulated agents in-process over the same MCP protocol: in a [load test](archive/LOAD_TEST_2026-11.md), starting a separate process per question kept p95 under 2 s on every endpoint only up to 30 judges at once, while in-process 100 judges finished the walkthrough with no errors and the slowest endpoint at p95 0.74 s.
 
