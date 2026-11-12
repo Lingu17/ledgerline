@@ -613,6 +613,11 @@ class ControlPlane:
                 "other": "Teammate B (Operator)" if a else "Judge A (Owner)",
                 "deleted_after": iso(parse_iso(d["created_at"]) + JUDGE_DEMO_TTL)}
 
+    def is_judge_demo_user(self, user_id: str) -> bool:
+        """Judge A or Teammate B of any demo. They stay inside their demo company, so the 48-hour cleanup removes all of it."""
+        with self.conn() as c:
+            return db.row(c, "SELECT 1 FROM judge_demos WHERE owner_user_id = ? OR teammate_user_id = ?", (user_id, user_id)) is not None
+
     def is_judge_demo(self, org_id: str | None) -> bool:
         if not org_id:
             return False

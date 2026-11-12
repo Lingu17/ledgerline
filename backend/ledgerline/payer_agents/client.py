@@ -199,7 +199,11 @@ def _probe_now(settings: Any) -> dict[str, Any]:
             else:
                 target = StdioServerParameters(command=sys.executable, args=["-m", "ledgerline.payer_agents.server",
                                                "--data-dir", str(settings.data_dir)], cwd=str(BACKEND_DIR))
-            tools = anyio.run(_list_tools, target)
+            if name == "memory":
+                tools = anyio.run(_list_tools, target)
+            else:
+                with _STDIO_SLOTS:  # the same cap on agent processes as real questions
+                    tools = anyio.run(_list_tools, target)
             out[name] = "ok" if "explain_payment" in tools else "explain_payment missing"
         except Exception as exc:  # noqa: BLE001 - reported, never raised from a health probe
             out[name] = f"unreachable: {type(exc).__name__}"[:120]

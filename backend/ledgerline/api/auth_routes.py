@@ -247,6 +247,8 @@ class OrgBody(BaseModel):
 def create_org(request: Request, body: OrgBody) -> dict[str, Any]:
     """Any signed-in user can create another organization and becomes its owner."""
     info, token = require_session(request, mutating=True)
+    if _control(request).is_judge_demo_user(info.user_id):
+        raise HTTPException(403, "a judge demo person works only in their demo company; sign up to create your own")
     kind = "sample" if body.start_with == "sample" else "workspace"
     org_id = _control(request).create_org(info.user_id, body.name, kind, ip=_ip(request))
     request.app.state.orgs.provision(org_id, sample=kind == "sample")

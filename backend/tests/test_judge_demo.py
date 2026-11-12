@@ -107,3 +107,13 @@ def test_a_normal_signup_is_never_treated_as_a_demo(app):
     c = TestClient(app)
     me = signup(c, email="real@company.test", org="Real Co", start_with="sample")
     assert me.get("judge_demo") is None
+
+
+def test_a_demo_person_cannot_create_companies_outside_the_demo(app):
+    """Everything a demo person can reach is inside the demo company, so the 48-hour cleanup removes all of it."""
+    c, _ = demo(app)
+    r = c.post("/api/organizations", json={"name": "Escape Co", "start_with": "empty"})
+    assert r.status_code == 403 and "demo" in r.json()["detail"]
+    c.post("/api/auth/judge-demo/switch")
+    assert c.post("/api/organizations", json={"name": "Escape Co", "start_with": "sample"}).status_code == 403
+    assert [o["id"] for o in c.get("/api/auth/me").json()["organizations"]] == [c.org_id]
