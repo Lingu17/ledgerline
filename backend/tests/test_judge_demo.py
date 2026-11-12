@@ -91,13 +91,14 @@ def test_the_demo_can_be_switched_off(tmp_path):
 def test_demos_older_than_48_hours_are_deleted_with_their_people(app):
     old, _ = demo(app)
     fresh, _ = demo(app)
-    path = app.state.settings.data_dir / "orgs" / old.org_id
+    from .test_account import _org_storage  # files on SQLite, a schema on PostgreSQL
+
     payments(old)
-    assert path.exists()
+    assert any(_org_storage(app, old.org_id).values())
     with app.state.control.conn() as conn:
         conn.execute("UPDATE judge_demos SET created_at = '2020-01-01T00:00:00Z' WHERE org_id = ?", (old.org_id,))
     assert judge_demo.cleanup(app) == 1
-    assert app.state.control.org(old.org_id) is None and not path.exists()
+    assert app.state.control.org(old.org_id) is None and not any(_org_storage(app, old.org_id).values())
     assert old.get("/api/deposits").status_code in (401, 403, 404, 409)  # the session no longer reaches it
     assert app.state.control.org(fresh.org_id) is not None and payments(fresh)  # a newer demo is untouched
     assert judge_demo.cleanup(app) == 0
