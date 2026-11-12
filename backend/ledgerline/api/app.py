@@ -184,7 +184,13 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     @app.get("/api/public/attacks", include_in_schema=False)
     def public_attacks() -> JSONResponse:
         """The attack suite's latest result, written by the test run (scripts/attack_report.py), never by hand."""
-        return JSONResponse(_committed("attacks.json"), headers={"Cache-Control": "no-cache"})
+        from .. import build_commit, ci_lookup
+
+        body = _committed("attacks.json")
+        live = build_commit(40)
+        # The CI run on the commit this server runs, read from GitHub (cached); the report's own commit is the code it tested.
+        body["live"] = {"commit": live[:12] if live else None, "ci": ci_lookup.run_for(live), "actions_url": ci_lookup.ACTIONS_URL}
+        return JSONResponse(body, headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/public/changelog", include_in_schema=False)
     def changelog() -> PlainTextResponse:

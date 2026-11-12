@@ -145,3 +145,51 @@ def test_health_reports_whether_the_payer_agents_answer_over_mcp(client, monkeyp
     monkeypatch.setattr(mcp_client, "_probe_state", {"at": None, "result": None, "running": False})
     monkeypatch.setattr(mcp_client.anyio, "run", broken)
     assert mcp_client.probe_mcp(client.app.state.settings, wait=True)["status"] == "unreachable"
+
+
+def test_the_attack_report_names_the_last_change_to_the_code_it_tested():
+    """/attacks says which code it ran on. That must be the newest commit touching the backend or the report script,
+    or the report is stale and must be regenerated with scripts/attack_report.py."""
+    import json as _json
+    import shutil
+    import subprocess
+
+    from ledgerline import REPO_DIR
+
+    if not shutil.which("git") or not (REPO_DIR / ".git").exists():
+        pytest.skip("not a git checkout")
+    shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=REPO_DIR, capture_output=True, text=True).stdout.strip()
+    if shallow == "true":
+        pytest.skip("shallow clone: history needed (CI checks out with fetch-depth 0)")
+    last = subprocess.run(["git", "log", "-1", "--format=%H", "--", "backend", "scripts/attack_report.py"], cwd=REPO_DIR,
+                          capture_output=True, text=True).stdout.strip()
+    dirty = subprocess.run(["git", "status", "--porcelain", "--", "backend", "scripts/attack_report.py"], cwd=REPO_DIR,
+                           capture_output=True, text=True).stdout.strip()
+    if dirty:
+        pytest.skip("uncommitted backend changes: commit, then regenerate the report")
+    report = _json.loads((REPO_DIR / "docs" / "evidence" / "attacks.json").read_text(encoding="utf-8"))
+    assert report["commit_full"] == last and report["commit"] == last[:7], "stale: run scripts/attack_report.py"
+
+
+def test_the_attacks_page_links_the_ci_run_on_the_live_commit(client, monkeypatch):
+    from ledgerline import build_commit, ci_lookup
+
+    from .conftest import new_client
+
+    sha = build_commit(40)
+    if not sha:
+        pytest.skip("not a git checkout")
+    runs = [{"name": "CI", "run_number": 250, "html_url": "https://github.com/Lingu17/ledgerline/actions/runs/1",
+             "status": "completed", "conclusion": "success"},
+            {"name": "CI", "run_number": 251, "html_url": "https://github.com/Lingu17/ledgerline/actions/runs/2",
+             "status": "in_progress", "conclusion": None}]
+    monkeypatch.setattr(ci_lookup, "_fetch", lambda s: runs if s == sha else [])
+    live = new_client(client.app).get("/api/public/attacks").json()["live"]
+    assert live["commit"] == sha[:12] and live["ci"]["run_number"] == 250 and live["ci"]["conclusion"] == "success"
+
+    def down(_s):
+        raise OSError("no network")
+    monkeypatch.setattr(ci_lookup, "_cache", {})
+    monkeypatch.setattr(ci_lookup, "_fetch", down)
+    live = new_client(client.app).get("/api/public/attacks").json()["live"]
+    assert live["ci"] is None and live["actions_url"].endswith("/actions")

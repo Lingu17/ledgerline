@@ -130,3 +130,12 @@ def _drop_postgres_test_schemas():
             names = [r[0] for r in c.execute("SELECT nspname FROM pg_namespace WHERE starts_with(nspname, %s)", (prefix + "_",)).fetchall()]
             for n in names:
                 c.execute(f'DROP SCHEMA "{n}" CASCADE')
+
+
+@pytest.fixture(autouse=True)
+def _no_github_calls(monkeypatch):
+    """Tests never call GitHub: the /attacks page's CI lookup sees no runs unless a test supplies them."""
+    from ledgerline import ci_lookup
+
+    monkeypatch.setattr(ci_lookup, "_cache", {})
+    monkeypatch.setattr(ci_lookup, "_fetch", lambda sha: [])

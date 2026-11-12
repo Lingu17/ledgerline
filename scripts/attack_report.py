@@ -51,14 +51,16 @@ def main() -> int:
     total = sum(m["amount_minor"] for m in moved.values()) if moved else None
     # The code that was tested: the last commit that changed the backend or this script (docs-only commits after it
     # do not change what ran, so the page keeps naming the code, not the commit that stores this report).
-    commit = subprocess.run(["git", "log", "-1", "--format=%h", "--", "backend", "scripts/attack_report.py"], cwd=ROOT,
-                            capture_output=True, text=True).stdout.strip()
+    full = subprocess.run(["git", "log", "-1", "--format=%H", "--", "backend", "scripts/attack_report.py"], cwd=ROOT,
+                          capture_output=True, text=True).stdout.strip()
+    commit = full[:7]
     report = {
         "what": "Hostile attempts run against the simulated bank (no real money). Each must be refused and move nothing.",
         "how": "backend/tests/test_attacks.py, run by scripts/attack_report.py; money is measured on the simulated bank's own "
                "transfer and conversion records before and after each attempt.",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "commit": commit,
+        "commit_full": full,
         "total": len(attacks),
         "blocked": sum(a["result"] == "blocked" for a in attacks),
         "moved_minor_total": total,
