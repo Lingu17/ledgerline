@@ -45,7 +45,7 @@ export function Proof() {
             ? <p className="small">Not recorded yet in <code>docs/evidence/outside-agent-run.json</code>. The 3 Nov run above was on the owner's own machine;
                 the steps to record one from a second machine are in <code>docs/OUTSIDE_AGENT_RUN.md</code>.</p>
             : <>
-              {outside.label && <p><span className="pill info" data-testid="outside-label">{outside.label}</span></p>}
+              {outside.label && <p><span className="pill info" data-testid="outside-label" style={{ whiteSpace: "normal", maxWidth: "100%", height: "auto", minHeight: 21, padding: "2px 8px", lineHeight: 1.35 }}>{outside.label}</span></p>}
               {outside.what && <p className="small">{outside.what}</p>}
               {outside.validated_by && <p className="small muted">Checked by <code>{outside.validated_by}</code> against <code>docs/evidence/outside-agent-run.json</code>:
                 the signature, that the key differs from every key this server holds, ids, times and the three checks.</p>}
