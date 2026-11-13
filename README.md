@@ -521,7 +521,7 @@ sudo bash deploy/vm/setup.sh <host> self <commit>
 sudo bash /opt/ledgerline/src/deploy/vm/update.sh <commit>
 ```
 
-Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite on the persistent disk. A nightly timer makes consistent backups (7 kept); an isolated restore test passed. `scripts/smoke_deploy.py <url> --save/--verify` checks 32 behaviours and proves persistence across restart, reboot and redeploy. Full guide, backup/restore and troubleshooting table: [DEPLOYMENT](docs/DEPLOYMENT.md).
+Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite on the persistent disk. Both the app and Caddy restart themselves if they stop (`Restart=always`). A nightly timer makes consistent backups (7 kept); an isolated restore test passed. `scripts/smoke_deploy.py <url> --save/--verify` checks 32 behaviours and proves persistence across restart, reboot and redeploy. Full guide, backup/restore and troubleshooting table: [DEPLOYMENT](docs/DEPLOYMENT.md).
 </details>
 
 ---
@@ -547,4 +547,4 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery (invitation and reset links are copied by a person), no self-service password reset (an owner issues a one-hour link), no enterprise SSO or MFA, and no billing.
 - The separate sending service ships switched off; the owner turns it on with server step 7. A compromised app could still request a send that its own database says was approved. Its Unix-socket test runs on Linux only and has not run while CI is blocked; on Windows it is tested over a loopback connection.
 
-<p align="center"><sub>Built for the Airwallex Agentic Banking Hackathon · sandbox and synthetic data only · no real money</sub></p>
+<p align="center"><sub>Built for the Airwallex Agentic Banking Hackathon · sandbox and synthetic data only · no real money · <a href="LICENSE">MIT license</a></sub></p>

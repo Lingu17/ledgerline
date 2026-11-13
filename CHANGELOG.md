@@ -3,6 +3,20 @@
 What changed for the people using Ledgerline, newest first. The version and commit the server runs are shown at the
 foot of every page.
 
+## 12–13 November 2026
+
+- One-click judge demo on the home page: a practice company of your own, signed in as Judge A with Teammate B one
+  click away, deleted after 48 hours.
+- Public Attacks page (/attacks): 25 hostile attempts on the simulated bank, each refused, $0 moved, with the date,
+  the commit of the code tested and its CI run.
+- Public Evidence page (/evidence): every run on the real Airwallex sandbox, with dates and ids, and what is
+  simulated only.
+- The reference payer agent answered the live site from a separate cloud VM with a key generated there: separate
+  machine, separate key, operated by the Ledgerline author. The record is checked by a standalone script.
+- Health shows whether the payer agents answer over MCP.
+- On the Evidence page the payer-agent label now wraps at phone width instead of being cut off.
+- MIT license.
+
 ## 4 November 2026 — 1.0.0
 
 - Privacy, Terms and Security pages, linked from every page, and a `security.txt` for reporting problems.

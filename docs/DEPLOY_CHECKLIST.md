@@ -20,6 +20,14 @@ sudo systemctl kill -s KILL ledgerline
 sleep 5 && systemctl is-active ledgerline && curl -s https://35-207-220-110.sslip.io/api/health
 ```
 
+Caddy: its packaged unit does not restart on its own, so the live server has a drop-in
+`/etc/systemd/system/caddy.service.d/restart.conf` with `Restart=always` and `RestartSec=3` (added 13 Nov; on a new
+server, add the same file and run `sudo systemctl daemon-reload`). Check it without stopping Caddy:
+
+```bash
+systemctl show caddy -p Restart,DropInPaths
+```
+
 Reboot: the app and Caddy are enabled, so they start with the machine (the separate sending service is installed only if you turned it on; then add ledgerline-send).
 
 ```bash
