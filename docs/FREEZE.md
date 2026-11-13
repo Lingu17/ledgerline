@@ -1,6 +1,7 @@
 # Freeze (from 12 Nov 2026 until results)
 
-**Frozen commit:** the commit that contains this file on `main`. The live server runs exactly that commit; check with
+**Frozen commit:** code frozen at `51195a3`; later commits are video link + one mobile CSS fix only. The live server
+runs the latest commit on `main`; check with
 `curl -s https://35-207-220-110.sslip.io/api/health` (its `commit` is the first 12 characters) or run the morning check
 below, which compares the two.
 
