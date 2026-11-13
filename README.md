@@ -7,7 +7,7 @@
   <a href="#run-the-tests"><img alt="Tests" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FLingu17%2Fledgerline%2Fmain%2Fdocs%2Fevidence%2Ftests-badge.json"></a>
   <a href="https://35-207-220-110.sslip.io/attacks"><img alt="Attacks blocked" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FLingu17%2Fledgerline%2Fmain%2Fdocs%2Fevidence%2Fattacks-badge.json"></a>
   <a href="https://35-207-220-110.sslip.io"><img alt="Live demo" src="https://img.shields.io/badge/live%20demo-35--207--220--110.sslip.io-5ec4b6"></a>
-  <a href="VIDEO_LINK"><img alt="Video" src="https://img.shields.io/badge/video-3%20minutes-d97757"></a>
+  <a href="https://youtu.be/FB-SYvdewfA"><img alt="Video" src="https://img.shields.io/badge/video-4%3A56-d97757"></a>
   <img alt="Airwallex sandbox, test money only" src="https://img.shields.io/badge/Airwallex%20sandbox-test%20money%20only-612fff">
 </p>
 

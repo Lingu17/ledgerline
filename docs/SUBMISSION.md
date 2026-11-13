@@ -39,7 +39,7 @@ A monthly subscription per company, priced by payments reconciled, for finance t
 
 - Live app: https://35-207-220-110.sslip.io
 - Repository: https://github.com/Lingu17/ledgerline
-- Video: VIDEO_LINK
+- Video: https://youtu.be/FB-SYvdewfA
 - Sandbox evidence: https://35-207-220-110.sslip.io/evidence
 - Attacks: https://35-207-220-110.sslip.io/attacks
 - Judge Q&A: https://github.com/Lingu17/ledgerline/blob/main/docs/JUDGE_QA.md
