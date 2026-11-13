@@ -15,6 +15,8 @@ When a payment arrives that matches no invoice, Ledgerline's agent asks the paye
 The answer comes back signed; Ledgerline checks the signature, that it is about this payment and still fresh, and that its own records agree.
 Only then does the plan change: in the reference company 4 of 6 payments are decided with no person, and no refund leaves without a verified answer or a second person.
 
+**Watch the walkthrough (4:56):** [youtu.be/FB-SYvdewfA](https://youtu.be/FB-SYvdewfA), the judge path below on the live site, narrated.
+
 Short, honest answers to the questions judges ask: [Judge Q&A](docs/JUDGE_QA.md).
 
 **Why Airwallex**
@@ -530,11 +532,11 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 
 | For | Read |
 |:--|:--|
-| Judges | [JUDGE_QUICKSTART](docs/JUDGE_QUICKSTART.md) · [JUDGE_QA](docs/JUDGE_QA.md) · [DEMO_SCRIPT](docs/DEMO_SCRIPT.md) |
+| Judges | [Video (4:56)](https://youtu.be/FB-SYvdewfA) · [JUDGE_QUICKSTART](docs/JUDGE_QUICKSTART.md) · [JUDGE_QA](docs/JUDGE_QA.md) · [DEMO_SCRIPT](docs/DEMO_SCRIPT.md) · [SUBMISSION](docs/SUBMISSION.md) |
 | Evidence | [INTEGRATION_EVIDENCE](docs/INTEGRATION_EVIDENCE.md) · [EVALUATION](docs/EVALUATION.md) · [ACCURACY_REPORT](docs/ACCURACY_REPORT.md) · [MEASURED_VALUE](docs/MEASURED_VALUE.md) |
 | Payer agents | [PAYER_AGENT_SPEC](docs/PAYER_AGENT_SPEC.md) · [JSON schema](docs/schemas/explain_payment.v1.schema.json) · [test vector](docs/schemas/explain_payment.v1.example.json) · [reference agent](tools/payer_agent/agent.py) |
 | Acceptance | [FULL_APPLICATION_ACCEPTANCE_REPORT](docs/FULL_APPLICATION_ACCEPTANCE_REPORT.md) · [HACKATHON_REQUIREMENTS_MATRIX](docs/HACKATHON_REQUIREMENTS_MATRIX.md) |
-| Operations | [DEPLOYMENT](docs/DEPLOYMENT.md) · [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md) |
+| Operations | [DEPLOYMENT](docs/DEPLOYMENT.md) · [DEPLOY_CHECKLIST](docs/DEPLOY_CHECKLIST.md) · [DEPLOYMENT_HANDOFF](docs/DEPLOYMENT_HANDOFF.md) |
 | Origin | [Accepted proposal](docs/original-proposal.txt) · [SUBMISSION_DRAFT](docs/SUBMISSION_DRAFT.md) |
 
 ## ⚠️ Honest limits
@@ -545,6 +547,6 @@ Caddy (automatic HTTPS) → systemd service as an unprivileged user → SQLite o
 - USD, EUR and GBP only; other currencies are not supported yet.
 - Invoice numbers are Ledgerline's own (INV-2301, INV-2302, ...). A payment that quotes another system's number (say HL-2026-014) is not matched by the rules or the remittance reader; a person places it with Resolve.
 - One VM, backups on the same disk, Free Trial credit until 28 Jan 2027; no email delivery (invitation and reset links are copied by a person), no self-service password reset (an owner issues a one-hour link), no enterprise SSO or MFA, and no billing.
-- The separate sending service ships switched off; the owner turns it on with server step 7. A compromised app could still request a send that its own database says was approved. Its Unix-socket test runs on Linux only and has not run while CI is blocked; on Windows it is tested over a loopback connection.
+- The separate sending service ships switched off; the owner turns it on with server step 7. A compromised app could still request a send that its own database says was approved. Its Unix-socket test runs on Linux (in CI on every push); on Windows it is tested over a loopback connection.
 
 <p align="center"><sub>Built for the Airwallex Agentic Banking Hackathon · sandbox and synthetic data only · no real money · <a href="LICENSE">MIT license</a></sub></p>
